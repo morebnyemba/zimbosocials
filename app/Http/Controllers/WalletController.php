@@ -3,11 +3,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\ManualPaymentDetail;
 use App\Models\Transaction;
 use App\Models\ContractApplication;
 use App\Models\ContractProofSubmission;
 use App\Models\User;
+use App\Services\ReferralService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -140,6 +142,18 @@ class WalletController extends Controller
             'notes'          => 'Awaiting proof of payment submission',
         ]);
 
+        AuditLog::log(
+            action: 'transaction.deposit_created_pending',
+            userId: (int) $request->user()->getAuthIdentifier(),
+            modelType: Transaction::class,
+            modelId: (int) $transaction->getKey(),
+            newValues: [
+                'status' => 'pending',
+                'method' => (string) $transaction->getAttribute('method'),
+                'amount' => (float) $transaction->amount,
+            ],
+        );
+
         return back()->with('info', 'Deposit request created. Please upload your proof of payment to complete the transaction.');
     }
 
@@ -155,7 +169,14 @@ class WalletController extends Controller
 
         $data = $request->validate([
             'transaction_id' => ['required', 'integer', 'exists:transactions,id'],
-            'proof_file' => ['required', 'file', 'image', 'max:5120'], // 5MB max, image only
+            'proof_file' => [
+                'required',
+                'file',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+                'dimensions:min_width=1,min_height=1,max_width=8000,max_height=8000',
+            ],
         ]);
 
         $transaction = Transaction::where('id', $data['transaction_id'])
@@ -170,24 +191,30 @@ class WalletController extends Controller
         // Store proof file
         if ($request->hasFile('proof_file')) {
             $file = $request->file('proof_file');
-            $fileName = sprintf(
-                'proofs/%s/%s-%s.%s',
-                $userId,
-                $transaction->id,
-                time(),
-                $file->getClientOriginalExtension()
-            );
-
-            $filePath = $file->storeAs(
-                'public',
-                $fileName,
+            $storedPath = $file->store(
+                'proofs/' . $userId,
                 'public'
             );
 
             $transaction->update([
-                'proof_url' => '/storage/' . $fileName,
+                'proof_url' => '/storage/' . $storedPath,
                 'notes' => 'Proof of payment submitted. Awaiting admin approval.',
             ]);
+
+            AuditLog::log(
+                action: 'transaction.deposit_proof_submitted',
+                userId: (int) $request->user()->getAuthIdentifier(),
+                modelType: Transaction::class,
+                modelId: (int) $transaction->getKey(),
+                oldValues: [
+                    'proof_url' => null,
+                    'status' => (string) $transaction->getAttribute('status'),
+                ],
+                newValues: [
+                    'proof_url' => (string) $transaction->getAttribute('proof_url'),
+                    'status' => (string) $transaction->getAttribute('status'),
+                ],
+            );
 
             return back()->with('success', 'Proof of payment submitted successfully. An admin will verify and credit your account.');
         }
@@ -260,7 +287,7 @@ class WalletController extends Controller
      * Webhook called by payment gateway after successful payment.
      * This should be called by your payment provider (e.g. PayPal IPN, EcoCash callback).
      */
-    public function handleWebhook(Request $request): \Illuminate\Http\JsonResponse
+    public function handleWebhook(Request $request, ReferralService $referralService): \Illuminate\Http\JsonResponse
     {
         // TODO: Verify webhook signature for your payment provider
         $reference = $request->input('reference');
@@ -275,12 +302,29 @@ class WalletController extends Controller
         }
 
         $user = $transaction->user;
+        $oldStatus = (string) $transaction->getAttribute('status');
         $user->increment('balance', $transaction->amount);
 
         $transaction->update([
             'status'       => 'completed',
             'balance_after'=> $user->fresh()->balance,
         ]);
+
+        $referralService->rewardReferrerOnFirstDeposit($transaction->fresh());
+
+        AuditLog::log(
+            action: 'transaction.webhook_status_updated',
+            userId: null,
+            modelType: Transaction::class,
+            modelId: (int) $transaction->getKey(),
+            oldValues: [
+                'status' => $oldStatus,
+            ],
+            newValues: [
+                'status' => 'completed',
+                'reference' => (string) $transaction->getAttribute('reference'),
+            ],
+        );
 
         return response()->json(['success' => true]);
     }

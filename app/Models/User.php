@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
@@ -21,6 +22,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'balance',
         'api_key',
+        'referral_code',
+        'referred_by',
+        'referred_bonus_awarded_at',
         'role',
         'marketer_status',
         'locale',
@@ -55,6 +59,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_active'          => 'boolean',
             'notification_prefs' => 'array',
             'last_login_at'      => 'datetime',
+            'referred_bonus_awarded_at' => 'datetime',
         ];
     }
 
@@ -108,6 +113,16 @@ class User extends Authenticatable implements MustVerifyEmail
     public function auditLogs(): HasMany
     {
         return $this->hasMany(AuditLog::class);
+    }
+
+    public function referrer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'referred_by');
+    }
+
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(User::class, 'referred_by');
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -175,6 +190,15 @@ class User extends Authenticatable implements MustVerifyEmail
         $key = 'zvk_live_' . Str::random(32);
         $this->update(['api_key' => $key]);
         return $key;
+    }
+
+    public static function generateReferralCode(): string
+    {
+        do {
+            $code = 'ZIM' . strtoupper(Str::random(8));
+        } while (static::where('referral_code', $code)->exists());
+
+        return $code;
     }
 
     /**

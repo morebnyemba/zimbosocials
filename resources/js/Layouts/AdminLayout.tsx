@@ -32,11 +32,11 @@ export default function AdminLayout({
     const user = usePage().props.auth.user;
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const flash = (usePage().props as any).flash as { success?: string; error?: string; info?: string } | undefined;
-        const { locale } = useTranslation();
+        const { locale, t } = useTranslation();
         const langs = [
-            { code: 'sn', label: 'SN' },
-            { code: 'nd', label: 'ND' },
-            { code: 'en', label: 'EN' },
+            { code: 'sn', label: t('shona') },
+            { code: 'nd', label: t('ndebele') },
+            { code: 'en', label: t('english') },
         ];
 
     const navLinks = [
@@ -158,12 +158,13 @@ export default function AdminLayout({
                         <LogOut className="h-4 w-4" />
                         Sign Out
                     </Link>
-                        <div className="mt-2 rounded-md bg-black/20 p-1">
+                        <div className="mt-2 rounded-md bg-black/20 p-2">
+                            <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-white/60">{t('language')}</p>
                             <select
                                 aria-label="Language"
                                 value={locale || 'sn'}
                                 onChange={(e) => router.post(route('locale.switch'), { locale: e.target.value }, { preserveScroll: true })}
-                                className="w-full rounded-md border border-white/10 bg-white/10 px-1.5 py-1 text-[10px] font-black uppercase tracking-wide text-white outline-none"
+                                className="w-full rounded-md border border-white/10 bg-white/10 px-2 py-1.5 text-[11px] font-black text-white outline-none"
                             >
                                 {langs.map((lang) => (
                                     <option key={lang.code} value={lang.code} className="text-zinc-900">

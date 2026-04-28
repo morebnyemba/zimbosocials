@@ -54,4 +54,10 @@ return [
         'integration_key' => env('PAYNOW_INTEGRATION_KEY'),
     ],
 
+    'referral' => [
+        'first_deposit_reward' => (float) env('REFERRAL_FIRST_DEPOSIT_REWARD', 1.00),
+        'order_commission_percent' => (float) env('REFERRAL_ORDER_COMMISSION_PERCENT', 2.00),
+        'order_commission_min_total' => (float) env('REFERRAL_ORDER_COMMISSION_MIN_TOTAL', 20.00),
+    ],
+
 ];

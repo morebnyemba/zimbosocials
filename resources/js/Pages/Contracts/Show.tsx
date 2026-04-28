@@ -1,5 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
+import { useTranslation } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     FaBriefcase, 
@@ -13,7 +14,8 @@ import {
     FaExternalLinkAlt,
     FaUserCircle,
     FaChevronRight,
-    FaPaperPlane
+    FaPaperPlane,
+    FaRocket,
 } from 'react-icons/fa';
 
 interface Marketer {
@@ -57,10 +59,11 @@ interface Props {
 }
 
 export default function ContractShow({ contract }: Props) {
+    const { t } = useTranslation();
     const handleDecision = (applicationId: number, decision: 'approved' | 'denied') => {
         const msg = decision === 'approved' 
-            ? "Are you sure? This will hire the marketer and move the budget to escrow." 
-            : "Are you sure you want to deny this applicant?";
+            ? t('confirm_hire_marketer')
+            : t('confirm_deny_applicant');
             
         if (confirm(msg)) {
             router.post(route('contracts.applications.decision', [contract.id, applicationId]), {
@@ -71,8 +74,8 @@ export default function ContractShow({ contract }: Props) {
 
     const handleProofDecision = (proofId: number, decision: 'approved' | 'rejected') => {
         const msg = decision === 'approved'
-            ? "Confirming this proof will release the funds from escrow to the marketer's wallet. Proceed?"
-            : "Reject this proof? The marketer will need to submit a new link.";
+            ? t('confirm_release_funds')
+            : t('confirm_reject_proof');
 
         if (confirm(msg)) {
             router.post(route('proof.review', proofId), {
@@ -88,7 +91,7 @@ export default function ContractShow({ contract }: Props) {
 
     return (
         <AuthenticatedLayout>
-            <Head title={`Contract Terminal: ${contract.title}`} />
+            <Head title={t('contract_terminal_title', { title: contract.title })} />
 
             <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12">
                 {/* Back Button */}
@@ -97,7 +100,7 @@ export default function ContractShow({ contract }: Props) {
                     className="flex items-center gap-2 text-zinc-400 hover:text-zinc-900 transition-colors mb-8 group w-fit"
                 >
                     <FaArrowLeft className="group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Marketplace Archive</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">{t('marketplace_archive')}</span>
                 </Link>
 
                 <div className="grid lg:grid-cols-[1.5fr,1fr] gap-12 items-start">
@@ -110,22 +113,22 @@ export default function ContractShow({ contract }: Props) {
                                     contract.status === 'filled' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
                                     'bg-zinc-500/10 text-zinc-500 border-zinc-500/20'
                                 }`}>
-                                    {contract.status}
+                                    {contract.status === 'open' ? t('contract_status_open') : contract.status === 'filled' ? t('contract_status_filled') : t('contract_status_closed')}
                                 </div>
-                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Mission Parameters</span>
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">{t('mission_parameters')}</span>
                             </div>
                             <h1 className="text-4xl font-black text-zinc-900 tracking-tighter leading-tight">
                                 {contract.title}
                             </h1>
                             <div className="flex flex-wrap gap-6 items-center">
-                                <DetailBadge icon={FaGlobe} label={contract.platform || 'Cross-Platform'} />
+                                <DetailBadge icon={FaGlobe} label={contract.platform || t('cross_platform')} />
                                 <DetailBadge icon={FaDollarSign} label={`$${Number(contract.budget || 0).toFixed(2)}`} highlight />
-                                <DetailBadge icon={FaClock} label={contract.deadline_at ? `Due ${new Date(contract.deadline_at).toLocaleDateString()}` : 'No Deadline'} />
+                                <DetailBadge icon={FaClock} label={contract.deadline_at ? t('due_on', { date: new Date(contract.deadline_at).toLocaleDateString() }) : t('no_deadline')} />
                             </div>
                         </header>
 
                         <section className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
-                            <h3 className="text-xl font-black text-zinc-900 tracking-tight mb-6">Briefing Overview</h3>
+                            <h3 className="text-xl font-black text-zinc-900 tracking-tight mb-6">{t('briefing_overview')}</h3>
                             <div className="prose prose-zinc max-w-none">
                                 <p className="text-zinc-500 font-medium leading-relaxed whitespace-pre-wrap">
                                     {contract.description}
@@ -135,9 +138,9 @@ export default function ContractShow({ contract }: Props) {
 
                         <section className="space-y-10">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Deployment Roster</h3>
+                                <h3 className="text-2xl font-black text-zinc-900 tracking-tight">{t('deployment_roster')}</h3>
                                 <div className="px-4 py-1.5 rounded-full bg-zinc-100 text-zinc-500 text-[10px] font-black uppercase tracking-widest">
-                                    {contract.applications.length} Total Signals
+                                    {t('total_signals', { count: contract.applications.length })}
                                 </div>
                             </div>
 
@@ -145,7 +148,7 @@ export default function ContractShow({ contract }: Props) {
                             <div className="space-y-6">
                                 <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-4 flex items-center gap-2">
                                     <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    Awaiting Review ({pendingApplications.length})
+                                    {t('awaiting_review', { count: pendingApplications.length })}
                                 </h4>
                                 {pendingApplications.map(app => (
                                     <ApplicationCard 
@@ -157,7 +160,7 @@ export default function ContractShow({ contract }: Props) {
                                 ))}
                                 {pendingApplications.length === 0 && (
                                     <div className="p-12 text-center bg-zinc-50 rounded-[2.5rem] border border-dashed border-zinc-200">
-                                        <p className="text-zinc-400 font-bold text-sm">All incoming signals have been processed.</p>
+                                        <p className="text-zinc-400 font-bold text-sm">{t('all_incoming_processed')}</p>
                                     </div>
                                 )}
                             </div>
@@ -167,7 +170,7 @@ export default function ContractShow({ contract }: Props) {
                                 <div className="space-y-6 pt-10 border-t border-zinc-100">
                                     <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500 mb-4 flex items-center gap-2">
                                         <FaRocket className="animate-bounce" />
-                                        In Progress / Review ({activeApplications.length})
+                                        {t('in_progress_review', { count: activeApplications.length })}
                                     </h4>
                                     {activeApplications.map(app => (
                                         <ApplicationCard 
@@ -185,7 +188,7 @@ export default function ContractShow({ contract }: Props) {
                             {completedApplications.length > 0 && (
                                 <div className="space-y-6 pt-10 border-t border-zinc-100">
                                     <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500 mb-4">
-                                        Mission Accomplished ({completedApplications.length})
+                                        {t('mission_accomplished', { count: completedApplications.length })}
                                     </h4>
                                     {completedApplications.map(app => (
                                         <ApplicationCard 
@@ -205,34 +208,34 @@ export default function ContractShow({ contract }: Props) {
                             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-emerald-500/30 transition-colors" />
                             <div className="relative z-10 space-y-8">
                                 <div>
-                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-2">Escrow Budget (Per Slot)</h4>
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-2">{t('escrow_budget_per_slot')}</h4>
                                     <p className="text-4xl font-black tracking-tighter">${Number(contract.budget || 0).toFixed(2)}</p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">Total Slots</p>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">{t('total_slots')}</p>
                                         <p className="text-xl font-black">{contract.slots || 1}</p>
                                     </div>
                                     <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">Hired</p>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">{t('hired')}</p>
                                         <p className="text-xl font-black">{activeApplications.length + completedApplications.length}</p>
                                     </div>
                                 </div>
                                 <div className="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
                                     <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <FaCheckCircle /> Secure Escrow Active
+                                        <FaCheckCircle /> {t('secure_escrow_active')}
                                     </p>
-                                    <p className="text-xs text-zinc-400 font-medium">Funds are deducted upon hire but held safely until you verify the work.</p>
+                                    <p className="text-xs text-zinc-400 font-medium">{t('escrow_hint')}</p>
                                 </div>
                             </div>
                         </div>
 
                         <div className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40 space-y-6">
-                            <h4 className="text-lg font-black text-zinc-900 tracking-tight">Market Analytics</h4>
+                            <h4 className="text-lg font-black text-zinc-900 tracking-tight">{t('market_analytics')}</h4>
                             <div className="space-y-4">
-                                <HealthRow label="Conversion Rate" value={`${Math.round(((activeApplications.length + completedApplications.length) / (contract.applications.length || 1)) * 100)}%`} color="text-zinc-900" />
-                                <HealthRow label="Applicant Quality" value="High-Tier" color="text-emerald-500" />
-                                <HealthRow label="Fill Velocity" value="Standard" color="text-zinc-500" />
+                                <HealthRow label={t('conversion_rate')} value={`${Math.round(((activeApplications.length + completedApplications.length) / (contract.applications.length || 1)) * 100)}%`} color="text-zinc-900" />
+                                <HealthRow label={t('applicant_quality')} value={t('high_tier')} color="text-emerald-500" />
+                                <HealthRow label={t('fill_velocity')} value={t('standard')} color="text-zinc-500" />
                             </div>
                         </div>
                     </aside>
@@ -273,7 +276,22 @@ function ApplicationCard({
     isPending?: boolean;
     isActive?: boolean;
 }) {
+    const { t } = useTranslation();
     const pendingProof = application.proofs.find(p => p.status === 'pending');
+    const proofStatusLabel = (status: string) => status === 'approved'
+        ? t('status_approved')
+        : status === 'rejected'
+            ? t('status_rejected')
+            : t('status_pending');
+    const applicationStatusLabel = application.status === 'completed'
+        ? t('status_completed')
+        : application.status === 'approved'
+            ? t('in_progress')
+            : application.status === 'denied'
+                ? t('status_denied')
+                : application.status === 'ignored'
+                    ? t('status_ignored')
+                    : t('status_pending');
 
     return (
         <motion.div 
@@ -317,11 +335,11 @@ function ApplicationCard({
                 <div className="flex-1 space-y-6">
                     <div>
                         <div className="flex items-center justify-between mb-2">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Mission Pitch</span>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">{t('mission_pitch')}</span>
                             <span className="text-[9px] font-bold text-zinc-300">{new Date(application.created_at).toLocaleDateString()}</span>
                         </div>
                         <p className="text-sm text-zinc-600 font-medium leading-relaxed italic">
-                            "{application.pitch || 'No pitch provided.'}"
+                            "{application.pitch || t('no_pitch_provided')}"
                         </p>
                     </div>
 
@@ -329,13 +347,13 @@ function ApplicationCard({
                     {application.proofs.length > 0 && (
                         <div className="pt-6 border-t border-zinc-100 space-y-4">
                             <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-2">
-                                <FaCheckCircle /> Proof of Work Submission
+                                <FaCheckCircle /> {t('proof_of_work_submission')}
                             </span>
                             {application.proofs.map(proof => (
                                 <div key={proof.id} className="p-4 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-start justify-between gap-4">
                                     <div className="space-y-2 min-w-0">
                                         <a href={proof.proof_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-zinc-900 font-bold text-xs hover:text-emerald-600 transition-colors truncate">
-                                            <FaExternalLinkAlt className="text-[10px]" /> View Deliverable
+                                            <FaExternalLinkAlt className="text-[10px]" /> {t('view_deliverable')}
                                         </a>
                                         {proof.notes && <p className="text-[10px] text-zinc-500 font-medium italic">{proof.notes}</p>}
                                     </div>
@@ -344,7 +362,7 @@ function ApplicationCard({
                                         proof.status === 'rejected' ? 'bg-red-100 text-red-600' : 
                                         'bg-zinc-200 text-zinc-500'
                                     }`}>
-                                        {proof.status}
+                                        {proofStatusLabel(proof.status)}
                                     </div>
                                 </div>
                             ))}
@@ -359,14 +377,14 @@ function ApplicationCard({
                             <button 
                                 onClick={() => onDecision(application.id, 'approved')}
                                 className="h-12 w-12 rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 flex items-center justify-center hover:scale-110 transition-transform"
-                                title="Approve & Hire"
+                                title={t('approve_hire')}
                             >
                                 <FaCheckCircle />
                             </button>
                             <button 
                                 onClick={() => onDecision(application.id, 'denied')}
                                 className="h-12 w-12 rounded-2xl bg-zinc-100 text-zinc-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all"
-                                title="Reject"
+                                title={t('reject')}
                             >
                                 <FaTimesCircle />
                             </button>
@@ -379,13 +397,13 @@ function ApplicationCard({
                                 onClick={() => onProofDecision(pendingProof.id, 'approved')}
                                 className="px-6 py-3 rounded-2xl bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:scale-105 transition-all flex items-center gap-2"
                             >
-                                <FaCheckCircle /> Approve Proof
+                                <FaCheckCircle /> {t('approve_proof')}
                             </button>
                             <button 
                                 onClick={() => onProofDecision(pendingProof.id, 'rejected')}
                                 className="px-6 py-3 rounded-2xl bg-zinc-100 text-zinc-500 text-[9px] font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all"
                             >
-                                <FaTimesCircle /> Reject
+                                <FaTimesCircle /> {t('reject')}
                             </button>
                         </div>
                     )}
@@ -396,7 +414,7 @@ function ApplicationCard({
                             application.status === 'approved' ? 'bg-blue-50 text-blue-500' :
                             'bg-zinc-100 text-zinc-400'
                         }`}>
-                            {application.status === 'approved' ? 'In Progress' : application.status}
+                            {applicationStatusLabel}
                         </div>
                     )}
                 </div>

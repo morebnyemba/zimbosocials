@@ -1,5 +1,5 @@
 import { Link, usePage, router } from '@inertiajs/react';
-import { PropsWithChildren, ReactNode, useState, useEffect } from 'react';
+import { PropsWithChildren, ReactNode, useState, useEffect, useRef } from 'react';
 import { useTranslation } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -24,33 +24,70 @@ import {
     FaExclamationTriangle,
     FaPlus,
     FaGlobe,
+    FaUsers,
 } from 'react-icons/fa';
 
 function LangSwitcher() {
-    const { locale } = useTranslation();
+    const { locale, t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    const current = locale ?? 'sn';
+
     const langs = [
-        { code: 'sn', label: 'SN' },
-        { code: 'nd', label: 'ND' },
-        { code: 'en', label: 'EN' },
+        { code: 'sn', short: 'SN', label: t('shona') },
+        { code: 'nd', short: 'ND', label: t('ndebele') },
+        { code: 'en', short: 'EN', label: t('english') },
     ];
 
-    const current = langs.find((lang) => lang.code === locale)?.code ?? 'sn';
+    const currentLang = langs.find((l) => l.code === current) ?? langs[0];
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    const switchLang = (code: string) => {
+        setOpen(false);
+        router.post(route('locale.switch'), { locale: code }, { preserveScroll: true });
+    };
 
     return (
-        <div className="hidden lg:flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-1 py-0.5 shadow-sm">
-            <FaGlobe className="text-[10px] text-zinc-400" />
-            <select
-                aria-label="Language"
-                value={current}
-                onChange={(e) => router.post(route('locale.switch'), { locale: e.target.value }, { preserveScroll: true })}
-                className="h-6 min-w-[64px] rounded border-0 bg-transparent px-0.5 text-[9px] font-black uppercase tracking-wide text-zinc-700 focus:outline-none focus:ring-0"
+        <div ref={ref} className="relative hidden md:flex">
+            <button
+                onClick={() => setOpen((v) => !v)}
+                className="flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 shadow-sm hover:border-zinc-300 focus:outline-none"
+                aria-label="Switch language"
             >
-                {langs.map((lang) => (
-                    <option key={lang.code} value={lang.code}>
-                        {lang.label}
-                    </option>
-                ))}
-            </select>
+                <FaGlobe className="text-[10px] text-zinc-400" />
+                <span className="text-[9px] font-black uppercase tracking-wide text-zinc-700">{currentLang.short}</span>
+                <FaChevronDown className={`text-[8px] text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+                {open && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute right-0 top-full mt-1 z-50 min-w-[110px] rounded-md border border-zinc-200 bg-white py-1 shadow-md"
+                    >
+                        {langs.map((lang) => (
+                            <button
+                                key={lang.code}
+                                onClick={() => switchLang(lang.code)}
+                                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-zinc-50 ${lang.code === current ? 'font-bold text-zinc-900' : 'text-zinc-600'}`}
+                            >
+                                <span className="w-5 text-[9px] font-black uppercase tracking-wide text-zinc-400">{lang.short}</span>
+                                {lang.label}
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
@@ -76,6 +113,7 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
         { href: route('services.index'), name: 'services.index', label: 'Services', icon: FaBox },
         { href: route('orders.index'), name: 'orders.index', label: 'Orders', icon: FaRocket },
         { href: route('wallet.index'), name: 'wallet.index', label: 'Wallet', icon: FaWallet },
+        { href: route('referrals.index'), name: 'referrals.index', label: 'Referrals', icon: FaUsers },
         ...(user.account_type !== 'individual' ? [{ href: route('contracts.index'), name: 'contracts.index', label: 'Contracts', icon: FaFileContract }] : []),
         { href: route('tickets.index'), name: 'tickets.index', label: 'Support', icon: FaHeadset },
     ];
@@ -108,9 +146,9 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
 
             {/* Main Header */}
             <nav className={`fixed left-0 top-0 md:top-14 w-full z-50 transition-all duration-500 ${scrolled ? 'bg-white/80 backdrop-blur-2xl border-b border-zinc-200 shadow-sm py-2' : 'bg-transparent py-5'}`}>
-                <div className="max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between">
+                <div className="max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between gap-4">
                     {/* Logo Area */}
-                    <div className="flex items-center gap-12">
+                    <div className="flex min-w-0 flex-1 items-center gap-6 xl:gap-12">
                         <Link href="/" className="group md:hidden flex items-center gap-2">
                             <div className="h-8 px-2 flex items-center justify-center rounded-lg border border-zinc-200 bg-white shadow-sm">
                                 <img src="/images/zimbosocials.png" alt="Zimbo Socials" className="h-full w-auto object-contain" />
@@ -118,25 +156,27 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                         </Link>
 
                         {/* Desktop Navigation */}
-                        <div className="hidden lg:flex items-center gap-2">
+                        <div className="hidden min-w-0 flex-1 lg:flex">
+                            <div className="flex min-w-0 items-center gap-2 overflow-x-auto py-1 pr-2">
                             {navLinks.map((link) => {
                                 const active = route().current(link.name);
                                 return (
                                     <Link 
                                         key={link.name} 
                                         href={link.href}
-                                        className={`px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-2.5 ${active ? 'bg-zinc-950 text-white shadow-xl shadow-zinc-900/40 ring-2 ring-emerald-500/20' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'}`}
+                                        className={`shrink-0 px-4 xl:px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-2.5 whitespace-nowrap ${active ? 'bg-zinc-950 text-white shadow-xl shadow-zinc-900/40 ring-2 ring-emerald-500/20' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'}`}
                                     >
                                         <link.icon className={`text-sm ${active ? 'text-amber-400' : 'text-zinc-300'}`} />
                                         {link.label}
                                     </Link>
                                 );
                             })}
+                            </div>
                         </div>
                     </div>
 
                     {/* Right Actions */}
-                    <div className="flex items-center gap-4 md:gap-6">
+                    <div className="flex shrink-0 items-center gap-3 md:gap-4 xl:gap-6">
                         {/* Wallet Badge */}
                         <Link href={route('wallet.index')} className="hidden sm:flex items-center gap-3 bg-zinc-950 px-5 py-2.5 rounded-2xl border border-zinc-800 shadow-xl group relative overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 opacity-10 group-hover:opacity-20 transition-opacity" />

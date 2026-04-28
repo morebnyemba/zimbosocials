@@ -42,10 +42,16 @@ class AuthController extends Controller
             'email'            => ['required', 'email', 'unique:users,email'],
             'whatsapp_number'  => ['required', 'string', 'min:10', 'max:20'],
             'password'         => ['required', 'confirmed', Password::min(8)],
+            'referral_code'    => ['nullable', 'string', 'max:32', 'exists:users,referral_code'],
         ]);
 
         // Normalize WhatsApp number — strip spaces, dashes, leading +
         $waNumber = preg_replace('/[^0-9]/', '', $data['whatsapp_number']);
+
+        $referrer = null;
+        if (!empty($data['referral_code'])) {
+            $referrer = User::where('referral_code', $data['referral_code'])->first();
+        }
 
         $user = User::create([
             'name'            => $data['name'],
@@ -54,6 +60,8 @@ class AuthController extends Controller
             'phone'           => $waNumber,      // also set phone for convenience
             'password'        => Hash::make($data['password']),
             'locale'          => $request->get('locale', 'sn'),
+            'referral_code'   => User::generateReferralCode(),
+            'referred_by'     => $referrer?->getKey(),
         ]);
 
         // accept account path fields from multi-step registration form

@@ -25,6 +25,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaynowController;
 use App\Http\Controllers\PortfolioController;
 use App\Http\Controllers\ServiceController;
+use App\Http\Controllers\ReferralController;
 use App\Http\Controllers\WalletController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\SettingsController;
@@ -189,6 +190,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/wallet/add-funds',   [WalletController::class, 'manualDeposit'])->middleware('throttle:wallet-manual-deposit')->name('wallet.add');
     Route::post('/wallet/submit-proof', [WalletController::class, 'submitProof'])->middleware('throttle:wallet-proof-submit')->name('wallet.submit-proof');
     Route::post('/wallet/withdraw',    [WalletController::class, 'withdraw'])->name('wallet.withdraw');
+
+    // Referrals
+    Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');
 
     // Paynow
     Route::post('/paynow/init', [PaynowController::class, 'init'])->middleware('throttle:paynow-init')->name('paynow.init');

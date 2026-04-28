@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import { useTranslation } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     FaBriefcase, 
@@ -44,6 +45,7 @@ const statusStyles: Record<string, { bg: string; text: string; icon: any }> = {
 };
 
 export default function ContractsIndex({ my_contracts, available_contracts }: Props) {
+    const { t } = useTranslation();
     const { auth } = usePage().props as any;
     const user = auth.user;
     const isBusinessAccount = user.account_type === 'business';
@@ -86,14 +88,14 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
     };
 
     const closeContract = (id: number) => { 
-        if (confirm('Are you sure you want to close this contract? This will stop new applications.')) {
+        if (confirm(t('confirm_close_contract'))) {
             router.delete(route('contracts.destroy', id), { preserveScroll: true }); 
         }
     };
 
     return (
         <AuthenticatedLayout>
-            <Head title="Contract Marketplace" />
+            <Head title={t('contracts_marketplace_title')} />
             
             <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12">
                 {/* Header Section */}
@@ -103,15 +105,15 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                             <div className="h-12 w-12 rounded-2xl bg-zinc-900 flex items-center justify-center shadow-lg">
                                 <FaBriefcase className="text-emerald-400 text-xl" />
                             </div>
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Opportunities Terminal</span>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">{t('contracts_opportunities_terminal')}</span>
                         </div>
                         <h1 className="text-5xl font-black text-zinc-900 tracking-tighter">
-                            Contract <span className="text-emerald-500">Marketplace</span>
+                            {t('contracts_marketplace_title')}
                         </h1>
                         <p className="text-zinc-500 font-medium max-w-xl leading-relaxed">
                             {isBusinessAccount 
-                                ? 'Post strategic campaigns and hire the top 1% of Zimbabwean digital talent to scale your brand.' 
-                                : 'Browse high-ticket contracts, apply with your portfolio, and earn rewards for elite digital execution.'}
+                                ? t('contracts_business_subtitle') 
+                                : t('contracts_marketer_subtitle')}
                         </p>
                     </div>
 
@@ -122,7 +124,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 opacity-90 group-hover:opacity-100 transition-opacity" />
                             <FaPlus className="relative z-10" />
-                            <span className="relative z-10">Post New Opportunity</span>
+                            <span className="relative z-10">{t('post_new_opportunity')}</span>
                         </button>
                     )}
                 </header>
@@ -133,13 +135,13 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                         onClick={() => setTab('available')} 
                         className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === 'available' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
                     >
-                        Marketplace
+                        {t('marketplace')}
                     </button>
                     <button 
                         onClick={() => setTab('my')} 
                         className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === 'my' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
                     >
-                        {isBusinessAccount ? 'My Postings' : 'My Applications'}
+                        {isBusinessAccount ? t('my_postings') : t('my_applications')}
                     </button>
                 </div>
 
@@ -163,7 +165,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                                     />
                                 ))
                             ) : (
-                                <EmptyState message="The marketplace is currently waiting for new opportunities. Check back shortly!" />
+                                <EmptyState message={t('marketplace_empty')} />
                             )
                         ) : (
                             my_contracts.data.length > 0 ? (
@@ -175,7 +177,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                                     />
                                 ))
                             ) : (
-                                <EmptyState message={isBusinessAccount ? "You haven't posted any contracts yet. Tap 'Post New Opportunity' to begin." : "You haven't applied to any contracts yet. Head to the marketplace to start earning."} />
+                                <EmptyState message={isBusinessAccount ? t('my_contracts_empty_business') : t('my_contracts_empty_marketer')} />
                             )
                         )}
                     </motion.div>
@@ -194,8 +196,8 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                 <form onSubmit={submitApply} className="p-8 space-y-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Contract Application</h3>
-                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">Submit your elevator pitch</p>
+                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">{t('contract_application')}</h3>
+                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('submit_your_pitch')}</p>
                         </div>
                         <button type="button" onClick={() => setApplyingContract(null)} className="h-10 w-10 rounded-xl bg-zinc-100 flex items-center justify-center hover:bg-zinc-200">
                             <FaTimes />
@@ -208,11 +210,11 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Your Pitch / Proposal</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('your_pitch_proposal')}</label>
                         <textarea 
                             value={applyData.pitch}
                             onChange={e => setApplyData('pitch', e.target.value)}
-                            placeholder="Why are you the perfect fit for this contract? Mention your relevant experience..."
+                            placeholder={t('your_pitch_placeholder')}
                             rows={5}
                             className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500 transition-all"
                             required
@@ -223,7 +225,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                         disabled={applying}
                         className="w-full py-4 rounded-2xl bg-zinc-900 text-white font-black uppercase tracking-widest text-xs shadow-xl hover:bg-zinc-800 disabled:opacity-50 flex items-center justify-center gap-3"
                     >
-                        {applying ? 'Submitting...' : <><FaRocket /> Submit Application</>}
+                        {applying ? t('submitting') : <><FaRocket /> {t('submit_application')}</>}
                     </button>
                 </form>
             </Modal>
@@ -233,8 +235,8 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                 <form onSubmit={submitCreate} className="p-8 space-y-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Post Opportunity</h3>
-                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">Define your campaign requirements</p>
+                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">{t('post_opportunity')}</h3>
+                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('define_campaign_requirements')}</p>
                         </div>
                         <button type="button" onClick={() => setShowCreate(false)} className="h-10 w-10 rounded-xl bg-zinc-100 flex items-center justify-center hover:bg-zinc-200">
                             <FaTimes />
@@ -243,33 +245,33 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
 
                     <div className="grid gap-6 sm:grid-cols-2">
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Contract Title</label>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('contract_title_label')}</label>
                             <input 
                                 value={data.title}
                                 onChange={e => setData('title', e.target.value)}
-                                placeholder="e.g. Instagram Brand Ambassador"
+                                placeholder={t('contract_title_placeholder')}
                                 className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500"
                                 required
                             />
                             {errors.title && <p className="text-[10px] text-red-500 font-bold uppercase">{errors.title}</p>}
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Target Platform</label>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('target_platform')}</label>
                             <input 
                                 value={data.platform}
                                 onChange={e => setData('platform', e.target.value)}
-                                placeholder="e.g. TikTok, Instagram"
+                                placeholder={t('target_platform_placeholder_short')}
                                 className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500"
                             />
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Detailed Description</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('detailed_description')}</label>
                         <textarea 
                             value={data.description}
                             onChange={e => setData('description', e.target.value)}
-                            placeholder="What are the deliverables and expectations?"
+                            placeholder={t('deliverables_placeholder')}
                             rows={4}
                             className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500"
                             required
@@ -278,7 +280,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
 
                     <div className="grid gap-6 sm:grid-cols-3">
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Budget Per Slot</label>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('budget_per_slot')}</label>
                             <div className="relative">
                                 <FaDollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
                                 <input 
@@ -293,7 +295,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Slots</label>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('total_slots')}</label>
                             <input 
                                 type="number"
                                 value={data.slots}
@@ -304,7 +306,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Submission Deadline</label>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('submission_deadline')}</label>
                             <input 
                                 type="date"
                                 value={data.deadline_at}
@@ -317,13 +319,13 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                     {Number(data.budget) > 0 && (
                         <div className="p-6 rounded-[2rem] bg-zinc-900 text-white flex items-center justify-between shadow-xl">
                             <div className="space-y-1">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Total Campaign Value</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{t('total_campaign_value')}</p>
                                 <p className="text-xl font-black tracking-tighter">
                                     ${(Number(data.budget) * (Number(data.slots) || 1)).toFixed(2)}
                                 </p>
                             </div>
                             <div className="text-right">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Your Wallet</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{t('your_wallet')}</p>
                                 <p className={`text-xs font-black ${Number(user.balance) < (Number(data.budget) * (Number(data.slots) || 1)) ? 'text-red-400' : 'text-emerald-400'}`}>
                                     ${Number(user.balance).toFixed(2)}
                                 </p>
@@ -335,7 +337,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                         disabled={processing}
                         className="w-full py-4 rounded-2xl bg-zinc-900 text-white font-black uppercase tracking-widest text-xs shadow-xl hover:bg-zinc-800 disabled:opacity-50 flex items-center justify-center gap-3"
                     >
-                        {processing ? 'Launching...' : <><FaPlus /> Launch Contract</>}
+                        {processing ? t('launching') : <><FaPlus /> {t('launch_contract')}</>}
                     </button>
                 </form>
             </Modal>
@@ -344,6 +346,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
 }
 
 function AvailableContractCard({ contract, onApply }: { contract: Contract; onApply: () => void }) {
+    const { t } = useTranslation();
     return (
         <motion.div 
             whileHover={{ y: -5 }}
@@ -355,13 +358,13 @@ function AvailableContractCard({ contract, onApply }: { contract: Contract; onAp
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20 flex items-center gap-2">
-                        <FaCheckCircle className="text-[8px]" /> Funds Verified
+                        <FaCheckCircle className="text-[8px]" /> {t('funds_verified')}
                     </div>
                     <div className="h-1 w-1 rounded-full bg-zinc-200" />
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">{contract.business?.company_name || contract.business?.name}</span>
                 </div>
                 <div className="text-right">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Fixed Budget</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">{t('fixed_budget')}</p>
                     <p className="text-lg font-black text-emerald-500 tracking-tighter">${Number(contract.budget || 0).toFixed(2)}</p>
                 </div>
             </div>
@@ -383,13 +386,13 @@ function AvailableContractCard({ contract, onApply }: { contract: Contract; onAp
             <div className="pt-6 border-t border-zinc-100 mt-auto flex items-center justify-between">
                 <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-widest">
                     <FaClock className="text-emerald-500/50" />
-                    {contract.deadline_at ? `Due ${new Date(contract.deadline_at).toLocaleDateString()}` : 'No Deadline'}
+                    {contract.deadline_at ? t('due_on', { date: new Date(contract.deadline_at).toLocaleDateString() }) : t('no_deadline')}
                 </div>
                 <button 
                     onClick={onApply}
                     className="h-10 px-6 rounded-xl bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg hover:bg-emerald-500 transition-colors"
                 >
-                    Apply
+                    {t('apply')}
                 </button>
             </div>
         </motion.div>
@@ -397,14 +400,20 @@ function AvailableContractCard({ contract, onApply }: { contract: Contract; onAp
 }
 
 function MyContractCard({ contract, onClose }: { contract: Contract; onClose: (id: number) => void }) {
+    const { t } = useTranslation();
     const style = statusStyles[contract.status] || statusStyles.closed;
     const StatusIcon = style.icon;
+    const statusLabel = contract.status === 'open'
+        ? t('contract_status_open')
+        : contract.status === 'filled'
+            ? t('contract_status_filled')
+            : t('contract_status_closed');
 
     return (
         <div className="bg-zinc-50 rounded-[2.5rem] p-8 border border-zinc-200">
             <div className="flex items-center justify-between mb-6">
                 <div className={`px-4 py-1.5 rounded-full ${style.bg} ${style.text} flex items-center gap-2 text-[9px] font-black uppercase tracking-widest`}>
-                    <StatusIcon /> {contract.status}
+                    <StatusIcon /> {statusLabel}
                 </div>
                 <p className="text-lg font-black text-zinc-900 tracking-tighter">${Number(contract.budget || 0).toFixed(2)}</p>
             </div>
@@ -415,11 +424,11 @@ function MyContractCard({ contract, onClose }: { contract: Contract; onClose: (i
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 rounded-2xl bg-white border border-zinc-100">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-1">Applications</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-1">{t('applications')}</p>
                         <p className="text-xl font-black text-zinc-900">{contract.applications_count || 0}</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-white border border-zinc-100">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400 mb-1">Pending</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400 mb-1">{t('pending')}</p>
                         <p className="text-xl font-black text-emerald-500">{contract.pending_applications_count || 0}</p>
                     </div>
                 </div>
@@ -430,7 +439,7 @@ function MyContractCard({ contract, onClose }: { contract: Contract; onClose: (i
                     href={route('contracts.show', contract.id)}
                     className="flex-1 h-12 rounded-2xl bg-white border border-zinc-200 text-zinc-600 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-100 transition-colors"
                 >
-                    Manage Applications
+                    {t('manage_applications')}
                 </Link>
                 {contract.status === 'open' && (
                     <button 
@@ -446,13 +455,14 @@ function MyContractCard({ contract, onClose }: { contract: Contract; onClose: (i
 }
 
 function EmptyState({ message }: { message: string }) {
+    const { t } = useTranslation();
     return (
         <div className="col-span-full py-24 flex flex-col items-center text-center space-y-6">
             <div className="h-24 w-24 rounded-full bg-zinc-50 border border-zinc-100 flex items-center justify-center">
                 <FaRegHandshake className="text-4xl text-zinc-200" />
             </div>
             <div className="space-y-2">
-                <h4 className="text-xl font-black text-zinc-900">Quiet for now...</h4>
+                <h4 className="text-xl font-black text-zinc-900">{t('quiet_for_now')}</h4>
                 <p className="text-sm text-zinc-400 max-w-xs mx-auto font-medium">{message}</p>
             </div>
         </div>

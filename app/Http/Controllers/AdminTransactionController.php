@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Services\NotificationService;
+use App\Services\ReferralService;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\Transaction;
@@ -46,11 +47,13 @@ class AdminTransactionController extends Controller
         ]);
     }
 
-    public function approveDeposit(Transaction $transaction): RedirectResponse
+    public function approveDeposit(Transaction $transaction, ReferralService $referralService): RedirectResponse
     {
         if ($transaction->type !== 'deposit' || $transaction->status !== 'pending') {
             return back()->with('error', 'Cannot approve this transaction.');
         }
+
+        $oldStatus = (string) $transaction->status;
 
         $user   = $transaction->user;
         $amount = (float) $transaction->amount;
@@ -62,7 +65,16 @@ class AdminTransactionController extends Controller
             'processed_by' => Auth::id(), 'processed_at' => now(),
         ]);
 
-        AuditLog::log('transaction.deposit_approved', Auth::id(), Transaction::class, $transaction->id);
+        $referralService->rewardReferrerOnFirstDeposit($transaction->fresh());
+
+        AuditLog::log(
+            action: 'transaction.deposit_approved',
+            userId: (int) Auth::id(),
+            modelType: Transaction::class,
+            modelId: (int) $transaction->id,
+            oldValues: ['status' => $oldStatus],
+            newValues: ['status' => 'completed'],
+        );
         NotificationService::notify($user->id, 'deposit_confirmed', 'Deposit Confirmed',
             "Your deposit of \${$amount} has been confirmed.");
 
@@ -75,12 +87,21 @@ class AdminTransactionController extends Controller
             return back()->with('error', 'Cannot reject this transaction.');
         }
 
+        $oldStatus = (string) $transaction->status;
+
         $transaction->update([
             'status' => 'failed', 'processed_by' => Auth::id(),
             'processed_at' => now(), 'admin_notes' => 'Rejected by admin',
         ]);
 
-        AuditLog::log('transaction.deposit_rejected', Auth::id(), Transaction::class, $transaction->id);
+        AuditLog::log(
+            action: 'transaction.deposit_rejected',
+            userId: (int) Auth::id(),
+            modelType: Transaction::class,
+            modelId: (int) $transaction->id,
+            oldValues: ['status' => $oldStatus],
+            newValues: ['status' => 'failed'],
+        );
         NotificationService::notify($transaction->user_id, 'deposit_rejected', 'Deposit Rejected',
             'Your deposit request has been rejected.');
 
@@ -93,11 +114,20 @@ class AdminTransactionController extends Controller
             return back()->with('error', 'Cannot process this withdrawal.');
         }
 
+        $oldStatus = (string) $transaction->status;
+
         $transaction->update([
             'status' => 'completed', 'processed_by' => Auth::id(), 'processed_at' => now(),
         ]);
 
-        AuditLog::log('transaction.withdrawal_processed', Auth::id(), Transaction::class, $transaction->id);
+        AuditLog::log(
+            action: 'transaction.withdrawal_processed',
+            userId: (int) Auth::id(),
+            modelType: Transaction::class,
+            modelId: (int) $transaction->id,
+            oldValues: ['status' => $oldStatus],
+            newValues: ['status' => 'completed'],
+        );
         NotificationService::notify($transaction->user_id, 'withdrawal_processed', 'Withdrawal Processed',
             "Your withdrawal of \$" . abs((float)$transaction->amount) . " has been processed.");
 

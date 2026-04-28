@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\ManualPaymentDetail;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Services\ReferralService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Paynow\Payments\Paynow;
@@ -53,6 +55,18 @@ class PaynowController extends Controller
             'notes'   => 'Initiated via Paynow',
             'payment_method_id' => null, // Dynamic payment
         ]);
+
+        AuditLog::log(
+            action: 'transaction.paynow_created_pending',
+            userId: (int) $user->getAuthIdentifier(),
+            modelType: Transaction::class,
+            modelId: (int) $transaction->getKey(),
+            newValues: [
+                'status' => 'pending',
+                'method' => (string) $request->input('method'),
+                'amount' => $amount,
+            ],
+        );
 
         $paynow = $this->getPaynow();
         $payment = $paynow->createPayment((string) $transaction->id, $user->email);
@@ -105,7 +119,7 @@ class PaynowController extends Controller
         return redirect()->route('wallet.index')->with('info', 'Your payment is being processed. It will reflect in your balance shortly.');
     }
 
-    public function webhook(Request $request)
+    public function webhook(Request $request, ReferralService $referralService)
     {
         $paynow = $this->getPaynow();
         $status = $paynow->processStatusUpdate();
@@ -119,10 +133,22 @@ class PaynowController extends Controller
             }
 
             if ($status->paid()) {
+                $oldStatus = (string) $transaction->getAttribute('status');
                 $transaction->update([
                     'status' => 'completed',
                     'notes' => 'Completed via Paynow'
                 ]);
+
+                $referralService->rewardReferrerOnFirstDeposit($transaction->fresh());
+
+                AuditLog::log(
+                    action: 'transaction.paynow_status_updated',
+                    userId: null,
+                    modelType: Transaction::class,
+                    modelId: (int) $transaction->getKey(),
+                    oldValues: ['status' => $oldStatus],
+                    newValues: ['status' => 'completed'],
+                );
 
                 $user = User::find($transaction->user_id);
                 if ($user) {
@@ -136,10 +162,23 @@ class PaynowController extends Controller
                     );
                 }
             } elseif ($status->status() === 'Cancelled' || $status->status() === 'Failed') {
+                $oldStatus = (string) $transaction->getAttribute('status');
                 $transaction->update([
                     'status' => 'rejected',
                     'notes' => 'Failed/Cancelled via Paynow'
                 ]);
+
+                AuditLog::log(
+                    action: 'transaction.paynow_status_updated',
+                    userId: null,
+                    modelType: Transaction::class,
+                    modelId: (int) $transaction->getKey(),
+                    oldValues: ['status' => $oldStatus],
+                    newValues: [
+                        'status' => 'rejected',
+                        'provider_status' => (string) $status->status(),
+                    ],
+                );
             }
 
             return response()->json(['status' => 'ok']);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Service;
+use App\Services\ReferralService;
 use App\Services\Upstream\OrderDispatchService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -35,7 +36,7 @@ class OrderController extends Controller
     /**
      * Store a new order.
      */
-    public function store(Request $request, OrderDispatchService $dispatchService): RedirectResponse
+    public function store(Request $request, OrderDispatchService $dispatchService, ReferralService $referralService): RedirectResponse
     {
         $data = $request->validate([
             'service_id' => ['required', 'exists:services,id'],
@@ -45,6 +46,13 @@ class OrderController extends Controller
 
         $service = Service::findOrFail($data['service_id']);
         $user    = Auth::user();
+
+        // Hard guard: users with empty balance cannot place orders.
+        if ((float) $user->balance <= 0) {
+            return back()->withErrors([
+                'balance' => __('orders.insufficient_balance'),
+            ])->withInput();
+        }
 
         // Validate quantity range
         if ($data['quantity'] < $service->min_qty || $data['quantity'] > $service->max_qty) {
@@ -57,9 +65,10 @@ class OrderController extends Controller
         }
 
         $charge = $service->calculateCharge($data['quantity']);
+        $availableBalance = (float) $user->balance;
 
         // Check balance
-        if ($user->balance < $charge) {
+        if ($availableBalance < $charge) {
             return back()->withErrors([
                 'balance' => __('orders.insufficient_balance'),
             ])->withInput();
@@ -87,6 +96,8 @@ class OrderController extends Controller
             $order->delete();
             return back()->withErrors(['balance' => __('orders.insufficient_balance')])->withInput();
         }
+
+        $referralService->rewardReferrerOnReferredOrder($order);
 
         $dispatchResult = $dispatchService->dispatch($order);
 

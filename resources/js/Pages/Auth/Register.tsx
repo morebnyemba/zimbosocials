@@ -4,7 +4,7 @@ import TextInput from '@/Components/TextInput'
 import { Head, Link, useForm } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { FormEventHandler, ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FiArrowLeft, FiArrowRight, FiBriefcase, FiCheckCircle, FiUser, FiUsers } from 'react-icons/fi'
 
 type AccountPath = 'marketer' | 'individual' | 'business'
@@ -63,7 +63,15 @@ export default function Register() {
         account_type: '',
         company_name: '',
         locale: 'sn',
+        referral_code: '',
     })
+
+    useEffect(() => {
+        const ref = new URLSearchParams(window.location.search).get('ref')
+        if (ref) {
+            setData('referral_code', ref)
+        }
+    }, [setData])
 
     const choosePath = (p: AccountPath) => {
         setSelectedPath(p)
@@ -226,6 +234,19 @@ export default function Register() {
                                                 <option value="en">English</option>
                                             </select>
                                             <InputError message={errors.locale} className="mt-2" />
+                                        </div>
+
+                                        <div>
+                                            <InputLabel htmlFor="referral_code" value="Referral Code (Optional)" />
+                                            <TextInput
+                                                id="referral_code"
+                                                name="referral_code"
+                                                value={data.referral_code}
+                                                className="mt-1 block w-full"
+                                                onChange={(e) => setData('referral_code', e.target.value.toUpperCase())}
+                                                placeholder="e.g. ZIMABC12345"
+                                            />
+                                            <InputError message={errors.referral_code} className="mt-2" />
                                         </div>
 
                                         <div className="grid gap-4 sm:grid-cols-2">
