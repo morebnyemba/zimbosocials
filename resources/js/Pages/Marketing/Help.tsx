@@ -31,8 +31,27 @@ const faqs = [
 const sectionViewport = { once: true, amount: 0.2 }
 
 export default function HelpPage() {
+  const faqStructuredData: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.q,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faq.a,
+      },
+    })),
+  }
+
   return (
-    <MarketingLayout title="Help Center - Zimbo Social">
+    <MarketingLayout
+      title="Help Center - Zimbo Socials"
+      description="Find fast answers about delivery times, payments, marketer onboarding, and account safety on Zimbo Socials."
+      seoPath="/help"
+      keywords={["Zimbo Socials help", "SMM FAQ", "order delivery help", "payment support"]}
+      structuredData={faqStructuredData}
+    >
       <section className="relative overflow-hidden border-b border-zinc-950 bg-gradient-to-br from-white via-amber-50 to-emerald-50">
         <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={sectionViewport} transition={{ duration: 0.6 }}>

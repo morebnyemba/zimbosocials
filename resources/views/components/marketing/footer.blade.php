@@ -2,7 +2,7 @@
     <div class="container">
         <div class="site-footer-grid">
             <div>
-                <img src="{{ asset('images/zimbosocials.png') }}" alt="Zimbo Social" class="footer-brand-logo">
+                <img src="{{ asset('images/zimbosocials.png') }}" alt="Zimbo Socials" class="footer-brand-logo">
                 <p>Zimbabwe's trusted SMM platform for creators, businesses, and page marketers looking for real growth and measurable outcomes.</p>
                 <div class="social-list">
                     <a href="#" class="social-icon" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
@@ -41,7 +41,7 @@
         </div>
 
         <div class="site-footer-bottom">
-            <i class="fas fa-copyright"></i> {{ date('Y') }} Zimbo Social. All rights reserved.
+            <i class="fas fa-copyright"></i> {{ date('Y') }} Zimbo Socials. All rights reserved.
         </div>
     </div>
 </footer>

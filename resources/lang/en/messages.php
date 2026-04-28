@@ -430,5 +430,24 @@ return [
     'upload_proof_of_payment'           => 'Upload Proof of Payment (Receipt/Screenshot)',
     'proof_receipt_screenshot'          => 'PNG, JPG or GIF (max 5MB). Clearly show transaction details.',
     'submit_proof_of_payment'           => 'Submit Proof of Payment',
+
+    // ─── Public / Marketing Nav ───────────────────────────────────────────────
+    'home'                  => 'Home',
+    'contact'               => 'Contact',
+    'about'                 => 'About',
+    'help'                  => 'Help',
+    'legal'                 => 'Legal',
+    'privacy'               => 'Privacy',
+    'terms'                 => 'Terms',
+    'get_started'           => 'Get Started',
+    'company'               => 'Company',
+    'help_center'           => 'Help Center',
+    'client_login'          => 'Client Login',
+    'footer_tagline'        => "Zimbabwe's trusted SMM growth platform for creators, brands, and marketers.",
+
+    // ─── Referral registration ─────────────────────────────────────────────────
+    'referred_by'           => 'Referred by',
+    'referral_code_applied' => 'Referral code applied',
+    'referral_code_label'   => 'Referral Code',
 ];
 

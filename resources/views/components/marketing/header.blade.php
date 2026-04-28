@@ -1,7 +1,7 @@
 <header class="container" style="position: sticky; top: 0; background: white; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
     <nav class="nav">
-        <a href="{{ route('marketing.home') }}" class="brand" aria-label="Zimbo Social Home">
-            <img src="{{ asset('images/zimbosocials.png') }}" alt="Zimbo Social" class="brand-logo">
+        <a href="{{ route('marketing.home') }}" class="brand" aria-label="Zimbo Socials Home">
+            <img src="{{ asset('images/zimbosocials.png') }}" alt="Zimbo Socials" class="brand-logo">
         </a>
 
         <!-- Mobile Menu Button -->

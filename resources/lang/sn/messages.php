@@ -409,7 +409,6 @@ return [
     // ─── Manual Deposit Flow ──────────────────────────────────────────────────
     'online_payment'                    => 'Kubhadhara Online',
     'manual_deposit'                    => 'Dhipoziti Yamaoko',
-    'payment_method'                    => 'Nzira yeKubhadhara',
     'online_badge'                      => 'ONLINE',
     'manual_badge'                      => 'YAMAOKO',
     'amount_to_deposit'                 => 'Huwandu hweKu Dhipoziti (USD)',
@@ -431,5 +430,24 @@ return [
     'upload_proof_of_payment'           => 'Isa Proof yeKubhadhara (Receipt/Screenshot)',
     'proof_receipt_screenshot'          => 'PNG, JPG kana GIF (max 5MB). Ratidza chienzanzo chehurongwa.',
     'submit_proof_of_payment'           => 'Tumira Proof yeKubhadhara',
+
+    // ─── Public / Marketing Nav ───────────────────────────────────────────────
+    'home'                  => 'Kumba',
+    'contact'               => 'Taura Nesu',
+    'about'                 => 'Nezvedu',
+    'help'                  => 'Rubatsiro',
+    'legal'                 => 'Mitemo',
+    'privacy'               => 'Chakavanzika',
+    'terms'                 => 'Mirairo',
+    'get_started'           => 'Tangawo',
+    'company'               => 'Kambani',
+    'help_center'           => 'Nzvimbo yeRubatsiro',
+    'client_login'          => 'Pinda Semutengi',
+    'footer_tagline'        => 'Nzvimbo yedu yeZimbabwe yakavimbika yekukura pamedia yemagariro esangano, makirasi, uye vashambadzisi.',
+
+    // ─── Referral registration ─────────────────────────────────────────────────
+    'referred_by'           => 'Wakaiswa na',
+    'referral_code_applied' => 'Kodhi yekupamhidzira yakashandiswa',
+    'referral_code_label'   => 'Kodhi yekupamhidzira',
 ];
 

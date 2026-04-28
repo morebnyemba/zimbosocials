@@ -25,7 +25,7 @@ const terms = [
     clause: "3",
     heading: "Acceptable Use Restrictions",
     title: "Prohibited Conduct",
-    body: "You may not use Zimbo Social for fraud, misinformation campaigns, impersonation, unlawful political manipulation, hate speech, harassment, or any activity that violates platform rules or Zimbabwean law.",
+    body: "You may not use Zimbo Socials for fraud, misinformation campaigns, impersonation, unlawful political manipulation, hate speech, harassment, or any activity that violates platform rules or Zimbabwean law.",
     icon: <FiXCircle className="h-5 w-5 text-amber-500" />,
     tone: "border-amber-300 bg-amber-50/40",
   },
@@ -49,7 +49,7 @@ const terms = [
     clause: "6",
     heading: "Liability Framework",
     title: "Limitation of Liability",
-    body: "Services are provided on an as-available basis. To the maximum extent permitted by Zimbabwean law, Zimbo Social is not liable for indirect, incidental, reputational, or consequential losses.",
+    body: "Services are provided on an as-available basis. To the maximum extent permitted by Zimbabwean law, Zimbo Socials is not liable for indirect, incidental, reputational, or consequential losses.",
     icon: <FiLock className="h-5 w-5 text-zinc-950" />,
     tone: "border-zinc-300 bg-white",
   },
@@ -57,7 +57,7 @@ const terms = [
     clause: "7",
     heading: "User Indemnity",
     title: "Indemnity",
-    body: "You agree to indemnify and hold Zimbo Social, its team, and partners harmless against claims, damages, penalties, and legal costs resulting from your unlawful use or breach of these terms.",
+    body: "You agree to indemnify and hold Zimbo Socials, its team, and partners harmless against claims, damages, penalties, and legal costs resulting from your unlawful use or breach of these terms.",
     icon: <FiShield className="h-5 w-5 text-emerald-600" />,
     tone: "border-emerald-300 bg-emerald-50/40",
   },
@@ -83,7 +83,12 @@ const sectionViewport = { once: true, amount: 0.2 }
 
 export default function TermsPage() {
   return (
-    <MarketingLayout title="Terms of Service - Zimbo Social">
+    <MarketingLayout
+      title="Terms of Service - Zimbo Socials"
+      description="Review Zimbo Socials terms of service, user obligations, and legal framework under Zimbabwean law."
+      seoPath="/terms"
+      keywords={["terms of service", "Zimbo Socials terms", "Zimbabwe digital services law"]}
+    >
       <section className="relative overflow-hidden border-b border-zinc-950 bg-gradient-to-br from-red-600 via-zinc-950 to-amber-500 text-white">
         <div className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={sectionViewport} transition={{ duration: 0.6 }}>
@@ -91,7 +96,7 @@ export default function TermsPage() {
               <FiFileText className="h-3.5 w-3.5" />
               Terms of Service
             </p>
-            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">Platform rules for responsible use of Zimbo Social.</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">Platform rules for responsible use of Zimbo Socials.</h1>
             <p className="mt-4 max-w-2xl text-sm text-zinc-200 sm:text-base">These terms define legal use, risk allocation, and user obligations under Zimbabwean law and constitutional principles.</p>
             <p className="mt-3 max-w-2xl text-xs text-zinc-300">This page is a simplified summary of platform terms. For formal legal reliance, users should keep records of the latest published version.</p>
           </motion.div>

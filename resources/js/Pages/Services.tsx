@@ -10,6 +10,7 @@ import {
     FaFacebook, 
     FaTwitter, 
     FaTelegram, 
+    FaWhatsapp,
     FaRocket, 
     FaSync, 
     FaInfoCircle, 
@@ -43,6 +44,7 @@ const categoryMeta: Record<string, { label: string; icon: any; color: string; bg
     facebook: { label: 'Facebook', icon: FaFacebook, color: 'text-blue-600', bg: 'bg-blue-50' },
     twitter: { label: 'Twitter / X', icon: FaTwitter, color: 'text-sky-600', bg: 'bg-sky-50' },
     telegram: { label: 'Telegram', icon: FaTelegram, color: 'text-cyan-600', bg: 'bg-cyan-50' },
+    whatsapp: { label: 'WhatsApp', icon: FaWhatsapp, color: 'text-green-600', bg: 'bg-green-50' },
 };
 
 export default function Services({ services, categories }: Props) {

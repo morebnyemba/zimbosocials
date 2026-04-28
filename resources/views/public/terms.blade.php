@@ -1,11 +1,11 @@
 @extends('layouts.marketing')
 
-@section('title', 'Terms of Service - Zimbo Social')
+@section('title', 'Terms of Service - Zimbo Socials')
 
 @section('content')
 <section class="hero">
     <h1>Terms of Service</h1>
-    <p>These terms govern your use of the Zimbo Social platform and services.</p>
+    <p>These terms govern your use of the Zimbo Socials platform and services.</p>
 </section>
 
 <section class="section">

@@ -1,6 +1,6 @@
 @extends('layouts.marketing')
 
-@section('title', 'Zimbo Social - Our Services')
+@section('title', 'Zimbo Socials - Our Services')
 
 @section('content')
 <section class="hero">

@@ -1,10 +1,10 @@
 @extends('layouts.marketing')
 
-@section('title', 'About Zimbo Social')
+@section('title', 'About Zimbo Socials')
 
 @section('content')
 <section class="hero">
-    <h1>About Zimbo Social</h1>
+    <h1>About Zimbo Socials</h1>
     <p>We help Zimbabwean creators, page owners, marketers, and businesses grow with reliable social media services and campaign contracts.</p>
 </section>
 

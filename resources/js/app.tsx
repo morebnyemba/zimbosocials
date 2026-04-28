@@ -6,10 +6,10 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import AppErrorBoundary from './Components/AppErrorBoundary';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = 'Zimbo Socials';
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => (title.includes(appName) ? title : `${title} - ${appName}`),
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.tsx`,

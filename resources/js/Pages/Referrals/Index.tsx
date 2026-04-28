@@ -43,7 +43,7 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
 
     const shareText = t('referral_share_message', { link: referralLink });
     const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-    const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}&quote=${encodeURIComponent(shareText)}`;
+    const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`;
 
     const copyReferralLink = async () => {
         await navigator.clipboard.writeText(referralLink);

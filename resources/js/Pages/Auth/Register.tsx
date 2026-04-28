@@ -1,13 +1,18 @@
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel'
 import TextInput from '@/Components/TextInput'
-import { Head, Link, useForm } from '@inertiajs/react'
+import { Head, Link, useForm, usePage } from '@inertiajs/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { FormEventHandler, ReactNode } from 'react'
-import { useEffect, useState } from 'react'
-import { FiArrowLeft, FiArrowRight, FiBriefcase, FiCheckCircle, FiUser, FiUsers } from 'react-icons/fi'
+import { useState } from 'react'
+import { FiArrowLeft, FiArrowRight, FiBriefcase, FiCheckCircle, FiUser, FiUsers, FiGift } from 'react-icons/fi'
 
 type AccountPath = 'marketer' | 'individual' | 'business'
+
+type RegisterPageProps = {
+    referralCode?: string | null
+    referrerName?: string | null
+}
 
 type PathDef = {
     key: AccountPath
@@ -50,6 +55,7 @@ const paths: PathDef[] = [
 ]
 
 export default function Register() {
+    const { referralCode, referrerName } = usePage<{ props: RegisterPageProps }>().props as unknown as RegisterPageProps
     const [step, setStep] = useState<1 | 2>(1)
     const [selectedPath, setSelectedPath] = useState<AccountPath | null>(null)
 
@@ -63,15 +69,8 @@ export default function Register() {
         account_type: '',
         company_name: '',
         locale: 'sn',
-        referral_code: '',
+        referral_code: referralCode ?? '',
     })
-
-    useEffect(() => {
-        const ref = new URLSearchParams(window.location.search).get('ref')
-        if (ref) {
-            setData('referral_code', ref)
-        }
-    }, [setData])
 
     const choosePath = (p: AccountPath) => {
         setSelectedPath(p)
@@ -100,7 +99,7 @@ export default function Register() {
                 <div className="w-full max-w-2xl">
                     <div className="mb-8 text-center">
                         <Link href="/" className="inline-flex items-center justify-center">
-                            <img src="/images/zimbosocials.png" alt="Zimbo Social" className="h-12 w-auto" />
+                            <img src="/images/zimbosocials.png" alt="Zimbo Socials" className="h-12 w-auto" />
                         </Link>
                         <p className="mt-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Create your account</p>
                     </div>
@@ -109,7 +108,7 @@ export default function Register() {
                         {step === 1 && (
                             <motion.div key="step1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.25 }}>
                                 <div className="mb-6 text-center">
-                                    <h1 className="text-2xl font-extrabold text-zinc-950">How will you use Zimbo Social?</h1>
+                                    <h1 className="text-2xl font-extrabold text-zinc-950">How will you use Zimbo Socials?</h1>
                                     <p className="mt-2 text-sm text-zinc-600">Choose the path that best describes your goals.</p>
                                 </div>
                                 <div className="grid gap-4 sm:grid-cols-3">
@@ -238,15 +237,30 @@ export default function Register() {
 
                                         <div>
                                             <InputLabel htmlFor="referral_code" value="Referral Code (Optional)" />
-                                            <TextInput
-                                                id="referral_code"
-                                                name="referral_code"
-                                                value={data.referral_code}
-                                                className="mt-1 block w-full"
-                                                onChange={(e) => setData('referral_code', e.target.value.toUpperCase())}
-                                                placeholder="e.g. ZIMABC12345"
-                                            />
-                                            <InputError message={errors.referral_code} className="mt-2" />
+                                            {referralCode ? (
+                                                <>
+                                                    <div className="mt-1 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+                                                        <FiGift className="h-4 w-4 shrink-0 text-emerald-600" />
+                                                        <span className="font-mono text-sm font-bold tracking-wider text-emerald-800">{referralCode}</span>
+                                                        {referrerName && (
+                                                            <span className="ml-auto text-xs text-emerald-700">Referred by <strong>{referrerName}</strong></span>
+                                                        )}
+                                                    </div>
+                                                    <input type="hidden" name="referral_code" value={referralCode} />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <TextInput
+                                                        id="referral_code"
+                                                        name="referral_code"
+                                                        value={data.referral_code}
+                                                        className="mt-1 block w-full"
+                                                        onChange={(e) => setData('referral_code', e.target.value.toUpperCase())}
+                                                        placeholder="e.g. ZIMABC12345"
+                                                    />
+                                                    <InputError message={errors.referral_code} className="mt-2" />
+                                                </>
+                                            )}
                                         </div>
 
                                         <div className="grid gap-4 sm:grid-cols-2">

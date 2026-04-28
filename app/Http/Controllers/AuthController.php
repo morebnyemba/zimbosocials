@@ -30,9 +30,25 @@ class AuthController extends Controller
 
     // ─── Register ─────────────────────────────────────────────────────────────
 
-    public function showRegister(): Response
+    public function showRegister(\Illuminate\Http\Request $request): Response
     {
-        return Inertia::render('Auth/Register');
+        // Capture referral code from query string into session
+        if ($request->filled('ref')) {
+            $ref = $request->input('ref');
+            if (User::where('referral_code', $ref)->exists()) {
+                $request->session()->put('referral_code', $ref);
+            }
+        }
+
+        $referralCode = $request->session()->get('referral_code');
+        $referrer = $referralCode
+            ? User::where('referral_code', $referralCode)->select('id', 'name')->first()
+            : null;
+
+        return Inertia::render('Auth/Register', [
+            'referralCode' => $referralCode,
+            'referrerName' => $referrer?->name,
+        ]);
     }
 
     public function register(Request $request): RedirectResponse
@@ -74,6 +90,8 @@ class AuthController extends Controller
 
         // Send welcome WhatsApp notification
         NotificationService::sendWelcome($user);
+
+    $request->session()->forget('referral_code');
 
         return redirect()->route($this->defaultDashboardRoute($user))
             ->with('success', __('messages.welcome', ['name' => $user->name]));

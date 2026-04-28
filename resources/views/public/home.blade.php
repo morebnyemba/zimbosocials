@@ -1,6 +1,6 @@
 @extends('layouts.marketing')
 
-@section('title', "Zimbo Social - Zimbabwe's #1 SMM Growth Platform")
+@section('title', "Zimbo Socials - Zimbabwe's #1 SMM Growth Platform")
 
 @section('head')
 <style>
@@ -388,7 +388,7 @@
 <section class="home-section" style="background: #fff;">
     <div class="container">
         <div class="section-title">
-            <h2>Why Trust Zimbo Social?</h2>
+            <h2>Why Trust Zimbo Socials?</h2>
             <p>Platform built for Zimbabwe's creators, businesses, and growth professionals</p>
         </div>
 
@@ -591,7 +591,7 @@
     <div class="container">
         <div class="cta-wrap">
             <h2 style="font-size: clamp(1.8rem, 4vw, 2.5rem);">Start Growing Today</h2>
-            <p>Join thousands of creators, businesses, and marketers on Zimbo Social.</p>
+            <p>Join thousands of creators, businesses, and marketers on Zimbo Socials.</p>
             <a href="{{ route('register') }}" class="btn" style="background:#fff;color:var(--zim-green);font-weight:700;">
                 <i class="fas fa-arrow-right"></i>Get Started Free
             </a>

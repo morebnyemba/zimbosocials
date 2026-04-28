@@ -90,6 +90,9 @@ class DatabaseSeeder extends Seeder
             ['category'=>'telegram','name'=>'Telegram Channel Members','name_sn'=>'Telegram — Members weChannel','rate'=>2.00,'min_qty'=>100,'max_qty'=>50000,'is_refill'=>false,'avg_time_minutes'=>60],
             ['category'=>'telegram','name'=>'Telegram Group Members','name_sn'=>'Telegram — Members weGroup','rate'=>2.50,'min_qty'=>100,'max_qty'=>20000,'is_refill'=>false,'avg_time_minutes'=>90],
             ['category'=>'telegram','name'=>'Telegram Post Views','name_sn'=>'Telegram — Kuonekwa kwePost','rate'=>0.10,'min_qty'=>1000,'max_qty'=>1000000,'is_refill'=>false,'avg_time_minutes'=>5],
+
+            // ── WhatsApp ──
+            ['category'=>'whatsapp','name'=>'WhatsApp Channel Followers','name_sn'=>'WhatsApp — Vateveri veChannel','rate'=>2.20,'min_qty'=>100,'max_qty'=>25000,'is_refill'=>false,'avg_time_minutes'=>90],
         ];
 
         foreach ($services as $i => $data) {

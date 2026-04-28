@@ -34,7 +34,12 @@ const sectionViewport = { once: true, amount: 0.2 }
 
 export default function PrivacyPage() {
   return (
-    <MarketingLayout title="Privacy Policy - Zimbo Social">
+    <MarketingLayout
+      title="Privacy Policy - Zimbo Socials"
+      description="Read how Zimbo Socials collects, uses, and protects personal and account data."
+      seoPath="/privacy"
+      keywords={["privacy policy", "data protection", "Zimbo Socials privacy"]}
+    >
       <section className="relative overflow-hidden border-b border-zinc-950 bg-gradient-to-br from-zinc-950 via-emerald-700 to-zinc-900 text-white">
         <div className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={sectionViewport} transition={{ duration: 0.6 }}>

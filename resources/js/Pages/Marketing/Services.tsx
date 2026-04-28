@@ -5,7 +5,7 @@ import { PageProps } from "@/types"
 import { motion } from "framer-motion"
 import { Link, usePage } from "@inertiajs/react"
 import { FiArrowRight, FiCheckCircle, FiTrendingUp, FiZap } from "react-icons/fi"
-import { FaFacebookF, FaInstagram, FaTelegram, FaTiktok, FaXTwitter, FaYoutube } from "react-icons/fa6"
+import { FaFacebookF, FaInstagram, FaTelegram, FaTiktok, FaWhatsapp, FaXTwitter, FaYoutube } from "react-icons/fa6"
 
 type Service = {
   id: number
@@ -34,13 +34,17 @@ function platformIcon(category: string) {
       return <FaTelegram className="h-5 w-5" />
     case "tiktok":
       return <FaTiktok className="h-5 w-5" />
+    case "whatsapp":
+      return <FaWhatsapp className="h-5 w-5" />
     default:
       return <FiTrendingUp className="h-5 w-5" />
   }
 }
 
 function categoryLabel(category: string) {
-  return category === "twitter" ? "X / Twitter" : category.charAt(0).toUpperCase() + category.slice(1)
+  if (category === "twitter") return "X / Twitter"
+  if (category === "whatsapp") return "WhatsApp"
+  return category.charAt(0).toUpperCase() + category.slice(1)
 }
 
 function serviceDescription(name: string, category: string): string {
@@ -64,6 +68,7 @@ const categoryDescriptions: Record<string, { headline: string; body: string }> =
   twitter: { headline: "X (Twitter) Momentum", body: "Followers, retweets, likes, and impressions that accelerate authority on the platform." },
   telegram: { headline: "Telegram Community", body: "Channel members, post views, and reactions \u2014 everything needed to build a credible Telegram community." },
   tiktok: { headline: "TikTok Virality", body: "Followers, video views, and likes designed to push TikTok content into discovery and the For You feed." },
+  whatsapp: { headline: "WhatsApp Channel Growth", body: "Channel follower growth for brands and creators building recurring reach inside WhatsApp." },
 }
 
 const audienceDeliverables = [
@@ -105,8 +110,28 @@ const audienceDeliverables = [
 export default function ServicesPage() {
   const { props } = usePage<PageProps<Props>>()
 
+  const servicesStructuredData: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Zimbo Socials Service Catalog",
+    itemListElement: Object.values(props.services)
+      .flat()
+      .slice(0, 30)
+      .map((service, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: service.name,
+      })),
+  }
+
   return (
-    <MarketingLayout title="Zimbo Social - Our Services">
+    <MarketingLayout
+      title="Social Media Services Catalog - Zimbo Socials"
+      description="Explore Zimbabwe-focused social media services across Instagram, YouTube, TikTok, Facebook, X, Telegram, and WhatsApp with clear quantity ranges."
+      seoPath="/services"
+      keywords={["SMM services Zimbabwe", "Instagram services", "YouTube subscribers", "WhatsApp channel followers", "social media packages"]}
+      structuredData={servicesStructuredData}
+    >
       <section className="relative overflow-hidden border-b border-zinc-950 bg-gradient-to-br from-zinc-950 via-red-600 to-emerald-600 text-white">
         <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={sectionViewport} transition={{ duration: 0.6 }}>

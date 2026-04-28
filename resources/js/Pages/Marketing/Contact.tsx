@@ -8,8 +8,22 @@ import { FiClock, FiMail, FiMessageCircle, FiShield, FiUser, FiZap } from "react
 const sectionViewport = { once: true, amount: 0.2 }
 
 export default function ContactPage() {
+  const contactStructuredData: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    name: "Zimbo Socials Contact",
+    url: "https://zimsocials.co.zw/contact",
+    description: "Contact Zimbo Socials support for order, payment, and account assistance.",
+  }
+
   return (
-    <MarketingLayout title="Zimbo Social - Contact">
+    <MarketingLayout
+      title="Contact Zimbo Socials Support"
+      description="Reach Zimbo Socials support for order updates, payment help, and account guidance."
+      seoPath="/contact"
+      keywords={["contact Zimbo Socials", "SMM support Zimbabwe", "order support"]}
+      structuredData={contactStructuredData}
+    >
       <section className="relative overflow-hidden border-b border-zinc-950 bg-gradient-to-br from-amber-50 via-white to-red-50">
         <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={sectionViewport} transition={{ duration: 0.6 }}>

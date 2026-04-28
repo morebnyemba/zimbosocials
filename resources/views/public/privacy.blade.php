@@ -1,11 +1,11 @@
 @extends('layouts.marketing')
 
-@section('title', 'Privacy Policy - Zimbo Social')
+@section('title', 'Privacy Policy - Zimbo Socials')
 
 @section('content')
 <section class="hero">
     <h1>Privacy Policy</h1>
-    <p>This policy explains how Zimbo Social collects, uses, and protects your personal information.</p>
+    <p>This policy explains how Zimbo Socials collects, uses, and protects your personal information.</p>
 </section>
 
 <section class="section">

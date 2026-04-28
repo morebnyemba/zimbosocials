@@ -36,7 +36,7 @@ export default function Login({
                 <div className="w-full max-w-md">
                     <div className="mb-6 text-center">
                         <Link href="/" className="inline-flex items-center justify-center">
-                            <img src="/images/zimbosocials.png" alt="Zimbo Social" className="h-12 w-auto" />
+                            <img src="/images/zimbosocials.png" alt="Zimbo Socials" className="h-12 w-auto" />
                         </Link>
                         <p className="mt-2 text-xs uppercase tracking-[0.18em] text-zinc-500">Welcome back</p>
                     </div>

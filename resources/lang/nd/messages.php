@@ -429,5 +429,24 @@ return [
     'upload_proof_of_payment'           => 'Faka Proof Yokubhadala (Receipt/Screenshot)',
     'proof_receipt_screenshot'          => 'PNG, JPG noma GIF (max 5MB). Khombisa ifomu lokutransakushini.',
     'submit_proof_of_payment'           => 'Thumela Proof Yokubhadala',
+
+    // ─── Public / Marketing Nav ───────────────────────────────────────────────
+    'home'                  => 'Ekhaya',
+    'contact'               => 'Xhumana Lathi',
+    'about'                 => 'Ngathi',
+    'help'                  => 'Usizo',
+    'legal'                 => 'Imithetho',
+    'privacy'               => 'Imfihlo',
+    'terms'                 => 'Imibandela',
+    'get_started'           => 'Qala Manje',
+    'company'               => 'Inkampani',
+    'help_center'           => 'Isikhungo Sosizo',
+    'client_login'          => 'Ngena njengeKlayenti',
+    'footer_tagline'        => 'Inkundla ethembekileyo ye-SMM yokukhula eZimbabwe yabaklami, amabhrand, labashambazisi.',
+
+    // ─── Referral registration ─────────────────────────────────────────────────
+    'referred_by'           => 'Wathunyelwa ngu',
+    'referral_code_applied' => 'Ikhodi yokubizela isebenzile',
+    'referral_code_label'   => 'Ikhodi Yokubizela',
 ];
 

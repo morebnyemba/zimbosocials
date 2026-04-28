@@ -11,7 +11,7 @@ import {
 } from "@/Components/ui/card"
 import { PageProps } from "@/types"
 import { motion } from "framer-motion"
-import { Head, Link, usePage } from "@inertiajs/react"
+import { Link, usePage } from "@inertiajs/react"
 import {
   FiArrowRight,
   FiBarChart2,
@@ -30,6 +30,7 @@ import {
   FaInstagram,
   FaTelegram,
   FaTiktok,
+  FaWhatsapp,
   FaXTwitter,
   FaYoutube,
 } from "react-icons/fa6"
@@ -76,8 +77,32 @@ const itemVariants = {
 export default function Home() {
   const { props } = usePage<PageProps<Props>>()
 
+  const homeStructuredData: Array<Record<string, unknown>> = [
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Zimbo Socials",
+      url: "https://zimsocials.co.zw",
+      potentialAction: {
+        "@type": "ViewAction",
+        target: "https://zimsocials.co.zw/services",
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: "Featured Social Growth Services",
+      itemListElement: props.featuredServices.slice(0, 8).map((service, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: service.name,
+      })),
+    },
+  ]
+
   const categoryLabel = (category: string) => {
     if (category === "twitter") return "X / Twitter"
+    if (category === "whatsapp") return "WhatsApp"
     return category.charAt(0).toUpperCase() + category.slice(1)
   }
 
@@ -95,15 +120,21 @@ export default function Home() {
         return <FaTelegram className="h-5 w-5" />
       case "tiktok":
         return <FaTiktok className="h-5 w-5" />
-      case "telegram":
+      case "whatsapp":
+        return <FaWhatsapp className="h-5 w-5" />
       default:
         return <FiTrendingUp className="h-5 w-5" />
     }
   }
 
   return (
-    <MarketingLayout title="Zimbo Social - Zimbabwe's #1 SMM Growth Platform">
-      <Head title="Zimbo Social - Zimbabwe's #1 SMM Growth Platform" />
+    <MarketingLayout
+      title="Zimbo Socials - Zimbabwe's #1 SMM Growth Platform"
+      description="Zimbabwe's trusted SMM platform for Instagram, TikTok, YouTube, Facebook, X, Telegram, and WhatsApp channel growth with transparent pricing and fast support."
+      seoPath="/"
+      keywords={["Zimbabwe SMM", "social media growth", "Instagram followers", "TikTok views", "WhatsApp channel followers"]}
+      structuredData={homeStructuredData}
+    >
 
       <section className="relative overflow-hidden border-b border-zinc-950 bg-gradient-to-br from-white via-amber-50 to-emerald-50">
         <motion.div
@@ -269,7 +300,7 @@ export default function Home() {
       >
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-6 text-center">
-          <h2 className="text-3xl font-bold">Why Trust Zimbo Social?</h2>
+          <h2 className="text-3xl font-bold">Why Trust Zimbo Socials?</h2>
           <p className="text-sm text-zinc-300">Built for Zimbabwe's creators, businesses, and growth professionals.</p>
         </div>
         <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" variants={sectionVariants}>
@@ -550,7 +581,7 @@ export default function Home() {
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-white">Ready to scale your socials?</CardTitle>
             <CardDescription>
-              Join creators and brands already growing with Zimbo Social.
+              Join creators and brands already growing with Zimbo Socials.
             </CardDescription>
           </CardHeader>
           <CardFooter className="flex flex-wrap gap-3">

@@ -8,8 +8,22 @@ import { FiArrowRight, FiBriefcase, FiLayers, FiTarget, FiUsers } from "react-ic
 const sectionViewport = { once: true, amount: 0.2 }
 
 export default function AboutPage() {
+  const aboutStructuredData: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    name: "About Zimbo Socials",
+    url: "https://zimsocials.co.zw/about",
+    description: "Learn about the mission of Zimbo Socials to support creators, brands, and marketers in Zimbabwe.",
+  }
+
   return (
-    <MarketingLayout title="About Zimbo Social">
+    <MarketingLayout
+      title="About Zimbo Socials"
+      description="Learn how Zimbo Socials helps creators, businesses, and marketers in Zimbabwe grow with reliable social media services."
+      seoPath="/about"
+      keywords={["about Zimbo Socials", "Zimbabwe social media platform", "creator growth Zimbabwe"]}
+      structuredData={aboutStructuredData}
+    >
       <section className="relative overflow-hidden border-b border-zinc-950 bg-gradient-to-br from-white via-emerald-50 to-amber-50">
         <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={sectionViewport} transition={{ duration: 0.6 }}>
@@ -19,7 +33,7 @@ export default function AboutPage() {
             </p>
             <h1 className="text-4xl font-extrabold tracking-tight text-zinc-950 sm:text-5xl">Built for Zimbabwean creators, brands, marketers, and growth teams.</h1>
             <p className="mt-4 max-w-3xl text-sm text-zinc-700 sm:text-base">
-              Zimbo Social exists to make digital growth more accessible through transparent services, dependable support, and a platform that understands local campaign realities.
+              Zimbo Socials exists to make digital growth more accessible through transparent services, dependable support, and a platform that understands local campaign realities.
             </p>
           </motion.div>
         </div>

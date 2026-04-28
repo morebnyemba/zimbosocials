@@ -43,7 +43,7 @@
 <body>
 <div class="auth-wrap">
     <div class="auth-logo">
-        <img src="{{ asset('images/zimbosocials.png') }}" alt="Zimbo Social" class="auth-logo-img">
+        <img src="{{ asset('images/zimbosocials.png') }}" alt="Zimbo Socials" class="auth-logo-img">
     </div>
 
     {{-- Language switch --}}
