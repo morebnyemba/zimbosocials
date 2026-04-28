@@ -1,0 +1,488 @@
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+    FaBriefcase, 
+    FaRocket, 
+    FaClock, 
+    FaGlobe, 
+    FaPlus, 
+    FaCheckCircle, 
+    FaExclamationCircle, 
+    FaChevronRight,
+    FaRegHandshake,
+    FaTimes,
+    FaArrowRight,
+    FaDollarSign
+} from 'react-icons/fa';
+
+interface Contract { 
+    id: number; 
+    title: string; 
+    platform?: string; 
+    description: string; 
+    budget?: string; 
+    slots?: number; 
+    deadline_at?: string; 
+    status: string; 
+    applications_count?: number; 
+    pending_applications_count?: number; 
+    business?: { id: number; name: string; company_name?: string }; 
+    created_at: string; 
+}
+
+interface Props { 
+    my_contracts: { data: Contract[]; links: any[] }; 
+    available_contracts: { data: Contract[]; links: any[] }; 
+}
+
+const statusStyles: Record<string, { bg: string; text: string; icon: any }> = { 
+    open: { bg: 'bg-emerald-500/10', text: 'text-emerald-500', icon: FaCheckCircle }, 
+    filled: { bg: 'bg-blue-500/10', text: 'text-blue-500', icon: FaRocket }, 
+    closed: { bg: 'bg-zinc-500/10', text: 'text-zinc-500', icon: FaTimes } 
+};
+
+export default function ContractsIndex({ my_contracts, available_contracts }: Props) {
+    const { auth } = usePage().props as any;
+    const user = auth.user;
+    const isBusinessAccount = user.account_type === 'business';
+    
+    const [tab, setTab] = useState<'available' | 'my'>(isBusinessAccount ? 'my' : 'available');
+    const [showCreate, setShowCreate] = useState(false);
+    const [applyingContract, setApplyingContract] = useState<Contract | null>(null);
+
+    const { data, setData, post, processing, reset, errors } = useForm({ 
+        title: '', 
+        platform: '', 
+        description: '', 
+        budget: '', 
+        slots: '1', 
+        deadline_at: '' 
+    });
+
+    const { data: applyData, setData: setApplyData, post: postApply, processing: applying } = useForm({
+        pitch: ''
+    });
+
+    const submitCreate = (e: React.FormEvent) => { 
+        e.preventDefault(); 
+        post(route('contracts.store'), { 
+            preserveScroll: true, 
+            onSuccess: () => { 
+                setShowCreate(false); 
+                reset(); 
+            } 
+        }); 
+    };
+
+    const submitApply = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!applyingContract) return;
+        postApply(route('contracts.apply', applyingContract.id), {
+            preserveScroll: true,
+            onSuccess: () => setApplyingContract(null)
+        });
+    };
+
+    const closeContract = (id: number) => { 
+        if (confirm('Are you sure you want to close this contract? This will stop new applications.')) {
+            router.delete(route('contracts.destroy', id), { preserveScroll: true }); 
+        }
+    };
+
+    return (
+        <AuthenticatedLayout>
+            <Head title="Contract Marketplace" />
+            
+            <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12">
+                {/* Header Section */}
+                <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                            <div className="h-12 w-12 rounded-2xl bg-zinc-900 flex items-center justify-center shadow-lg">
+                                <FaBriefcase className="text-emerald-400 text-xl" />
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Opportunities Terminal</span>
+                        </div>
+                        <h1 className="text-5xl font-black text-zinc-900 tracking-tighter">
+                            Contract <span className="text-emerald-500">Marketplace</span>
+                        </h1>
+                        <p className="text-zinc-500 font-medium max-w-xl leading-relaxed">
+                            {isBusinessAccount 
+                                ? 'Post strategic campaigns and hire the top 1% of Zimbabwean digital talent to scale your brand.' 
+                                : 'Browse high-ticket contracts, apply with your portfolio, and earn rewards for elite digital execution.'}
+                        </p>
+                    </div>
+
+                    {isBusinessAccount && (
+                        <button 
+                            onClick={() => setShowCreate(true)} 
+                            className="group relative px-8 py-4 rounded-2xl bg-zinc-950 text-white font-black uppercase tracking-widest text-xs shadow-2xl hover:scale-105 transition-all flex items-center gap-3 overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 opacity-90 group-hover:opacity-100 transition-opacity" />
+                            <FaPlus className="relative z-10" />
+                            <span className="relative z-10">Post New Opportunity</span>
+                        </button>
+                    )}
+                </header>
+
+                {/* Tabs */}
+                <div className="flex items-center gap-4 mb-10 p-1.5 rounded-2xl bg-zinc-100 w-fit">
+                    <button 
+                        onClick={() => setTab('available')} 
+                        className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === 'available' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
+                    >
+                        Marketplace
+                    </button>
+                    <button 
+                        onClick={() => setTab('my')} 
+                        className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === 'my' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
+                    >
+                        {isBusinessAccount ? 'My Postings' : 'My Applications'}
+                    </button>
+                </div>
+
+                {/* Content Area */}
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={tab}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3 }}
+                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+                    >
+                        {tab === 'available' ? (
+                            available_contracts.data.length > 0 ? (
+                                available_contracts.data.map(contract => (
+                                    <AvailableContractCard 
+                                        key={contract.id} 
+                                        contract={contract} 
+                                        onApply={() => setApplyingContract(contract)} 
+                                    />
+                                ))
+                            ) : (
+                                <EmptyState message="The marketplace is currently waiting for new opportunities. Check back shortly!" />
+                            )
+                        ) : (
+                            my_contracts.data.length > 0 ? (
+                                my_contracts.data.map(contract => (
+                                    <MyContractCard 
+                                        key={contract.id} 
+                                        contract={contract} 
+                                        onClose={closeContract} 
+                                    />
+                                ))
+                            ) : (
+                                <EmptyState message={isBusinessAccount ? "You haven't posted any contracts yet. Tap 'Post New Opportunity' to begin." : "You haven't applied to any contracts yet. Head to the marketplace to start earning."} />
+                            )
+                        )}
+                    </motion.div>
+                </AnimatePresence>
+
+                {/* Pagination (Simple for now) */}
+                {(tab === 'available' ? available_contracts.links : my_contracts.links).length > 3 && (
+                    <div className="mt-12 flex justify-center gap-2">
+                        {/* Pagination component would go here */}
+                    </div>
+                )}
+            </div>
+
+            {/* Application Modal */}
+            <Modal show={!!applyingContract} onClose={() => setApplyingContract(null)}>
+                <form onSubmit={submitApply} className="p-8 space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Contract Application</h3>
+                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">Submit your elevator pitch</p>
+                        </div>
+                        <button type="button" onClick={() => setApplyingContract(null)} className="h-10 w-10 rounded-xl bg-zinc-100 flex items-center justify-center hover:bg-zinc-200">
+                            <FaTimes />
+                        </button>
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-zinc-50 border border-zinc-200">
+                        <p className="text-sm font-bold text-zinc-900">{applyingContract?.title}</p>
+                        <p className="text-xs text-zinc-500 mt-1">{applyingContract?.business?.company_name || applyingContract?.business?.name}</p>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Your Pitch / Proposal</label>
+                        <textarea 
+                            value={applyData.pitch}
+                            onChange={e => setApplyData('pitch', e.target.value)}
+                            placeholder="Why are you the perfect fit for this contract? Mention your relevant experience..."
+                            rows={5}
+                            className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500 transition-all"
+                            required
+                        />
+                    </div>
+
+                    <button 
+                        disabled={applying}
+                        className="w-full py-4 rounded-2xl bg-zinc-900 text-white font-black uppercase tracking-widest text-xs shadow-xl hover:bg-zinc-800 disabled:opacity-50 flex items-center justify-center gap-3"
+                    >
+                        {applying ? 'Submitting...' : <><FaRocket /> Submit Application</>}
+                    </button>
+                </form>
+            </Modal>
+
+            {/* Create Modal */}
+            <Modal show={showCreate} onClose={() => setShowCreate(false)}>
+                <form onSubmit={submitCreate} className="p-8 space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Post Opportunity</h3>
+                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">Define your campaign requirements</p>
+                        </div>
+                        <button type="button" onClick={() => setShowCreate(false)} className="h-10 w-10 rounded-xl bg-zinc-100 flex items-center justify-center hover:bg-zinc-200">
+                            <FaTimes />
+                        </button>
+                    </div>
+
+                    <div className="grid gap-6 sm:grid-cols-2">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Contract Title</label>
+                            <input 
+                                value={data.title}
+                                onChange={e => setData('title', e.target.value)}
+                                placeholder="e.g. Instagram Brand Ambassador"
+                                className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500"
+                                required
+                            />
+                            {errors.title && <p className="text-[10px] text-red-500 font-bold uppercase">{errors.title}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Target Platform</label>
+                            <input 
+                                value={data.platform}
+                                onChange={e => setData('platform', e.target.value)}
+                                placeholder="e.g. TikTok, Instagram"
+                                className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Detailed Description</label>
+                        <textarea 
+                            value={data.description}
+                            onChange={e => setData('description', e.target.value)}
+                            placeholder="What are the deliverables and expectations?"
+                            rows={4}
+                            className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500"
+                            required
+                        />
+                    </div>
+
+                    <div className="grid gap-6 sm:grid-cols-3">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Budget Per Slot</label>
+                            <div className="relative">
+                                <FaDollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
+                                <input 
+                                    type="number"
+                                    step="0.01"
+                                    value={data.budget}
+                                    onChange={e => setData('budget', e.target.value)}
+                                    className="w-full pl-10 rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500"
+                                    placeholder="0.00"
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Slots</label>
+                            <input 
+                                type="number"
+                                value={data.slots}
+                                onChange={e => setData('slots', e.target.value)}
+                                placeholder="1"
+                                className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Submission Deadline</label>
+                            <input 
+                                type="date"
+                                value={data.deadline_at}
+                                onChange={e => setData('deadline_at', e.target.value)}
+                                className="w-full rounded-2xl border-zinc-200 focus:border-emerald-500 focus:ring-emerald-500"
+                            />
+                        </div>
+                    </div>
+
+                    {Number(data.budget) > 0 && (
+                        <div className="p-6 rounded-[2rem] bg-zinc-900 text-white flex items-center justify-between shadow-xl">
+                            <div className="space-y-1">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Total Campaign Value</p>
+                                <p className="text-xl font-black tracking-tighter">
+                                    ${(Number(data.budget) * (Number(data.slots) || 1)).toFixed(2)}
+                                </p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Your Wallet</p>
+                                <p className={`text-xs font-black ${Number(user.balance) < (Number(data.budget) * (Number(data.slots) || 1)) ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    ${Number(user.balance).toFixed(2)}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    <button 
+                        disabled={processing}
+                        className="w-full py-4 rounded-2xl bg-zinc-900 text-white font-black uppercase tracking-widest text-xs shadow-xl hover:bg-zinc-800 disabled:opacity-50 flex items-center justify-center gap-3"
+                    >
+                        {processing ? 'Launching...' : <><FaPlus /> Launch Contract</>}
+                    </button>
+                </form>
+            </Modal>
+        </AuthenticatedLayout>
+    );
+}
+
+function AvailableContractCard({ contract, onApply }: { contract: Contract; onApply: () => void }) {
+    return (
+        <motion.div 
+            whileHover={{ y: -5 }}
+            className="group bg-white rounded-[2.5rem] p-8 border border-zinc-200 shadow-xl shadow-zinc-200/40 flex flex-col h-full"
+        >
+            <div className="flex items-center justify-between mb-6">
+                <div className="h-10 w-10 rounded-xl bg-zinc-50 flex items-center justify-center border border-zinc-100">
+                    <FaGlobe className="text-zinc-400 text-sm" />
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20 flex items-center gap-2">
+                        <FaCheckCircle className="text-[8px]" /> Funds Verified
+                    </div>
+                    <div className="h-1 w-1 rounded-full bg-zinc-200" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">{contract.business?.company_name || contract.business?.name}</span>
+                </div>
+                <div className="text-right">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Fixed Budget</p>
+                    <p className="text-lg font-black text-emerald-500 tracking-tighter">${Number(contract.budget || 0).toFixed(2)}</p>
+                </div>
+            </div>
+
+            <div className="space-y-4 mb-8 flex-1">
+                <div>
+                    <h3 className="text-xl font-black text-zinc-900 tracking-tight leading-snug group-hover:text-emerald-600 transition-colors">
+                        {contract.title}
+                    </h3>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">
+                        {contract.business?.company_name || contract.business?.name} {contract.platform && `· ${contract.platform}`}
+                    </p>
+                </div>
+                <p className="text-sm text-zinc-500 font-medium leading-relaxed line-clamp-3">
+                    {contract.description}
+                </p>
+            </div>
+
+            <div className="pt-6 border-t border-zinc-100 mt-auto flex items-center justify-between">
+                <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-widest">
+                    <FaClock className="text-emerald-500/50" />
+                    {contract.deadline_at ? `Due ${new Date(contract.deadline_at).toLocaleDateString()}` : 'No Deadline'}
+                </div>
+                <button 
+                    onClick={onApply}
+                    className="h-10 px-6 rounded-xl bg-zinc-900 text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg hover:bg-emerald-500 transition-colors"
+                >
+                    Apply
+                </button>
+            </div>
+        </motion.div>
+    );
+}
+
+function MyContractCard({ contract, onClose }: { contract: Contract; onClose: (id: number) => void }) {
+    const style = statusStyles[contract.status] || statusStyles.closed;
+    const StatusIcon = style.icon;
+
+    return (
+        <div className="bg-zinc-50 rounded-[2.5rem] p-8 border border-zinc-200">
+            <div className="flex items-center justify-between mb-6">
+                <div className={`px-4 py-1.5 rounded-full ${style.bg} ${style.text} flex items-center gap-2 text-[9px] font-black uppercase tracking-widest`}>
+                    <StatusIcon /> {contract.status}
+                </div>
+                <p className="text-lg font-black text-zinc-900 tracking-tighter">${Number(contract.budget || 0).toFixed(2)}</p>
+            </div>
+
+            <div className="space-y-4 mb-8">
+                <h3 className="text-xl font-black text-zinc-900 tracking-tight leading-snug">
+                    {contract.title}
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-white border border-zinc-100">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-1">Applications</p>
+                        <p className="text-xl font-black text-zinc-900">{contract.applications_count || 0}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white border border-zinc-100">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400 mb-1">Pending</p>
+                        <p className="text-xl font-black text-emerald-500">{contract.pending_applications_count || 0}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="pt-6 border-t border-zinc-200 mt-auto flex items-center gap-3">
+                <Link 
+                    href={route('contracts.show', contract.id)}
+                    className="flex-1 h-12 rounded-2xl bg-white border border-zinc-200 text-zinc-600 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-100 transition-colors"
+                >
+                    Manage Applications
+                </Link>
+                {contract.status === 'open' && (
+                    <button 
+                        onClick={() => onClose(contract.id)}
+                        className="h-12 w-12 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
+                    >
+                        <FaTimes />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function EmptyState({ message }: { message: string }) {
+    return (
+        <div className="col-span-full py-24 flex flex-col items-center text-center space-y-6">
+            <div className="h-24 w-24 rounded-full bg-zinc-50 border border-zinc-100 flex items-center justify-center">
+                <FaRegHandshake className="text-4xl text-zinc-200" />
+            </div>
+            <div className="space-y-2">
+                <h4 className="text-xl font-black text-zinc-900">Quiet for now...</h4>
+                <p className="text-sm text-zinc-400 max-w-xs mx-auto font-medium">{message}</p>
+            </div>
+        </div>
+    );
+}
+
+// Simple Modal Component
+function Modal({ show, onClose, children }: { show: boolean; onClose: () => void; children: React.ReactNode }) {
+    return (
+        <AnimatePresence>
+            {show && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={onClose}
+                        className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" 
+                    />
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl overflow-hidden"
+                    >
+                        {children}
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
+    );
+}
+
