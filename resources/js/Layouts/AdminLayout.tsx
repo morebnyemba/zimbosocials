@@ -13,6 +13,7 @@ import {
     Ticket, 
     MessageSquare, 
     Plug,
+    Megaphone,
     Zap,
     UserCheck,
     FileText,
@@ -52,6 +53,7 @@ export default function AdminLayout({
         { href: route('admin.payment-details.index'), name: 'admin.payment-details.index', label: 'Payment Methods', icon: CreditCard },
         { href: route('admin.upstream-providers.index'), name: 'admin.upstream-providers.index', label: 'API Providers', icon: Plug },
         { href: route('admin.whatsapp.templates'), name: 'admin.whatsapp.templates', label: 'WhatsApp', icon: MessageSquare },
+        { href: route('admin.campaigns.index'), name: 'admin.campaigns.*', label: 'Campaigns', icon: Megaphone },
         { href: route('admin.settings.index'), name: 'admin.settings.index', label: 'System Settings', icon: Settings },
     ];
 

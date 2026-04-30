@@ -53,6 +53,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
     const [tab, setTab] = useState<'available' | 'my'>(isBusinessAccount ? 'my' : 'available');
     const [showCreate, setShowCreate] = useState(false);
     const [applyingContract, setApplyingContract] = useState<Contract | null>(null);
+    const [closingContractId, setClosingContractId] = useState<number | null>(null);
 
     const { data, setData, post, processing, reset, errors } = useForm({ 
         title: '', 
@@ -88,9 +89,15 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
     };
 
     const closeContract = (id: number) => { 
-        if (confirm(t('confirm_close_contract'))) {
-            router.delete(route('contracts.destroy', id), { preserveScroll: true }); 
-        }
+        setClosingContractId(id);
+    };
+
+    const confirmCloseContract = () => {
+        if (!closingContractId) return;
+        router.delete(route('contracts.destroy', closingContractId), {
+            preserveScroll: true,
+            onFinish: () => setClosingContractId(null),
+        });
     };
 
     return (
@@ -340,6 +347,32 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                         {processing ? t('launching') : <><FaPlus /> {t('launch_contract')}</>}
                     </button>
                 </form>
+            </Modal>
+
+            <Modal show={closingContractId !== null} onClose={() => setClosingContractId(null)}>
+                <div className="p-8 space-y-6">
+                    <div className="space-y-2">
+                        <h3 className="text-2xl font-black tracking-tight text-zinc-900">{t('confirm')}</h3>
+                        <p className="text-sm font-medium text-zinc-500">{t('confirm_close_contract')}</p>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setClosingContractId(null)}
+                            className="h-11 rounded-2xl border border-zinc-200 px-5 text-[10px] font-black uppercase tracking-widest text-zinc-500 transition-colors hover:bg-zinc-50"
+                        >
+                            {t('cancel')}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={confirmCloseContract}
+                            className="h-11 rounded-2xl bg-zinc-900 px-6 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-zinc-700"
+                        >
+                            {t('confirm')}
+                        </button>
+                    </div>
+                </div>
             </Modal>
         </AuthenticatedLayout>
     );

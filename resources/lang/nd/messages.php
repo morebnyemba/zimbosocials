@@ -429,6 +429,13 @@ return [
     'upload_proof_of_payment'           => 'Faka Proof Yokubhadala (Receipt/Screenshot)',
     'proof_receipt_screenshot'          => 'PNG, JPG noma GIF (max 5MB). Khombisa ifomu lokutransakushini.',
     'submit_proof_of_payment'           => 'Thumela Proof Yokubhadala',
+    'wallet_check_phone_pin'            => 'Sicela uhlole ifoni yakho ufake i-PIN yakho.',
+    'wallet_failed_initiate_payment'    => 'Ukuqalisa ukubhadala kwehlulekile.',
+    'wallet_payment_gateway_error'      => 'Kube lephutha ku-payment gateway. Zama futhi ngemva kwesikhatshana.',
+    'wallet_deposit_request_created'    => 'Isicelo sedepositi sidaliwe. Sicela ufake proof yokubhadala.',
+    'wallet_proof_submitted'            => 'I-proof ithunyelwe. Umphathi uzayihlola maduze.',
+    'wallet_failed_submit_proof'        => 'Ukuthumela i-proof kwehlulekile. Zama futhi.',
+    'wallet_error_submit_proof'         => 'Kube lephutha ekuthumeleni i-proof.',
 
     // ─── Public / Marketing Nav ───────────────────────────────────────────────
     'home'                  => 'Ekhaya',

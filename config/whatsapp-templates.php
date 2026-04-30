@@ -21,10 +21,10 @@ return [
         // ─── Account ─────────────────────────────────────────────────────────
         'welcome_message' => [
             'category' => 'UTILITY',
-            'body'     => "Welcome to SlykerTech SMM, {{1}}! 🎉\n\nYour account has been created successfully. Start growing your social media presence today.\n\nNeed help? Reply to this message or visit our Help Center.",
+            'body'     => "Welcome to Zimbo Socials, {{1}}! 🎉\n\nYour account has been created successfully. Start growing your social media presence today.\n\nNeed help? Reply to this message or visit our Help Center.",
             'params'   => ['user_name'],
             'header'   => null,
-            'footer'   => 'SlykerTech SMM Panel',
+            'footer'   => 'Zimbo Socials',
             'buttons'  => [],
         ],
 
@@ -34,7 +34,7 @@ return [
             'body'     => "✅ *Deposit Confirmed*\n\nHi {{1}}, your deposit of *{{2}}* has been credited to your wallet.\n\n💰 New Balance: {{3}}\n📅 Date: {{4}}",
             'params'   => ['user_name', 'amount', 'new_balance', 'date'],
             'header'   => null,
-            'footer'   => 'SlykerTech SMM',
+            'footer'   => 'Zimbo Socials',
             'buttons'  => [],
         ],
 
@@ -43,7 +43,7 @@ return [
             'body'     => "❌ *Deposit Rejected*\n\nHi {{1}}, your deposit request of {{2}} could not be verified.\n\nPlease ensure you sent the correct amount and reference. Contact support if you need assistance.",
             'params'   => ['user_name', 'amount'],
             'header'   => null,
-            'footer'   => 'SlykerTech SMM',
+            'footer'   => 'Zimbo Socials',
             'buttons'  => [],
         ],
 
@@ -53,7 +53,7 @@ return [
             'body'     => "🏧 *Withdrawal Processed*\n\nHi {{1}}, your withdrawal of *{{2}}* has been sent to your account.\n\nPlease allow 24–48 hours for the funds to reflect.\n\n📅 Processed: {{3}}",
             'params'   => ['user_name', 'amount', 'date'],
             'header'   => null,
-            'footer'   => 'SlykerTech SMM',
+            'footer'   => 'Zimbo Socials',
             'buttons'  => [],
         ],
 
@@ -63,7 +63,7 @@ return [
             'body'     => "📦 *Order Update*\n\nHi {{1}}, your order *#{{2}}* status has changed to *{{3}}*.\n\nService: {{4}}\nQuantity: {{5}}",
             'params'   => ['user_name', 'order_id', 'status', 'service_name', 'quantity'],
             'header'   => null,
-            'footer'   => 'SlykerTech SMM',
+            'footer'   => 'Zimbo Socials',
             'buttons'  => [],
         ],
 
@@ -72,7 +72,7 @@ return [
             'body'     => "💸 *Order Refunded*\n\nHi {{1}}, your order *#{{2}}* has been refunded.\n\nRefund Amount: *{{3}}*\nYour updated balance: {{4}}",
             'params'   => ['user_name', 'order_id', 'refund_amount', 'new_balance'],
             'header'   => null,
-            'footer'   => 'SlykerTech SMM',
+            'footer'   => 'Zimbo Socials',
             'buttons'  => [],
         ],
 
@@ -82,7 +82,7 @@ return [
             'body'     => "💰 *Balance Adjustment*\n\nHi {{1}}, your balance has been adjusted by *{{2}}*.\n\nReason: {{3}}\nNew Balance: {{4}}",
             'params'   => ['user_name', 'adjustment', 'reason', 'new_balance'],
             'header'   => null,
-            'footer'   => 'SlykerTech SMM',
+            'footer'   => 'Zimbo Socials',
             'buttons'  => [],
         ],
 
@@ -92,7 +92,7 @@ return [
             'body'     => "👤 *Account Role Updated*\n\nHi {{1}}, your account role has been changed to *{{2}}*.\n\nThis may affect your dashboard access and available features.",
             'params'   => ['user_name', 'new_role'],
             'header'   => null,
-            'footer'   => 'SlykerTech SMM',
+            'footer'   => 'Zimbo Socials',
             'buttons'  => [],
         ],
 
@@ -102,7 +102,17 @@ return [
             'body'     => "📋 *New Contract Application*\n\nHi {{1}}, you've received a new application for your contract \"{{2}}\".\n\nApplicant: {{3}}\n\nLog in to review and accept or decline.",
             'params'   => ['business_name', 'contract_title', 'applicant_name'],
             'header'   => null,
-            'footer'   => 'SlykerTech SMM',
+            'footer'   => 'Zimbo Socials',
+            'buttons'  => [],
+        ],
+
+        // ─── Marketing Broadcast ────────────────────────────────────────────
+        'marketing_broadcast' => [
+            'category' => 'MARKETING',
+            'body'     => "📣 *{{2}}*\n\nHi {{1}},\n{{3}}",
+            'params'   => ['user_name', 'subject', 'body'],
+            'header'   => null,
+            'footer'   => 'Zimbo Socials',
             'buttons'  => [],
         ],
 

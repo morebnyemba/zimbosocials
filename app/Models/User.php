@@ -3,6 +3,8 @@
 
 namespace App\Models;
 
+use App\Notifications\LocalizedResetPasswordNotification;
+use App\Notifications\LocalizedVerifyEmailNotification;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -190,6 +192,16 @@ class User extends Authenticatable implements MustVerifyEmail
         $key = 'zvk_live_' . Str::random(32);
         $this->update(['api_key' => $key]);
         return $key;
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new LocalizedResetPasswordNotification($token));
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new LocalizedVerifyEmailNotification());
     }
 
     public static function generateReferralCode(): string

@@ -12,6 +12,7 @@ use App\Http\Controllers\AdminTicketController;
 use App\Http\Controllers\AdminTransactionController;
 use App\Http\Controllers\AdminMarketerController;
 use App\Http\Controllers\AdminContractController;
+use App\Http\Controllers\AdminCampaignController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\ContractController;
@@ -145,6 +146,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/whatsapp/templates', [WhatsAppTemplateController::class, 'index'])->name('whatsapp.templates');
         Route::post('/whatsapp/templates/sync', [WhatsAppTemplateController::class, 'sync'])->name('whatsapp.sync');
         Route::delete('/whatsapp/templates/{name}', [WhatsAppTemplateController::class, 'delete'])->name('whatsapp.delete');
+
+        // Marketing Campaigns (email/whatsapp/in-app)
+        Route::get('/campaigns', [AdminCampaignController::class, 'index'])->name('campaigns.index');
+        Route::post('/campaigns', [AdminCampaignController::class, 'store'])->name('campaigns.store');
 
         // Marketer management
         Route::get('/marketers', [AdminMarketerController::class, 'index'])->name('marketers.index');

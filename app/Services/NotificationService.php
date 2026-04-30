@@ -88,6 +88,7 @@ class NotificationService
                 $title,
                 $body,
                 $templateParams,
+                $user->locale,
             )->onQueue('notifications');
         }
 
@@ -96,7 +97,15 @@ class NotificationService
             in_array($type, self::EMAIL_TYPES, true)
             && ($prefs['email'] ?? true)
         ) {
-            SendEmailNotification::dispatch($user->email, $user->name, $title, $body)
+            SendEmailNotification::dispatch(
+                $user->email,
+                $user->name,
+                $title,
+                $body,
+                $type,
+                $data,
+                $user->locale,
+            )
                 ->onQueue('notifications');
         }
 
@@ -116,17 +125,28 @@ class NotificationService
         Notification::send(
             $user->id,
             'welcome',
-            'Welcome to SlykerTech!',
-            "Hi {$user->name}, your account is ready. Start growing your social presence!",
+            __('mail.templates.welcome.subject', [], $user->locale ?? 'en'),
+            __('mail.templates.welcome.body', ['name' => $user->name], $user->locale ?? 'en'),
         );
+
+        SendEmailNotification::dispatch(
+            (string) $user->email,
+            (string) $user->name,
+            __('mail.templates.welcome.subject', [], $user->locale ?? 'en'),
+            __('mail.templates.welcome.body', ['name' => $user->name], $user->locale ?? 'en'),
+            'welcome',
+            ['name' => $user->name],
+            $user->locale,
+        )->onQueue('notifications');
 
         // WhatsApp (template-based)
         SendWhatsAppNotification::dispatch(
             $user->whatsapp_number,
             'welcome_message',
-            'Welcome!',
-            "Welcome to SlykerTech SMM, {$user->name}!",
+            __('mail.templates.welcome.subject', [], $user->locale ?? 'en'),
+            __('mail.templates.welcome.body', ['name' => $user->name], $user->locale ?? 'en'),
             [$user->name],
+            $user->locale,
         )->onQueue('notifications');
     }
 

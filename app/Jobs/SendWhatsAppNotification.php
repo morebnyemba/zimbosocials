@@ -29,12 +29,15 @@ class SendWhatsAppNotification implements ShouldQueue
         public readonly string $title,
         public readonly string $body,
         public readonly array  $templateParams = [],
+        public readonly ?string $locale = null,
     ) {}
 
     public function handle(WhatsAppService $whatsapp): void
     {
         $templates = config('whatsapp-templates.templates', []);
-        $language  = config('whatsapp-templates.language', 'en');
+        $language  = in_array($this->locale, ['en', 'sn', 'nd'], true)
+            ? $this->locale
+            : config('whatsapp-templates.language', 'en');
 
         // If template exists in config, try sending as a template message
         if (isset($templates[$this->templateName])) {
@@ -55,7 +58,7 @@ class SendWhatsAppNotification implements ShouldQueue
         }
 
         // Fallback: plain text message
-        $message = "🔔 *{$this->title}*\n\n{$this->body}\n\n— SlykerTech SMM";
+        $message = "🔔 *{$this->title}*\n\n{$this->body}\n\n— Zimbo Socials";
         $whatsapp->sendMessage($this->to, $message);
     }
 }

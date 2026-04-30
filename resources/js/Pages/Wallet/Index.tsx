@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { PageProps } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import { useTranslation } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     FaWallet, 
@@ -46,6 +47,11 @@ interface Props extends PageProps {
     gatewayMethods: string[];
 }
 
+interface ToastState {
+    kind: 'success' | 'error' | 'info';
+    message: string;
+}
+
 const typeThemes: Record<string, { icon: any; color: string; bg: string }> = {
     deposit: { icon: FaArrowDown, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     contract_earning: { icon: FaArrowDown, color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -65,6 +71,7 @@ const methodIcons: Record<string, any> = {
 };
 
 export default function WalletIndex({ auth, transactions, totals, manualPaymentDetails, availableMethods, gatewayMethods }: Props) {
+    const { t } = useTranslation();
     const user = auth.user;
     const isMarketer = user.role === 'marketer' || user.role === 'reseller';
     const methods = Object.entries(availableMethods ?? {});
@@ -78,8 +85,7 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
     
     const [showDeposit, setShowDeposit] = useState(false);
     const [showWithdraw, setShowWithdraw] = useState(false);
-    const [showPOPSubmission, setShowPOPSubmission] = useState(false);
-    const [pendingTransactionId, setPendingTransactionId] = useState<number | null>(null);
+    const [toast, setToast] = useState<ToastState | null>(null);
 
     const depositForm = useForm({
         amount: '',
@@ -101,6 +107,13 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
 
     const chosenDetails = manualPaymentDetails.find((m) => m.method_key === depositForm.data.method);
     const isPaynowMethod = gatewaySet.has(depositForm.data.method);
+
+    const notify = (kind: ToastState['kind'], message: string) => {
+        setToast({ kind, message });
+        window.setTimeout(() => {
+            setToast((current) => (current?.message === message ? null : current));
+        }, 3500);
+    };
 
     const submitDeposit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -125,13 +138,13 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                 if (result.success && result.redirect_url) {
                     window.location.href = result.redirect_url;
                 } else if (result.success && result.poll_url) {
-                    alert(result.message || 'Please check your phone to enter your PIN.');
+                    notify('info', result.message || t('wallet_check_phone_pin'));
                     setShowDeposit(false);
                 } else {
-                    alert(result.message || 'Failed to initiate payment.');
+                    notify('error', result.message || t('wallet_failed_initiate_payment'));
                 }
             } catch (err) {
-                alert('Payment gateway error. Please try again later.');
+                notify('error', t('wallet_payment_gateway_error'));
             }
         } else {
             // Manual flow - create pending transaction and show POP submission
@@ -139,7 +152,7 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                 onSuccess: () => { 
                     depositForm.reset();
                     setShowDeposit(false);
-                    alert('Deposit request created. Please upload your proof of payment.');
+                    notify('success', t('wallet_deposit_request_created'));
                 },
             });
         }
@@ -163,14 +176,13 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
         .then(r => r.text().then(text => {
             // Parse HTML response for success/error
             if (text.includes('success')) {
-                alert('Proof submitted! Admin will review shortly.');
+                notify('success', t('wallet_proof_submitted'));
                 proofForm.reset();
-                setShowPOPSubmission(false);
             } else {
-                alert('Failed to submit proof. Please try again.');
+                notify('error', t('wallet_failed_submit_proof'));
             }
         }))
-        .catch(() => alert('Error submitting proof.'));
+        .catch(() => notify('error', t('wallet_error_submit_proof')));
     };
 
     const submitWithdrawal = (e: React.FormEvent) => {
@@ -183,6 +195,27 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
     return (
         <AuthenticatedLayout>
             <Head title="Wallet & Finance" />
+
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="fixed right-6 top-6 z-[120]"
+                    >
+                        <div className={`min-w-[260px] max-w-sm rounded-2xl border px-5 py-4 shadow-2xl ${
+                            toast.kind === 'success'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : toast.kind === 'error'
+                                    ? 'border-red-200 bg-red-50 text-red-700'
+                                    : 'border-blue-200 bg-blue-50 text-blue-700'
+                        }`}>
+                            <p className="text-xs font-black uppercase tracking-widest">{toast.message}</p>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <div className="space-y-12">
                 {/* Header & Main Balance */}

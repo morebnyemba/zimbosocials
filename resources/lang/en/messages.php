@@ -430,6 +430,13 @@ return [
     'upload_proof_of_payment'           => 'Upload Proof of Payment (Receipt/Screenshot)',
     'proof_receipt_screenshot'          => 'PNG, JPG or GIF (max 5MB). Clearly show transaction details.',
     'submit_proof_of_payment'           => 'Submit Proof of Payment',
+    'wallet_check_phone_pin'            => 'Please check your phone to enter your PIN.',
+    'wallet_failed_initiate_payment'    => 'Failed to initiate payment.',
+    'wallet_payment_gateway_error'      => 'Payment gateway error. Please try again later.',
+    'wallet_deposit_request_created'    => 'Deposit request created. Please upload your proof of payment.',
+    'wallet_proof_submitted'            => 'Proof submitted. Admin will review shortly.',
+    'wallet_failed_submit_proof'        => 'Failed to submit proof. Please try again.',
+    'wallet_error_submit_proof'         => 'Error submitting proof.',
 
     // ─── Public / Marketing Nav ───────────────────────────────────────────────
     'home'                  => 'Home',

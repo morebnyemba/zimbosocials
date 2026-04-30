@@ -430,6 +430,13 @@ return [
     'upload_proof_of_payment'           => 'Isa Proof yeKubhadhara (Receipt/Screenshot)',
     'proof_receipt_screenshot'          => 'PNG, JPG kana GIF (max 5MB). Ratidza chienzanzo chehurongwa.',
     'submit_proof_of_payment'           => 'Tumira Proof yeKubhadhara',
+    'wallet_check_phone_pin'            => 'Tarisa foni yako woisa PIN yako.',
+    'wallet_failed_initiate_payment'    => 'Kutanga kubhadhara kwatadza.',
+    'wallet_payment_gateway_error'      => 'Pane dambudziko pa gateway rekubhadhara. Edza zvakare gare gare.',
+    'wallet_deposit_request_created'    => 'Chikumbiro chedeposit chagadzirwa. Ndapota isa proof yekubhadhara.',
+    'wallet_proof_submitted'            => 'Proof yatumirwa. Admin achakuzivisa munguva pfupi.',
+    'wallet_failed_submit_proof'        => 'Kutumira proof kwatadza. Edza zvakare.',
+    'wallet_error_submit_proof'         => 'Pane dambudziko pakutumira proof.',
 
     // ─── Public / Marketing Nav ───────────────────────────────────────────────
     'home'                  => 'Kumba',

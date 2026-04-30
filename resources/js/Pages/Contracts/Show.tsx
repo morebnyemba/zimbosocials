@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useTranslation } from '@/lib/i18n';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     FaBriefcase, 
@@ -58,31 +59,52 @@ interface Props {
     contract: Contract;
 }
 
+type PendingAction =
+    | { type: 'application'; applicationId: number; decision: 'approved' | 'denied' }
+    | { type: 'proof'; proofId: number; decision: 'approved' | 'rejected' };
+
 export default function ContractShow({ contract }: Props) {
     const { t } = useTranslation();
+    const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+
     const handleDecision = (applicationId: number, decision: 'approved' | 'denied') => {
-        const msg = decision === 'approved' 
-            ? t('confirm_hire_marketer')
-            : t('confirm_deny_applicant');
-            
-        if (confirm(msg)) {
-            router.post(route('contracts.applications.decision', [contract.id, applicationId]), {
-                decision: decision === 'approved' ? 'approved' : 'denied'
-            }, { preserveScroll: true });
-        }
+        setPendingAction({ type: 'application', applicationId, decision });
     };
 
     const handleProofDecision = (proofId: number, decision: 'approved' | 'rejected') => {
-        const msg = decision === 'approved'
-            ? t('confirm_release_funds')
-            : t('confirm_reject_proof');
-
-        if (confirm(msg)) {
-            router.post(route('proof.review', proofId), {
-                decision
-            }, { preserveScroll: true });
-        }
+        setPendingAction({ type: 'proof', proofId, decision });
     };
+
+    const confirmPendingAction = () => {
+        if (!pendingAction) return;
+
+        if (pendingAction.type === 'application') {
+            router.post(route('contracts.applications.decision', [contract.id, pendingAction.applicationId]), {
+                decision: pendingAction.decision,
+            }, {
+                preserveScroll: true,
+                onFinish: () => setPendingAction(null),
+            });
+            return;
+        }
+
+        router.post(route('proof.review', pendingAction.proofId), {
+            decision: pendingAction.decision,
+        }, {
+            preserveScroll: true,
+            onFinish: () => setPendingAction(null),
+        });
+    };
+
+    const confirmationMessage = pendingAction
+        ? pendingAction.type === 'application'
+            ? pendingAction.decision === 'approved'
+                ? t('confirm_hire_marketer')
+                : t('confirm_deny_applicant')
+            : pendingAction.decision === 'approved'
+                ? t('confirm_release_funds')
+                : t('confirm_reject_proof')
+        : '';
 
     const pendingApplications = contract.applications.filter(a => a.status === 'pending');
     const activeApplications = contract.applications.filter(a => a.status === 'approved');
@@ -241,6 +263,45 @@ export default function ContractShow({ contract }: Props) {
                     </aside>
                 </div>
             </div>
+
+            <AnimatePresence>
+                {pendingAction && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm"
+                            onClick={() => setPendingAction(null)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                            className="relative w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl"
+                        >
+                            <h3 className="text-xl font-black tracking-tight text-zinc-900">{t('confirm')}</h3>
+                            <p className="mt-3 text-sm font-medium text-zinc-500">{confirmationMessage}</p>
+                            <div className="mt-8 flex items-center justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setPendingAction(null)}
+                                    className="h-11 rounded-2xl border border-zinc-200 px-5 text-[10px] font-black uppercase tracking-widest text-zinc-500 transition-colors hover:bg-zinc-50"
+                                >
+                                    {t('cancel')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmPendingAction}
+                                    className="h-11 rounded-2xl bg-zinc-900 px-6 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-zinc-700"
+                                >
+                                    {t('confirm')}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </AuthenticatedLayout>
     );
 }

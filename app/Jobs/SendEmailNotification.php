@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Mail\LocalizedTemplateMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,33 +22,25 @@ class SendEmailNotification implements ShouldQueue
         public readonly string $name,
         public readonly string $title,
         public readonly string $body,
+        public readonly string $template = 'generic_notification',
+        public readonly array $payload = [],
+        public readonly ?string $locale = null,
     ) {}
 
     public function handle(): void
     {
-        Mail::send([], [], function ($msg) {
-            $msg->to($this->email, $this->name)
-                ->subject($this->title)
-                ->html($this->buildHtml());
-        });
-    }
+        $resolvedLocale = in_array($this->locale, ['sn', 'nd', 'en'], true) ? $this->locale : 'en';
+        $mail = new LocalizedTemplateMail(
+            $this->title,
+            $this->template,
+            array_merge([
+                'subject' => $this->title,
+                'body' => $this->body,
+                'name' => $this->name,
+            ], $this->payload),
+            $resolvedLocale,
+        );
 
-    private function buildHtml(): string
-    {
-        return <<<HTML
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-            <div style="background: linear-gradient(135deg, #7c3aed, #4f46e5); padding: 32px; border-radius: 16px; color: white; text-align: center; margin-bottom: 24px;">
-                <h1 style="margin: 0; font-size: 20px; font-weight: 600;">SlykerTech SMM</h1>
-            </div>
-            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px;">
-                <h2 style="margin: 0 0 12px; font-size: 18px; color: #111827;">{$this->title}</h2>
-                <p style="margin: 0; font-size: 14px; color: #6b7280; line-height: 1.6;">{$this->body}</p>
-            </div>
-            <p style="text-align: center; margin-top: 24px; font-size: 12px; color: #9ca3af;">
-                You received this because you have an account at SlykerTech SMM. <br>
-                Manage your notification preferences in Settings.
-            </p>
-        </div>
-        HTML;
+        Mail::to($this->email, $this->name)->send($mail);
     }
 }
