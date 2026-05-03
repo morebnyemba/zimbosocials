@@ -17,13 +17,23 @@ import {
     FaChevronRight,
     FaPaperPlane,
     FaRocket,
+    FaStar,
 } from 'react-icons/fa';
+
+interface MarketerReview {
+    id: number;
+    rating: number;
+    comment?: string | null;
+    created_at: string;
+}
 
 interface Marketer {
     id: number;
     name: string;
     email: string;
     social_links: Array<{ platform: string; url: string }>;
+    avg_rating?: number | null;
+    review_count?: number | null;
 }
 
 interface Proof {
@@ -41,6 +51,7 @@ interface Application {
     created_at: string;
     marketer: Marketer;
     proofs: Proof[];
+    review?: MarketerReview | null;
 }
 
 interface Contract {
@@ -66,6 +77,30 @@ type PendingAction =
 export default function ContractShow({ contract }: Props) {
     const { t } = useTranslation();
     const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+
+    // Review modal state
+    const [reviewingApp, setReviewingApp] = useState<Application | null>(null);
+    const [reviewRating, setReviewRating] = useState(5);
+    const [reviewComment, setReviewComment] = useState('');
+    const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
+    const submitReview = () => {
+        if (!reviewingApp) return;
+        setReviewSubmitting(true);
+        router.post(
+            route('contracts.review.store', [contract.id, reviewingApp.id]),
+            { rating: reviewRating, comment: reviewComment || null },
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setReviewSubmitting(false);
+                    setReviewingApp(null);
+                    setReviewRating(5);
+                    setReviewComment('');
+                },
+            }
+        );
+    };
 
     const handleDecision = (applicationId: number, decision: 'approved' | 'denied') => {
         setPendingAction({ type: 'application', applicationId, decision });
@@ -217,6 +252,7 @@ export default function ContractShow({ contract }: Props) {
                                             key={app.id} 
                                             application={app} 
                                             onDecision={handleDecision}
+                                            onReview={() => setReviewingApp(app)}
                                         />
                                     ))}
                                 </div>
@@ -301,13 +337,87 @@ export default function ContractShow({ contract }: Props) {
                         </motion.div>
                     </div>
                 )}
+
+                {reviewingApp && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm"
+                            onClick={() => setReviewingApp(null)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                            className="relative w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl"
+                        >
+                            <h3 className="text-xl font-black tracking-tight text-zinc-900">Rate {reviewingApp.marketer.name}</h3>
+                            <p className="mt-1 text-xs font-medium text-zinc-400">Share your experience working with this marketer.</p>
+
+                            {/* Star picker */}
+                            <div className="mt-6 flex items-center gap-2">
+                                {[1,2,3,4,5].map(star => (
+                                    <button
+                                        key={star}
+                                        type="button"
+                                        onClick={() => setReviewRating(star)}
+                                        className="transition-transform hover:scale-110"
+                                    >
+                                        <FaStar className={`text-3xl ${star <= reviewRating ? 'text-amber-400' : 'text-zinc-200'}`} />
+                                    </button>
+                                ))}
+                                <span className="ml-3 text-sm font-black text-zinc-500">{reviewRating}/5</span>
+                            </div>
+
+                            {/* Comment */}
+                            <textarea
+                                className="mt-6 w-full rounded-2xl border border-zinc-200 p-4 text-sm font-medium text-zinc-700 placeholder-zinc-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                                rows={4}
+                                placeholder="Optional comment about this marketer's work..."
+                                value={reviewComment}
+                                onChange={e => setReviewComment(e.target.value)}
+                                maxLength={500}
+                            />
+
+                            <div className="mt-6 flex items-center justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setReviewingApp(null)}
+                                    className="h-11 rounded-2xl border border-zinc-200 px-5 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:bg-zinc-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={submitReview}
+                                    disabled={reviewSubmitting}
+                                    className="h-11 rounded-2xl bg-zinc-900 px-6 text-[10px] font-black uppercase tracking-widest text-white hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                                >
+                                    {reviewSubmitting ? 'Submitting…' : 'Submit Review'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
             </AnimatePresence>
         </AuthenticatedLayout>
     );
 }
 
-function DetailBadge({ icon: Icon, label, highlight }: { icon: any; label: string; highlight?: boolean }) {
+function StarDisplay({ rating, size = 'md' }: { rating: number; size?: 'sm' | 'md' }) {
+    const sz = size === 'sm' ? 'text-xs' : 'text-sm';
     return (
+        <div className="flex items-center gap-0.5">
+            {[1,2,3,4,5].map(s => (
+                <FaStar key={s} className={`${sz} ${s <= Math.round(rating) ? 'text-amber-400' : 'text-zinc-200'}`} />
+            ))}
+        </div>
+    );
+}
+
+function DetailBadge({ icon: Icon, label, highlight }: { icon: any; label: string; highlight?: boolean }) {    return (
         <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${highlight ? 'text-emerald-500' : 'text-zinc-400'}`}>
             <Icon className={highlight ? 'text-emerald-500' : 'text-zinc-200'} />
             {label}
@@ -328,12 +438,14 @@ function ApplicationCard({
     application, 
     onDecision, 
     onProofDecision,
+    onReview,
     isPending, 
     isActive 
 }: { 
     application: Application; 
     onDecision: (id: number, d: 'approved' | 'denied') => void; 
     onProofDecision?: (id: number, d: 'approved' | 'rejected') => void;
+    onReview?: () => void;
     isPending?: boolean;
     isActive?: boolean;
 }) {
@@ -374,6 +486,12 @@ function ApplicationCard({
                         <div>
                             <p className="font-black text-zinc-900 tracking-tight">{application.marketer.name}</p>
                             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{application.marketer.email}</p>
+                            {(application.marketer.avg_rating ?? 0) > 0 && (
+                                <div className="mt-1 flex items-center gap-1">
+                                    <StarDisplay rating={application.marketer.avg_rating ?? 0} size="sm" />
+                                    <span className="text-[9px] font-black text-zinc-400">({application.marketer.review_count})</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                     
@@ -470,12 +588,30 @@ function ApplicationCard({
                     )}
 
                     {!isPending && !pendingProof && (
-                        <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${
-                            application.status === 'completed' ? 'bg-emerald-50 text-emerald-500' : 
-                            application.status === 'approved' ? 'bg-blue-50 text-blue-500' :
-                            'bg-zinc-100 text-zinc-400'
-                        }`}>
-                            {applicationStatusLabel}
+                        <div className="flex flex-col items-center gap-2">
+                            <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${
+                                application.status === 'completed' ? 'bg-emerald-50 text-emerald-500' : 
+                                application.status === 'approved' ? 'bg-blue-50 text-blue-500' :
+                                'bg-zinc-100 text-zinc-400'
+                            }`}>
+                                {applicationStatusLabel}
+                            </div>
+                            {application.status === 'completed' && onReview && (
+                                application.review ? (
+                                    <div className="flex flex-col items-center gap-1 mt-1">
+                                        <StarDisplay rating={application.review.rating} size="sm" />
+                                        <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Reviewed</span>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={onReview}
+                                        className="mt-1 px-4 py-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 text-[9px] font-black uppercase tracking-widest hover:bg-amber-100 transition-colors flex items-center gap-1"
+                                    >
+                                        <FaStar className="text-[8px]" /> Leave Review
+                                    </button>
+                                )
+                            )}
                         </div>
                     )}
                 </div>

@@ -15,8 +15,19 @@ import {
     FaRegHandshake,
     FaTimes,
     FaArrowRight,
-    FaDollarSign
+    FaDollarSign,
+    FaStar,
+    FaMedal,
 } from 'react-icons/fa';
+
+interface TopMarketer {
+    id: number;
+    name: string;
+    company_name?: string | null;
+    avg_rating: number | null;
+    review_count: number;
+    completed_contracts: number;
+}
 
 interface Contract { 
     id: number; 
@@ -36,6 +47,7 @@ interface Contract {
 interface Props { 
     my_contracts: { data: Contract[]; links: any[] }; 
     available_contracts: { data: Contract[]; links: any[] }; 
+    top_marketers: TopMarketer[];
 }
 
 const statusStyles: Record<string, { bg: string; text: string; icon: any }> = { 
@@ -44,13 +56,13 @@ const statusStyles: Record<string, { bg: string; text: string; icon: any }> = {
     closed: { bg: 'bg-zinc-500/10', text: 'text-zinc-500', icon: FaTimes } 
 };
 
-export default function ContractsIndex({ my_contracts, available_contracts }: Props) {
+export default function ContractsIndex({ my_contracts, available_contracts, top_marketers }: Props) {
     const { t } = useTranslation();
     const { auth } = usePage().props as any;
     const user = auth.user;
     const isBusinessAccount = user.account_type === 'business';
     
-    const [tab, setTab] = useState<'available' | 'my'>(isBusinessAccount ? 'my' : 'available');
+    const [tab, setTab] = useState<'available' | 'my' | 'rankings'>(isBusinessAccount ? 'my' : 'available');
     const [showCreate, setShowCreate] = useState(false);
     const [applyingContract, setApplyingContract] = useState<Contract | null>(null);
     const [closingContractId, setClosingContractId] = useState<number | null>(null);
@@ -150,6 +162,12 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                     >
                         {isBusinessAccount ? t('my_postings') : t('my_applications')}
                     </button>
+                    <button
+                        onClick={() => setTab('rankings')}
+                        className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${tab === 'rankings' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
+                    >
+                        <FaMedal className="text-amber-400" /> Rankings
+                    </button>
                 </div>
 
                 {/* Content Area */}
@@ -160,7 +178,7 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
                         transition={{ duration: 0.3 }}
-                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+                        className={tab === 'rankings' ? 'space-y-4 max-w-3xl' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'}
                     >
                         {tab === 'available' ? (
                             available_contracts.data.length > 0 ? (
@@ -173,6 +191,17 @@ export default function ContractsIndex({ my_contracts, available_contracts }: Pr
                                 ))
                             ) : (
                                 <EmptyState message={t('marketplace_empty')} />
+                            )
+                        ) : tab === 'rankings' ? (
+                            top_marketers.length > 0 ? (
+                                top_marketers.map((m, idx) => (
+                                    <MarketerRankCard key={m.id} marketer={m} rank={idx + 1} />
+                                ))
+                            ) : (
+                                <div className="col-span-full py-20 text-center">
+                                    <FaMedal className="mx-auto text-4xl text-zinc-200 mb-4" />
+                                    <p className="text-zinc-400 font-bold text-sm">No ranked marketers yet. Rankings appear once reviews are submitted.</p>
+                                </div>
                             )
                         ) : (
                             my_contracts.data.length > 0 ? (
@@ -501,6 +530,52 @@ function EmptyState({ message }: { message: string }) {
         </div>
     );
 }
+
+function MarketerRankCard({ marketer, rank }: { marketer: TopMarketer; rank: number }) {
+    const medalColors: Record<number, string> = { 1: 'text-amber-400', 2: 'text-zinc-400', 3: 'text-amber-700' };
+    const medalColor = medalColors[rank] ?? 'text-zinc-300';
+    const avg = marketer.avg_rating ?? 0;
+    return (
+        <motion.div
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: rank * 0.04 }}
+            className="flex items-center gap-6 bg-white rounded-2xl border border-zinc-100 px-6 py-5 shadow-sm hover:shadow-md transition-shadow"
+        >
+            {/* Rank */}
+            <div className="flex-shrink-0 w-10 text-center">
+                {rank <= 3 ? (
+                    <FaMedal className={`text-2xl mx-auto ${medalColor}`} />
+                ) : (
+                    <span className="text-lg font-black text-zinc-300">#{rank}</span>
+                )}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+                <p className="font-black text-zinc-900 tracking-tight truncate">{marketer.name}</p>
+                {marketer.company_name && (
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest truncate">{marketer.company_name}</p>
+                )}
+            </div>
+
+            {/* Stars */}
+            <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                <div className="flex items-center gap-0.5">
+                    {[1,2,3,4,5].map(s => (
+                        <FaStar key={s} className={`text-xs ${s <= Math.round(avg) ? 'text-amber-400' : 'text-zinc-200'}`} />
+                    ))}
+                    <span className="ml-1.5 text-xs font-black text-zinc-600">{avg > 0 ? avg.toFixed(1) : '—'}</span>
+                </div>
+                <div className="flex items-center gap-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest">
+                    <span>{marketer.review_count} review{marketer.review_count !== 1 ? 's' : ''}</span>
+                    <span>{marketer.completed_contracts} completed</span>
+                </div>
+            </div>
+        </motion.div>
+    );
+}
+
 
 // Simple Modal Component
 function Modal({ show, onClose, children }: { show: boolean; onClose: () => void; children: React.ReactNode }) {

@@ -78,6 +78,15 @@ interface MyContractApplication {
     }
 }
 
+interface MarketerReviewItem {
+    id: number;
+    rating: number;
+    comment?: string | null;
+    created_at: string;
+    reviewer?: { id: number; name: string; company_name?: string } | null;
+    contract?: { id: number; title: string } | null;
+}
+
 interface Props extends PageProps {
     stats: {
         total_orders: number
@@ -87,6 +96,8 @@ interface Props extends PageProps {
         contract_earnings: number
         withdrawn: number
         client_orders_this_month: number
+        avg_rating: number
+        review_count: number
     }
     recent_orders: Order[]
     available_contracts: AvailableContract[]
@@ -98,6 +109,7 @@ interface Props extends PageProps {
     }
     social_links: SocialLink[]
     approved_apps: ApprovedApp[]
+    recent_reviews: MarketerReviewItem[]
 }
 
 const statusColors: Record<string, string> = {
@@ -414,6 +426,7 @@ export default function MarketerDashboard({
     contract_stats,
     social_links,
     approved_apps,
+    recent_reviews,
 }: Props) {
     const { t } = useTranslation()
 
@@ -543,6 +556,45 @@ export default function MarketerDashboard({
                 </section>
 
                 <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)]">
+                    {/* Rating summary widget */}
+                    {stats.review_count > 0 && (
+                        <div className="xl:col-span-2 rounded-[24px] border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm flex flex-wrap items-center justify-between gap-6">
+                            <div className="flex items-center gap-5">
+                                <div className="flex flex-col items-center justify-center h-16 w-16 rounded-2xl bg-amber-400/10 border border-amber-200">
+                                    <span className="text-2xl font-black text-amber-500">{stats.avg_rating.toFixed(1)}</span>
+                                    <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest">/ 5</span>
+                                </div>
+                                <div>
+                                    <p className="text-base font-black text-slate-900">Your Rating</p>
+                                    <div className="flex items-center gap-0.5 mt-1">
+                                        {[1,2,3,4,5].map(s => (
+                                            <svg key={s} className={`w-4 h-4 ${s <= Math.round(stats.avg_rating) ? 'text-amber-400' : 'text-slate-200'}`} viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1 font-medium">Based on {stats.review_count} review{stats.review_count !== 1 ? 's' : ''} from businesses</p>
+                                </div>
+                            </div>
+                            {recent_reviews.length > 0 && (
+                                <div className="flex flex-col gap-2 max-w-sm w-full">
+                                    {recent_reviews.slice(0, 3).map(review => (
+                                        <div key={review.id} className="flex items-start gap-3 rounded-xl bg-white border border-amber-100 p-3">
+                                            <div className="flex-shrink-0 flex gap-0.5 mt-0.5">
+                                                {[1,2,3,4,5].map(s => (
+                                                    <svg key={s} className={`w-3 h-3 ${s <= review.rating ? 'text-amber-400' : 'text-slate-200'}`} viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                                                ))}
+                                            </div>
+                                            <div className="min-w-0">
+                                                {review.comment && <p className="text-xs text-slate-600 font-medium italic truncate">"{review.comment}"</p>}
+                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                                                    {review.reviewer?.name ?? 'Business'}{review.contract ? ` · ${review.contract.title}` : ''}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/70">
                         <div className="flex items-center justify-between gap-3">
                             <div>
