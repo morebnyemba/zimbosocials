@@ -17,6 +17,7 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\ContractProofController;
+use App\Http\Controllers\ContractReviewController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\MarketerController;
@@ -47,12 +48,16 @@ Route::post('/locale', function (\Illuminate\Http\Request $req) {
 })->name('locale.switch');
 
 Route::get('/', [MarketingController::class, 'home'])->name('marketing.home');
-Route::get('/our-services', [MarketingController::class, 'services'])->name('marketing.services');
 Route::get('/contact', [MarketingController::class, 'contact'])->name('marketing.contact');
-Route::get('/about', [MarketingController::class, 'about'])->name('marketing.about');
-Route::get('/help-center', [MarketingController::class, 'help'])->name('marketing.help');
-Route::get('/privacy-policy', [MarketingController::class, 'privacy'])->name('marketing.privacy');
-Route::get('/terms-of-service', [MarketingController::class, 'terms'])->name('marketing.terms');
+
+// Static marketing pages — 5-minute public cache
+Route::middleware('cache.headers:public;max_age=300;etag')->group(function () {
+    Route::get('/our-services',      [MarketingController::class, 'services'])->name('marketing.services');
+    Route::get('/about',             [MarketingController::class, 'about'])->name('marketing.about');
+    Route::get('/help-center',       [MarketingController::class, 'help'])->name('marketing.help');
+    Route::get('/privacy-policy',    [MarketingController::class, 'privacy'])->name('marketing.privacy');
+    Route::get('/terms-of-service',  [MarketingController::class, 'terms'])->name('marketing.terms');
+});
 
 // Public marketer portfolio
 Route::get('/marketers/{user}', [PortfolioController::class, 'show'])->name('portfolio.show');
@@ -62,9 +67,9 @@ Route::get('/marketers/{user}', [PortfolioController::class, 'show'])->name('por
 Route::middleware('guest')->group(function () {
     Route::get('/home',      [MarketingController::class, 'home'])->name('home');
     Route::get('/login',    [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login',   [AuthController::class, 'login']);
+    Route::post('/login',   [AuthController::class, 'login'])->middleware('throttle:5,1');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
-    Route::post('/register',[AuthController::class, 'register']);
+    Route::post('/register',[AuthController::class, 'register'])->middleware('throttle:10,1');
 });
 
 // ─── Authenticated routes ─────────────────────────────────────────────────────
@@ -199,9 +204,19 @@ Route::middleware('auth')->group(function () {
     // Referrals
     Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');
 
-    // Paynow
+    // Paynow — web redirect (credit card / Paynow balance)
     Route::post('/paynow/init', [PaynowController::class, 'init'])->middleware('throttle:paynow-init')->name('paynow.init');
+    // Paynow — O'mari OTP submission (must be before the {provider} wildcard)
+    Route::post('/paynow/omari/otp/{transaction}', [PaynowController::class, 'submitOmariOtp'])
+        ->middleware('throttle:5,1')
+        ->name('paynow.omari.otp');
+    // Paynow — express checkout, one route per mobile-money provider
+    Route::post('/paynow/mobile/{provider}', [PaynowController::class, 'initMobile'])
+        ->middleware('throttle:paynow-init')
+        ->name('paynow.mobile')
+        ->where('provider', 'ecocash|onemoney|telecash|innbucks|omari');
     Route::get('/paynow/return', [PaynowController::class, 'returnUrl'])->name('paynow.return');
+    Route::get('/paynow/poll/{transaction}', [PaynowController::class, 'pollStatus'])->middleware('throttle:30,1')->name('paynow.poll');
 
     // Tickets
     Route::get('/tickets',              [TicketController::class, 'index'])->name('tickets.index');
@@ -235,6 +250,7 @@ Route::middleware('auth')->group(function () {
     // Contract proof submissions
     Route::post('/contract-applications/{application}/proof', [ContractProofController::class, 'store'])->name('proof.store');
     Route::post('/contract-proof/{proof}/review', [ContractProofController::class, 'review'])->name('proof.review');
+    Route::post('/contracts/{contract}/applications/{application}/review', [ContractReviewController::class, 'store'])->name('contracts.review.store');
 
     // Portfolio management
     Route::post('/portfolio', [PortfolioController::class, 'store'])->name('portfolio.store');

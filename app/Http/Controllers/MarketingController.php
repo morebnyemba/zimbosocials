@@ -44,6 +44,7 @@ class MarketingController extends Controller
 
     public function contact(): Response
     {
+        // Contact page not cached — contains live payment details
         $paymentDetails = ManualPaymentDetail::active()
             ->ordered()
             ->get();

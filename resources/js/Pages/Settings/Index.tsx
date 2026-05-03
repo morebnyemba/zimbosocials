@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout'
+import ConfirmModal from '@/Components/ConfirmModal'
 import { PageProps } from '@/types'
 import { Head, router, useForm, usePage } from '@inertiajs/react'
 import { useState } from 'react'
@@ -29,6 +30,7 @@ export default function SettingsIndex({ auth }: PageProps) {
     const [emailNotif, setEmailNotif] = useState(notifPrefs.email)
     const [waNotif, setWaNotif] = useState(notifPrefs.whatsapp)
     const [copied, setCopied] = useState(false)
+    const [showKeyConfirm, setShowKeyConfirm] = useState(false)
 
     function copyApiKey() {
         if (user.api_key) {
@@ -39,7 +41,11 @@ export default function SettingsIndex({ auth }: PageProps) {
     }
 
     function regenerateKey() {
-        if (!confirm('Regenerate API key? This will invalidate the current key.')) return
+        setShowKeyConfirm(true)
+    }
+
+    function confirmRegenerateKey() {
+        setShowKeyConfirm(false)
         router.post(route('settings.api-key'))
     }
 
@@ -185,6 +191,16 @@ export default function SettingsIndex({ auth }: PageProps) {
                     </div>
                 )}
             </div>
+            
+            <ConfirmModal
+                open={showKeyConfirm}
+                title="Regenerate API Key"
+                message="This will invalidate your current API key immediately. Any integrations using the old key will stop working."
+                confirmLabel="Regenerate"
+                danger
+                onConfirm={confirmRegenerateKey}
+                onCancel={() => setShowKeyConfirm(false)}
+            />
         </AuthenticatedLayout>
     )
 }

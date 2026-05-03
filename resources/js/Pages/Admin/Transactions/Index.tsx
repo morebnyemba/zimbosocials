@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -9,11 +10,12 @@ const sC: Record<string, string> = { pending: 'bg-amber-100 text-amber-800 borde
 
 export default function TransactionsIndex({ transactions, filters, pending_deposits, pending_withdrawals }: Props) {
     const [search, setSearch] = useState(filters.search || '');
+    const [pendingRejectId, setPendingRejectId] = useState<number | null>(null);
     const applySearch = () => router.get(route('admin.transactions.index'), { ...filters, search }, { preserveState: true });
     const setFilter = (k: string, v: string) => router.get(route('admin.transactions.index'), { ...filters, [k]: v || undefined }, { preserveState: true });
 
     const approve = (id: number) => router.post(route('admin.transactions.approve', id), {}, { preserveScroll: true });
-    const reject = (id: number) => { if (confirm('Reject?')) router.post(route('admin.transactions.reject', id), {}, { preserveScroll: true }); };
+    const reject = (id: number) => { setPendingRejectId(id); };
     const processW = (id: number) => router.post(route('admin.transactions.process-withdrawal', id), {}, { preserveScroll: true });
 
     return (
@@ -93,6 +95,18 @@ export default function TransactionsIndex({ transactions, filters, pending_depos
                     {transactions.links && (<div className="flex justify-center gap-1 py-4 border-t border-gray-100 bg-gray-50">{transactions.links.map((l: any, i: number) => <Link key={i} href={l.url || '#'} className={`px-3 py-1.5 text-xs font-medium rounded-lg ${l.active ? 'bg-brand-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'}`} dangerouslySetInnerHTML={{ __html: l.label }} />)}</div>)}
                 </div>
             </div>
+            
+            {pendingRejectId !== null && (
+                <ConfirmModal
+                    open
+                    title="Reject Transaction"
+                    message="Reject this transaction? The user will be notified."
+                    confirmLabel="Reject"
+                    danger
+                    onConfirm={() => { router.post(route('admin.transactions.reject', pendingRejectId)); setPendingRejectId(null); }}
+                    onCancel={() => setPendingRejectId(null)}
+                />
+            )}
         </AdminLayout>
     );
 }

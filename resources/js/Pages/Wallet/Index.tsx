@@ -86,6 +86,19 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
     const [showDeposit, setShowDeposit] = useState(false);
     const [showWithdraw, setShowWithdraw] = useState(false);
     const [toast, setToast] = useState<ToastState | null>(null);
+    const [pollingTxId, setPollingTxId] = useState<number | null>(null);
+
+    // InnBucks auth-code flow
+    const [innbucksData, setInnbucksData] = useState<{
+        authorizationCode: string;
+        authorizationExpires: string;
+        qrUrl: string;
+        deepLink: string;
+        txId: number;
+    } | null>(null);
+
+    // O'mari OTP flow
+    const [omariOtp, setOmariOtp] = useState<{ txId: number; reference: string; otp: string; submitting: boolean } | null>(null);
 
     const depositForm = useForm({
         amount: '',
@@ -119,9 +132,14 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
         e.preventDefault();
 
         if (isPaynowMethod) {
-            // Paynow flow - redirect to payment gateway
+            // Paynow flow
+            const isMobileProvider = depositForm.data.method !== 'paynow';
+            const endpoint = isMobileProvider
+                ? route('paynow.mobile', { provider: depositForm.data.method })
+                : route('paynow.init');
+
             try {
-                const response = await fetch(route('paynow.init'), {
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -129,19 +147,42 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                     },
                     body: JSON.stringify({
                         amount: depositForm.data.amount,
-                        method: depositForm.data.method,
-                        phone: depositForm.data.phone,
+                        ...(isMobileProvider ? { phone: depositForm.data.phone } : {}),
                     })
                 });
                 const result = await response.json();
-                
+
                 if (result.success && result.redirect_url) {
+                    // Web redirect (Paynow website) — navigate away; return URL handles result
                     window.location.href = result.redirect_url;
-                } else if (result.success && result.poll_url) {
-                    notify('info', result.message || t('wallet_check_phone_pin'));
+                } else if (result.success && result.flow === 'innbucks_authcode') {
+                    // InnBucks — show authorization code UI
                     setShowDeposit(false);
+                    depositForm.reset();
+                    setInnbucksData({
+                        authorizationCode: result.authorization_code,
+                        authorizationExpires: result.authorization_expires,
+                        qrUrl: result.qr_url,
+                        deepLink: result.deep_link,
+                        txId: result.transaction_id,
+                    });
+                    startPolling(result.transaction_id);
+                } else if (result.success && result.flow === 'omari_otp') {
+                    // O'mari — show OTP input
+                    setShowDeposit(false);
+                    depositForm.reset();
+                    notify('info', result.message || 'Enter the OTP sent to your phone.');
+                    setOmariOtp({ txId: result.transaction_id, reference: result.otp_reference, otp: '', submitting: false });
+                } else if (result.success && (result.flow === 'ussd_pin' || result.transaction_id)) {
+                    // EcoCash / OneMoney / TeleCash — poll for completion
+                    notify('info', result.message || 'Check your phone and enter your PIN.');
+                    setShowDeposit(false);
+                    depositForm.reset();
+                    if (result.transaction_id) {
+                        startPolling(result.transaction_id);
+                    }
                 } else {
-                    notify('error', result.message || t('wallet_failed_initiate_payment'));
+                    notify('error', result.message || 'Failed to initiate payment.');
                 }
             } catch (err) {
                 notify('error', t('wallet_payment_gateway_error'));
@@ -149,12 +190,82 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
         } else {
             // Manual flow - create pending transaction and show POP submission
             depositForm.post(route('wallet.add'), {
-                onSuccess: () => { 
+                onSuccess: () => {
                     depositForm.reset();
                     setShowDeposit(false);
                     notify('success', t('wallet_deposit_request_created'));
                 },
             });
+        }
+    };
+
+    const startPolling = (txId: number) => {
+        setPollingTxId(txId);
+        const INTERVAL = 5000;  // 5 seconds
+        const MAX_ATTEMPTS = 24; // 2 minutes total
+        let attempts = 0;
+
+        const poll = async () => {
+            attempts++;
+            try {
+                const res = await fetch(route('paynow.poll', { transaction: txId }), {
+                    headers: { 'X-CSRF-TOKEN': (document.head.querySelector('meta[name="csrf-token"]') as any)?.content || '' }
+                });
+                const data = await res.json();
+
+                if (data.resolved) {
+                    setPollingTxId(null);
+                    if (data.status === 'completed') {
+                        notify('success', 'Deposit confirmed! Your balance has been updated.');
+                        // Reload page to reflect new balance
+                        window.setTimeout(() => window.location.reload(), 1500);
+                    } else if (data.status === 'rejected') {
+                        notify('error', 'Payment was not successful. No funds were deducted.');
+                    } else {
+                        notify('info', 'Payment status: ' + data.status);
+                    }
+                    return;
+                }
+            } catch {
+                // Network error — keep trying
+            }
+
+            if (attempts < MAX_ATTEMPTS) {
+                window.setTimeout(poll, INTERVAL);
+            } else {
+                setPollingTxId(null);
+                notify('info', 'Payment is taking longer than expected. Your balance will update once confirmed.');
+            }
+        };
+
+        window.setTimeout(poll, INTERVAL);
+    };
+
+    const submitOmariOtpHandler = async () => {
+        if (!omariOtp || !omariOtp.otp.trim()) return;
+        setOmariOtp(prev => prev ? { ...prev, submitting: true } : null);
+        try {
+            const res = await fetch(route('paynow.omari.otp', { transaction: omariOtp.txId }), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (document.head.querySelector('meta[name="csrf-token"]') as any)?.content || '',
+                },
+                body: JSON.stringify({ otp: omariOtp.otp }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                notify('info', data.message || 'OTP accepted. Waiting for payment…');
+                const txId = omariOtp.txId;
+                setOmariOtp(null);
+                startPolling(txId);
+            } else {
+                notify('error', data.message || 'Invalid OTP. Please try again.');
+                setOmariOtp(prev => prev ? { ...prev, submitting: false } : null);
+            }
+        } catch {
+            notify('error', 'Could not submit OTP. Please try again.');
+            setOmariOtp(prev => prev ? { ...prev, submitting: false } : null);
         }
     };
 
@@ -213,6 +324,143 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                         }`}>
                             <p className="text-xs font-black uppercase tracking-widest">{toast.message}</p>
                         </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Mobile money polling indicator */}
+            <AnimatePresence>
+                {pollingTxId && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120]"
+                    >
+                        <div className="flex items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 shadow-xl text-blue-700">
+                            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                            </svg>
+                            <p className="text-xs font-black uppercase tracking-widest">Waiting for payment confirmation…</p>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* InnBucks authorization code modal */}
+            <AnimatePresence>
+                {innbucksData && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 10 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95, y: 10 }}
+                            className="bg-white rounded-3xl p-8 shadow-2xl max-w-sm w-full space-y-6"
+                        >
+                            <div className="text-center space-y-1">
+                                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">InnBucks Payment</p>
+                                <h2 className="text-2xl font-black text-zinc-900">Authorization Code</h2>
+                                <p className="text-xs text-zinc-500">Open your InnBucks app and enter the code below, or tap the button to open the app directly.</p>
+                            </div>
+
+                            <div className="bg-zinc-900 rounded-2xl p-6 text-center space-y-2">
+                                <p className="text-4xl font-black tracking-[0.2em] text-emerald-400 select-all">{innbucksData.authorizationCode}</p>
+                                {innbucksData.authorizationExpires && (
+                                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Expires: {innbucksData.authorizationExpires}</p>
+                                )}
+                            </div>
+
+                            {innbucksData.qrUrl && (
+                                <div className="flex justify-center">
+                                    <img src={innbucksData.qrUrl} alt="InnBucks QR Code" className="w-40 h-40 rounded-xl border border-zinc-100" />
+                                </div>
+                            )}
+
+                            <div className="space-y-3">
+                                <a
+                                    href={innbucksData.deepLink}
+                                    className="block w-full text-center py-4 rounded-2xl bg-emerald-500 text-white font-black text-xs uppercase tracking-widest shadow-xl hover:bg-emerald-600 transition-all"
+                                >
+                                    Open InnBucks App
+                                </a>
+                                <button
+                                    onClick={() => setInnbucksData(null)}
+                                    className="w-full text-center py-3 rounded-2xl border-2 border-zinc-100 text-zinc-500 font-black text-xs uppercase tracking-widest hover:border-zinc-300 transition-all"
+                                >
+                                    Close (payment is being tracked)
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* O'mari OTP modal */}
+            <AnimatePresence>
+                {omariOtp && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 10 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95, y: 10 }}
+                            className="bg-white rounded-3xl p-8 shadow-2xl max-w-sm w-full space-y-6"
+                        >
+                            <div className="text-center space-y-1">
+                                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">O'mari Payment</p>
+                                <h2 className="text-2xl font-black text-zinc-900">Enter OTP</h2>
+                                <p className="text-xs text-zinc-500">An OTP has been sent to your phone. Enter it below to complete the payment.</p>
+                            </div>
+
+                            {omariOtp.reference && (
+                                <div className="bg-zinc-50 rounded-2xl px-5 py-3 text-center">
+                                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">OTP Reference</p>
+                                    <p className="text-sm font-black text-zinc-900 mt-1">{omariOtp.reference}</p>
+                                </div>
+                            )}
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">One-Time Password</label>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    maxLength={8}
+                                    value={omariOtp.otp}
+                                    onChange={e => setOmariOtp(prev => prev ? { ...prev, otp: e.target.value } : null)}
+                                    placeholder="Enter OTP"
+                                    className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-6 py-4 font-black text-zinc-900 text-center text-xl tracking-[0.3em] focus:outline-none focus:border-emerald-500 transition-all"
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={submitOmariOtpHandler}
+                                    disabled={omariOtp.submitting || !omariOtp.otp.trim()}
+                                    className="w-full py-4 rounded-2xl bg-emerald-500 text-white font-black text-xs uppercase tracking-widest shadow-xl hover:bg-emerald-600 transition-all disabled:opacity-50"
+                                >
+                                    {omariOtp.submitting ? 'Submitting…' : 'Confirm Payment'}
+                                </button>
+                                <button
+                                    onClick={() => setOmariOtp(null)}
+                                    disabled={omariOtp.submitting}
+                                    className="w-full text-center py-3 rounded-2xl border-2 border-zinc-100 text-zinc-500 font-black text-xs uppercase tracking-widest hover:border-zinc-300 transition-all disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -325,7 +573,7 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                 <div className="space-y-6">
                                     {isPaynowMethod ? (
                                         <>
-                                            {['ecocash', 'onemoney'].includes(depositForm.data.method) ? (
+                                            {depositForm.data.method !== 'paynow' ? (
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-4">Mobile Number</label>
                                                     <input 
@@ -335,6 +583,13 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                                         placeholder="e.g. 0771234567"
                                                         className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-6 py-4 font-black text-zinc-900 focus:outline-none focus:border-emerald-500 transition-all"
                                                     />
+                                                    {depositForm.data.method === 'innbucks' && (
+                                                        <p className="text-[10px] text-zinc-500 ml-4">You'll receive an authorization code to enter in your InnBucks app.</p>
+                                                    )}
+                                                    {depositForm.data.method === 'omari' && (
+                                                        <p className="text-[10px] text-zinc-500 ml-4">An OTP will be sent to your phone via SMS.</p>
+                                                    )}
+                                                </div>
                                                 </div>
                                             ) : (
                                                 <div className="p-6 rounded-3xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium leading-relaxed">

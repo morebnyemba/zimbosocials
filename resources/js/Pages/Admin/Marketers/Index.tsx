@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { Search, UserCheck, UserX, ExternalLink, ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
@@ -28,6 +29,7 @@ interface Props {
 
 export default function MarketersIndex({ marketers, filters, status_counts }: Props) {
     const [search, setSearch] = useState(filters.search || '');
+    const [pendingApproveId, setPendingApproveId] = useState<number | null>(null);
 
     const applySearch = () => {
         router.get(route('admin.marketers.index'), { ...filters, search }, { preserveState: true });
@@ -38,9 +40,7 @@ export default function MarketersIndex({ marketers, filters, status_counts }: Pr
     };
 
     const approve = (id: number) => {
-        if (confirm('Approve this marketer account? They will be able to apply for contracts immediately.')) {
-            router.post(route('admin.marketers.approve', id));
-        }
+        setPendingApproveId(id);
     };
 
     const reject = (id: number) => {
@@ -166,6 +166,17 @@ export default function MarketersIndex({ marketers, filters, status_counts }: Pr
                     </table>
                 </div>
             </div>
+            
+            {pendingApproveId !== null && (
+                <ConfirmModal
+                    open
+                    title="Approve Marketer"
+                    message="Approve this marketer account? They will gain full platform access."
+                    confirmLabel="Approve"
+                    onConfirm={() => { router.post(route('admin.marketers.approve', pendingApproveId)); setPendingApproveId(null); }}
+                    onCancel={() => setPendingApproveId(null)}
+                />
+            )}
         </AdminLayout>
     );
 }

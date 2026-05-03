@@ -13,6 +13,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Builder;
+use App\Models\MarketerReview;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -115,6 +116,16 @@ class User extends Authenticatable implements MustVerifyEmail
     public function auditLogs(): HasMany
     {
         return $this->hasMany(AuditLog::class);
+    }
+
+    public function receivedReviews(): HasMany
+    {
+        return $this->hasMany(MarketerReview::class, 'marketer_id');
+    }
+
+    public function givenReviews(): HasMany
+    {
+        return $this->hasMany(MarketerReview::class, 'reviewer_id');
     }
 
     public function referrer(): BelongsTo

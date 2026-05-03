@@ -1,10 +1,8 @@
 import {
   NavigationMenu,
-  NavigationMenuContent,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
-  NavigationMenuTrigger,
   navigationMenuTriggerStyle,
 } from "@/Components/ui/navigation-menu"
 import SeoHead from "@/Components/SeoHead"
@@ -106,7 +104,31 @@ export default function MarketingLayout({
   canAuth = true,
 }: MarketingLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [legalOpen, setLegalOpen] = useState(false)
+  const legalDropdownRef = useRef<HTMLDivElement>(null)
   const { t } = useTranslation()
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (legalDropdownRef.current && !legalDropdownRef.current.contains(event.target as Node)) {
+        setLegalOpen(false)
+      }
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setLegalOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [])
 
   const baseStructuredData: Array<Record<string, unknown>> = [
     {
@@ -196,28 +218,53 @@ export default function MarketingLayout({
                     </NavigationMenuItem>
                   ))}
                   <NavigationMenuItem>
-                    <NavigationMenuTrigger className={cn("text-zinc-700 hover:bg-amber-50 hover:text-emerald-700", route().current("marketing.privacy") || route().current("marketing.terms") ? "border-emerald-200 bg-emerald-50 font-semibold text-emerald-700" : "")}>{t('legal')}</NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <ul className="grid min-w-[200px] gap-1 p-2">
-                        {secondaryLinks.map((link) => (
-                          <li key={link.name}>
-                            <NavigationMenuLink asChild>
-                              <Link
-                                href={link.href}
-                                className={cn(
-                                  "block rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition",
-                                  route().current(link.name)
-                                    ? "bg-emerald-50 text-emerald-700"
-                                    : "hover:bg-emerald-50 hover:text-emerald-700"
-                                )}
-                              >
-                                {link.label}
-                              </Link>
-                            </NavigationMenuLink>
-                          </li>
-                        ))}
-                      </ul>
-                    </NavigationMenuContent>
+                    <div ref={legalDropdownRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setLegalOpen((prev) => !prev)}
+                        aria-expanded={legalOpen}
+                        aria-haspopup="menu"
+                        className={cn(
+                          navigationMenuTriggerStyle(),
+                          "text-zinc-700 hover:bg-amber-50 hover:text-emerald-700",
+                          (route().current("marketing.privacy") || route().current("marketing.terms")) && "border-emerald-200 bg-emerald-50 font-semibold text-emerald-700"
+                        )}
+                      >
+                        {t('legal')}
+                        <FaChevronDown className={cn("ml-1 h-3 w-3 text-zinc-400 transition-transform", legalOpen && "rotate-180")} />
+                      </button>
+
+                      <AnimatePresence>
+                        {legalOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 6 }}
+                            transition={{ duration: 0.12 }}
+                            className="absolute right-0 top-full z-[70] mt-2 min-w-[200px] rounded-xl border border-zinc-200 bg-white p-2 shadow-xl"
+                            role="menu"
+                          >
+                            {secondaryLinks.map((link) => (
+                              <NavigationMenuLink key={link.name} asChild>
+                                <Link
+                                  href={link.href}
+                                  role="menuitem"
+                                  onClick={() => setLegalOpen(false)}
+                                  className={cn(
+                                    "block rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition",
+                                    route().current(link.name)
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "hover:bg-emerald-50 hover:text-emerald-700"
+                                  )}
+                                >
+                                  {link.label}
+                                </Link>
+                              </NavigationMenuLink>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </NavigationMenuItem>
                 </NavigationMenuList>
               </NavigationMenu>

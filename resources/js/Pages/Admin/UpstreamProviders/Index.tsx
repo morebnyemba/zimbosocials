@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { PageProps } from '@/types';
 import { Head, useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -17,6 +18,7 @@ interface UpstreamProvider {
 export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ providers: UpstreamProvider[] }>) {
     const [editingProvider, setEditingProvider] = useState<UpstreamProvider | null>(null);
     const [isCreating, setIsCreating] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
     const { data, setData, post, put, delete: destroy, processing, errors, reset } = useForm({
         name: '',
@@ -62,9 +64,7 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
     };
 
     const deleteProvider = (id: number) => {
-        if (confirm('Are you sure you want to delete this provider? This will break any services linked to it!')) {
-            destroy(route('admin.upstream-providers.destroy', id));
-        }
+        setPendingDeleteId(id);
     };
 
     return (
@@ -223,6 +223,18 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
 
                 </div>
             </div>
+            
+            {pendingDeleteId !== null && (
+                <ConfirmModal
+                    open
+                    title="Delete Upstream Provider"
+                    message="Are you sure you want to delete this provider? This will break any services linked to it!"
+                    confirmLabel="Delete"
+                    danger
+                    onConfirm={() => { destroy(route('admin.upstream-providers.destroy', pendingDeleteId)); setPendingDeleteId(null); }}
+                    onCancel={() => setPendingDeleteId(null)}
+                />
+            )}
         </AdminLayout>
     );
 }

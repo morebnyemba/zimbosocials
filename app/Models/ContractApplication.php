@@ -43,4 +43,9 @@ class ContractApplication extends Model
     {
         return $this->hasMany(ContractProofSubmission::class);
     }
+
+    public function review(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(MarketerReview::class, 'contract_application_id');
+    }
 }

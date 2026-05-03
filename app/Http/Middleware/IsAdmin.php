@@ -12,9 +12,7 @@ class IsAdmin
     public function handle(Request $request, Closure $next): Response
     {
         if (! $request->user() || ! $request->user()->isAdmin()) {
-            abort(403, app()->getLocale() === 'sn'
-                ? 'Huna mvumo yekupinda pano.'
-                : 'Unauthorized. Admin access required.');
+            abort(403, __('auth.admin_required'));
         }
 
         return $next($request);

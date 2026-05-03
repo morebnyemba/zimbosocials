@@ -1,16 +1,26 @@
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Head, useForm } from '@inertiajs/react';
-import { useTranslation } from '@/lib/i18n';
+import { Head, router, useForm } from '@inertiajs/react';
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+    Megaphone, Plus, X, ChevronDown, ChevronUp,
+    Clock, CheckCircle2, XCircle, Loader2, AlertTriangle
+} from 'lucide-react';
 
 type Campaign = {
     id: number;
     name: string;
-    status: string;
+    status: 'queued' | 'running' | 'completed' | 'failed';
+    channels: string[];
+    subjects: { en: string; sn?: string; nd?: string };
+    bodies: { en: string; sn?: string; nd?: string };
+    filters: { roles: string[]; account_types: string[] };
     recipients_total: number;
     sent_email: number;
     sent_whatsapp: number;
     sent_in_app: number;
     error_message?: string | null;
+    started_at?: string | null;
     created_at: string;
     completed_at?: string | null;
     creator?: { name: string; email: string };
@@ -19,16 +29,145 @@ type Campaign = {
 type Props = {
     campaigns: {
         data: Campaign[];
+        links: { url: string | null; label: string; active: boolean }[];
+        total: number;
+        current_page: number;
+        last_page: number;
     };
 };
 
-const roleOptions = ['all', 'user', 'marketer', 'reseller', 'admin'];
-const accountTypeOptions = ['all', 'individual', 'business', 'marketer'];
-const channelOptions = ['email', 'whatsapp', 'in_app'] as const;
+const STATUS_CONFIG: Record<Campaign['status'], { label: string; color: string; Icon: React.ElementType }> = {
+    queued:    { label: 'Queued',    color: 'bg-amber-100 text-amber-700 border-amber-200',      Icon: Clock },
+    running:   { label: 'Running',   color: 'bg-blue-100 text-blue-700 border-blue-200',          Icon: Loader2 },
+    completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', Icon: CheckCircle2 },
+    failed:    { label: 'Failed',    color: 'bg-red-100 text-red-700 border-red-200',             Icon: XCircle },
+};
+
+const CHANNELS = [
+    { value: 'email',    label: 'Email' },
+    { value: 'whatsapp', label: 'WhatsApp' },
+    { value: 'in_app',   label: 'In-App' },
+];
+
+const ROLES = [
+    { value: 'all',      label: 'All Roles' },
+    { value: 'user',     label: 'User' },
+    { value: 'marketer', label: 'Marketer' },
+    { value: 'reseller', label: 'Reseller' },
+    { value: 'admin',    label: 'Admin' },
+];
+
+const ACCOUNT_TYPES = [
+    { value: 'all',        label: 'All Types' },
+    { value: 'individual', label: 'Individual' },
+    { value: 'business',   label: 'Business' },
+    { value: 'marketer',   label: 'Marketer' },
+];
+
+function CampaignRow({ campaign }: { campaign: Campaign }) {
+    const [expanded, setExpanded] = useState(false);
+    const cfg = STATUS_CONFIG[campaign.status] ?? STATUS_CONFIG.queued;
+    const StatusIcon = cfg.Icon;
+
+    return (
+        <div className="border border-gray-200 rounded-xl bg-white shadow-sm overflow-hidden">
+            <button
+                onClick={() => setExpanded(e => !e)}
+                className="w-full flex items-center gap-4 p-4 text-left hover:bg-gray-50 transition-colors"
+            >
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <span className="font-semibold text-gray-900 text-sm">{campaign.name}</span>
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${cfg.color}`}>
+                            <StatusIcon className={`w-3 h-3 ${campaign.status === 'running' ? 'animate-spin' : ''}`} />
+                            {cfg.label}
+                        </span>
+                        {campaign.channels?.map(ch => (
+                            <span key={ch} className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 uppercase tracking-wide">
+                                {ch === 'in_app' ? 'In-App' : ch}
+                            </span>
+                        ))}
+                    </div>
+                    <div className="mt-1 flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                        <span>{campaign.recipients_total} recipients</span>
+                        {campaign.sent_email > 0 && <span>✉ {campaign.sent_email}</span>}
+                        {campaign.sent_whatsapp > 0 && <span>📱 {campaign.sent_whatsapp}</span>}
+                        {campaign.sent_in_app > 0 && <span>🔔 {campaign.sent_in_app}</span>}
+                        <span className="text-gray-400">
+                            {new Date(campaign.created_at).toLocaleDateString()}
+                            {campaign.creator ? ` · ${campaign.creator.name}` : ''}
+                        </span>
+                    </div>
+                </div>
+                {expanded
+                    ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+                    : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+            </button>
+
+            <AnimatePresence>
+                {expanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden border-t border-gray-100"
+                    >
+                        <div className="p-4 space-y-4 bg-gray-50">
+                            {campaign.error_message && (
+                                <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                    <span>{campaign.error_message}</span>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                {(['en', 'sn', 'nd'] as const).map(locale => {
+                                    const subject = campaign.subjects?.[locale];
+                                    const body = campaign.bodies?.[locale];
+                                    if (!subject && !body) return null;
+                                    return (
+                                        <div key={locale} className="bg-white border border-gray-200 rounded-lg p-3 text-xs space-y-1">
+                                            <div className="font-bold uppercase tracking-widest text-gray-400 text-[10px]">
+                                                {locale === 'en' ? 'English' : locale === 'sn' ? 'Shona' : 'Ndebele'}
+                                            </div>
+                                            <div className="font-semibold text-gray-800">{subject}</div>
+                                            <div className="text-gray-600 line-clamp-3">{body}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="flex flex-wrap gap-3 text-xs text-gray-600">
+                                <span><strong>Roles:</strong> {campaign.filters?.roles?.join(', ') || 'all'}</span>
+                                <span><strong>Account Types:</strong> {campaign.filters?.account_types?.join(', ') || 'all'}</span>
+                                {campaign.started_at && <span><strong>Started:</strong> {new Date(campaign.started_at).toLocaleString()}</span>}
+                                {campaign.completed_at && <span><strong>Completed:</strong> {new Date(campaign.completed_at).toLocaleString()}</span>}
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
+
+type CampaignForm = {
+    name: string;
+    subject_en: string;
+    body_en: string;
+    subject_sn: string;
+    body_sn: string;
+    subject_nd: string;
+    body_nd: string;
+    channels: string[];
+    roles: string[];
+    account_types: string[];
+};
 
 export default function CampaignsIndex({ campaigns }: Props) {
-    const { t } = useTranslation();
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const [showForm, setShowForm] = useState(false);
+    const [activeLocale, setActiveLocale] = useState<'en' | 'sn' | 'nd'>('en');
+
+    const { data, setData, post, processing, errors, reset } = useForm<CampaignForm>({
         name: '',
         subject_en: '',
         body_en: '',
@@ -36,166 +175,253 @@ export default function CampaignsIndex({ campaigns }: Props) {
         body_sn: '',
         subject_nd: '',
         body_nd: '',
-        channels: ['email', 'in_app'] as string[],
-        roles: ['all'] as string[],
-        account_types: ['all'] as string[],
+        channels: ['email'],
+        roles: ['all'],
+        account_types: ['all'],
     });
 
     const toggleArray = (field: 'channels' | 'roles' | 'account_types', value: string) => {
-        const current = data[field] as string[];
-        setData(
-            field,
-            current.includes(value)
-                ? current.filter((item) => item !== value)
-                : [...current, value],
-        );
+        const arr = data[field] as string[];
+        setData(field, arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);
     };
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
         post(route('admin.campaigns.store'), {
-            preserveScroll: true,
             onSuccess: () => {
-                reset('name', 'subject_en', 'body_en', 'subject_sn', 'body_sn', 'subject_nd', 'body_nd');
+                reset();
+                setShowForm(false);
             },
         });
     };
 
     return (
         <AdminLayout>
-            <Head title={t('campaigns_dashboard')} />
+            <Head title="Broadcast Campaigns" />
 
-            <div className="space-y-6 py-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-zinc-900">{t('campaigns_dashboard')}</h1>
-                    <p className="text-sm text-zinc-500">{t('campaigns_dashboard_subtitle')}</p>
+            <div className="space-y-6">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+                            <Megaphone className="w-6 h-6 text-brand-green" />
+                            Broadcast Campaigns
+                        </h1>
+                        <p className="text-gray-500 text-sm mt-1">{campaigns.total} total campaigns</p>
+                    </div>
+                    <button
+                        onClick={() => setShowForm(true)}
+                        className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl bg-brand-green text-white hover:bg-brand-green/90 shadow-sm transition-colors"
+                    >
+                        <Plus className="w-4 h-4" /> New Campaign
+                    </button>
                 </div>
 
-                <form onSubmit={submit} className="grid gap-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">{t('campaign_name')}</label>
-                            <input
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2"
-                                placeholder={t('campaign_name_placeholder')}
+                {/* Campaign list */}
+                {campaigns.data.length === 0 ? (
+                    <div className="text-center py-16 text-gray-400">
+                        <Megaphone className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                        <p className="font-medium">No campaigns yet</p>
+                        <p className="text-sm mt-1">Create your first broadcast campaign to reach your users.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {campaigns.data.map(campaign => (
+                            <CampaignRow key={campaign.id} campaign={campaign} />
+                        ))}
+                    </div>
+                )}
+
+                {/* Pagination */}
+                {campaigns.last_page > 1 && (
+                    <div className="flex justify-center gap-1 py-4">
+                        {campaigns.links?.map((link, i) => (
+                            <button
+                                key={i}
+                                onClick={() => link.url && router.get(link.url)}
+                                disabled={!link.url}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                                    link.active
+                                        ? 'bg-brand-green text-white shadow-sm'
+                                        : 'text-gray-600 hover:bg-gray-200 disabled:opacity-40'
+                                }`}
+                                dangerouslySetInnerHTML={{ __html: link.label }}
                             />
-                            {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}
-                        </div>
+                        ))}
                     </div>
-
-                    <div className="grid gap-4 lg:grid-cols-3">
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">EN Subject</label>
-                            <input value={data.subject_en} onChange={(e) => setData('subject_en', e.target.value)} className="w-full rounded-lg border border-zinc-300 px-3 py-2" />
-                            {errors.subject_en && <p className="mt-1 text-xs text-red-600">{errors.subject_en}</p>}
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">SN Subject</label>
-                            <input value={data.subject_sn} onChange={(e) => setData('subject_sn', e.target.value)} className="w-full rounded-lg border border-zinc-300 px-3 py-2" />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">ND Subject</label>
-                            <input value={data.subject_nd} onChange={(e) => setData('subject_nd', e.target.value)} className="w-full rounded-lg border border-zinc-300 px-3 py-2" />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 lg:grid-cols-3">
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">EN Body</label>
-                            <textarea value={data.body_en} onChange={(e) => setData('body_en', e.target.value)} rows={5} className="w-full rounded-lg border border-zinc-300 px-3 py-2" />
-                            {errors.body_en && <p className="mt-1 text-xs text-red-600">{errors.body_en}</p>}
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">SN Body</label>
-                            <textarea value={data.body_sn} onChange={(e) => setData('body_sn', e.target.value)} rows={5} className="w-full rounded-lg border border-zinc-300 px-3 py-2" />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">ND Body</label>
-                            <textarea value={data.body_nd} onChange={(e) => setData('body_nd', e.target.value)} rows={5} className="w-full rounded-lg border border-zinc-300 px-3 py-2" />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <fieldset>
-                            <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{t('channels')}</legend>
-                            <div className="space-y-2">
-                                {channelOptions.map((channel) => (
-                                    <label key={channel} className="flex items-center gap-2 text-sm text-zinc-700">
-                                        <input type="checkbox" checked={data.channels.includes(channel)} onChange={() => toggleArray('channels', channel)} />
-                                        {channel}
-                                    </label>
-                                ))}
-                            </div>
-                        </fieldset>
-
-                        <fieldset>
-                            <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{t('roles')}</legend>
-                            <div className="space-y-2">
-                                {roleOptions.map((role) => (
-                                    <label key={role} className="flex items-center gap-2 text-sm text-zinc-700">
-                                        <input type="checkbox" checked={data.roles.includes(role)} onChange={() => toggleArray('roles', role)} />
-                                        {role}
-                                    </label>
-                                ))}
-                            </div>
-                        </fieldset>
-
-                        <fieldset>
-                            <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{t('account_types')}</legend>
-                            <div className="space-y-2">
-                                {accountTypeOptions.map((type) => (
-                                    <label key={type} className="flex items-center gap-2 text-sm text-zinc-700">
-                                        <input type="checkbox" checked={data.account_types.includes(type)} onChange={() => toggleArray('account_types', type)} />
-                                        {type}
-                                    </label>
-                                ))}
-                            </div>
-                        </fieldset>
-                    </div>
-
-                    <div>
-                        <button disabled={processing} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                            {processing ? t('sending') : t('queue_broadcast')}
-                        </button>
-                    </div>
-                </form>
-
-                <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-                    <h2 className="mb-4 text-lg font-semibold text-zinc-900">{t('recent_campaigns')}</h2>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-zinc-200 text-left text-zinc-500">
-                                    <th className="py-2 pr-3">{t('name')}</th>
-                                    <th className="py-2 pr-3">{t('status')}</th>
-                                    <th className="py-2 pr-3">{t('recipients')}</th>
-                                    <th className="py-2 pr-3">Email</th>
-                                    <th className="py-2 pr-3">WhatsApp</th>
-                                    <th className="py-2 pr-3">In-app</th>
-                                    <th className="py-2 pr-3">{t('date')}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {campaigns.data.map((campaign) => (
-                                    <tr key={campaign.id} className="border-b border-zinc-100">
-                                        <td className="py-2 pr-3 font-medium text-zinc-900">{campaign.name}</td>
-                                        <td className="py-2 pr-3">
-                                            <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-700">{campaign.status}</span>
-                                        </td>
-                                        <td className="py-2 pr-3">{campaign.recipients_total}</td>
-                                        <td className="py-2 pr-3">{campaign.sent_email}</td>
-                                        <td className="py-2 pr-3">{campaign.sent_whatsapp}</td>
-                                        <td className="py-2 pr-3">{campaign.sent_in_app}</td>
-                                        <td className="py-2 pr-3 text-zinc-500">{new Date(campaign.created_at).toLocaleString()}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
+                )}
             </div>
+
+            {/* New Campaign Modal */}
+            <AnimatePresence>
+                {showForm && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+                        onClick={e => { if (e.target === e.currentTarget) setShowForm(false); }}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 16 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 16 }}
+                            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+                        >
+                            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                                <h2 className="text-lg font-bold text-gray-900">New Broadcast Campaign</h2>
+                                <button onClick={() => setShowForm(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                                    <X className="w-4 h-4 text-gray-500" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={submit} className="p-6 space-y-6">
+                                {/* Campaign Name */}
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-1.5">Campaign Name</label>
+                                    <input
+                                        type="text"
+                                        value={data.name}
+                                        onChange={e => setData('name', e.target.value)}
+                                        placeholder="e.g. January Promo"
+                                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
+                                    />
+                                    {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name}</p>}
+                                </div>
+
+                                {/* Channels */}
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Channels</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {CHANNELS.map(ch => (
+                                            <button
+                                                key={ch.value}
+                                                type="button"
+                                                onClick={() => toggleArray('channels', ch.value)}
+                                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                                                    data.channels.includes(ch.value)
+                                                        ? 'bg-brand-green text-white border-brand-green'
+                                                        : 'bg-white text-gray-600 border-gray-300 hover:border-brand-green/50'
+                                                }`}
+                                            >
+                                                {ch.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {errors.channels && <p className="text-xs text-red-600 mt-1">{errors.channels}</p>}
+                                </div>
+
+                                {/* Audience Filters */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Roles</label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {ROLES.map(r => (
+                                                <button
+                                                    key={r.value}
+                                                    type="button"
+                                                    onClick={() => toggleArray('roles', r.value)}
+                                                    className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
+                                                        data.roles.includes(r.value)
+                                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                                            : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-300'
+                                                    }`}
+                                                >
+                                                    {r.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Account Types</label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {ACCOUNT_TYPES.map(t => (
+                                                <button
+                                                    key={t.value}
+                                                    type="button"
+                                                    onClick={() => toggleArray('account_types', t.value)}
+                                                    className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
+                                                        data.account_types.includes(t.value)
+                                                            ? 'bg-purple-600 text-white border-purple-600'
+                                                            : 'bg-white text-gray-600 border-gray-300 hover:border-purple-300'
+                                                    }`}
+                                                >
+                                                    {t.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Content by Locale */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <label className="block text-xs font-bold uppercase tracking-widest text-gray-500">Content</label>
+                                        <div className="flex gap-1">
+                                            {(['en', 'sn', 'nd'] as const).map(locale => (
+                                                <button
+                                                    key={locale}
+                                                    type="button"
+                                                    onClick={() => setActiveLocale(locale)}
+                                                    className={`px-3 py-1 text-xs font-semibold rounded-lg border transition-colors ${
+                                                        activeLocale === locale
+                                                            ? 'bg-gray-900 text-white border-gray-900'
+                                                            : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                                                    }`}
+                                                >
+                                                    {locale.toUpperCase()}
+                                                    {locale === 'en' && <span className="ml-1 text-red-400">*</span>}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <input
+                                                type="text"
+                                                value={data[`subject_${activeLocale}` as keyof CampaignForm] as string}
+                                                onChange={e => setData(`subject_${activeLocale}` as keyof CampaignForm, e.target.value)}
+                                                placeholder={`Subject ${activeLocale === 'en' ? '(required)' : '(optional, falls back to EN)'}`}
+                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
+                                            />
+                                            {activeLocale === 'en' && errors.subject_en && <p className="text-xs text-red-600 mt-1">{errors.subject_en}</p>}
+                                        </div>
+                                        <div>
+                                            <textarea
+                                                rows={6}
+                                                value={data[`body_${activeLocale}` as keyof CampaignForm] as string}
+                                                onChange={e => setData(`body_${activeLocale}` as keyof CampaignForm, e.target.value)}
+                                                placeholder={`Message body ${activeLocale === 'en' ? '(required)' : '(optional, falls back to EN)'}`}
+                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green resize-none"
+                                            />
+                                            {activeLocale === 'en' && errors.body_en && <p className="text-xs text-red-600 mt-1">{errors.body_en}</p>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Submit */}
+                                <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowForm(false)}
+                                        className="px-4 py-2 text-sm font-medium rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={processing || data.channels.length === 0}
+                                        className="flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-xl bg-brand-green text-white hover:bg-brand-green/90 shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        {processing && <Loader2 className="w-4 h-4 animate-spin" />}
+                                        {processing ? 'Queuing…' : 'Launch Campaign'}
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </AdminLayout>
     );
 }

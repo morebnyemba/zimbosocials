@@ -245,6 +245,15 @@ class AdminUserController extends Controller
             return back()->with('error', "You cannot impersonate yourself.");
         }
 
+        AuditLog::log(
+            'user.impersonation_started',
+            Auth::id(),
+            User::class,
+            $user->id,
+            ['admin_id' => Auth::id()],
+            ['target_user_id' => $user->id, 'target_email' => $user->email],
+        );
+
         // Store the original admin ID
         session(['impersonator_id' => Auth::id()]);
 
@@ -269,8 +278,16 @@ class AdminUserController extends Controller
             return redirect()->route('login');
         }
 
+        $impersonatedId = Auth::id();
         Auth::login($admin);
         session()->forget('impersonator_id');
+
+        AuditLog::log(
+            'user.impersonation_ended',
+            $admin->id,
+            User::class,
+            $impersonatedId,
+        );
 
         return redirect()->route('admin.users.index')->with('success', "Returned to Admin Panel");
     }

@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,6 +39,7 @@ import { HiOutlineBadgeCheck, HiOutlineSparkles, HiOutlineMailOpen, HiOutlineDev
 export default function MarketerShow({ marketer, stats, recent_applications }: any) {
     const [showBalanceModal, setShowBalanceModal] = useState(false);
     const [balanceForm, setBalanceForm] = useState({ amount: '', type: 'add', note: '' });
+    const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; danger?: boolean } | null>(null);
 
     if (!marketer) return <AdminLayout><div className="p-8">Loading...</div></AdminLayout>;
 
@@ -440,14 +442,14 @@ export default function MarketerShow({ marketer, stats, recent_applications }: a
                             
                             <div className="space-y-4">
                                 <button 
-                                    onClick={() => confirm('Issue password reset?') && router.post(route('admin.users.reset-password', { user: marketer.id }))}
+                                    onClick={() => setConfirmModal({ title: 'Reset Password', message: 'Issue a password reset email to this marketer?', onConfirm: () => router.post(route('admin.users.reset-password', { user: marketer.id })) })}
                                     className="flex items-center justify-center gap-3 w-full p-5 rounded-2xl bg-zinc-50 text-zinc-700 text-xs font-black uppercase tracking-widest hover:bg-zinc-100 transition-all border border-zinc-100 shadow-sm active:scale-95"
                                 >
                                     <FaLock className="opacity-30" /> Reset Password
                                 </button>
                                 
                                 <button 
-                                    onClick={() => confirm('Change access status?') && router.post(route('admin.marketers.suspend', { user: marketer.id }))}
+                                    onClick={() => setConfirmModal({ title: marketer.is_active ? 'Suspend Partner' : 'Reactivate Partner', message: marketer.is_active ? 'Suspend this partner? They will lose access immediately.' : 'Reactivate this partner account?', onConfirm: () => router.post(route('admin.marketers.suspend', { user: marketer.id })), danger: marketer.is_active })}
                                     className={`flex items-center justify-center gap-3 w-full p-5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border shadow-sm active:scale-95 ${
                                         marketer.is_active 
                                         ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' 
@@ -458,7 +460,7 @@ export default function MarketerShow({ marketer, stats, recent_applications }: a
                                 </button>
 
                                 <button 
-                                    onClick={() => confirm('Demote partner to regular user?') && router.post(route('admin.marketers.demote', { user: marketer.id }))}
+                                    onClick={() => setConfirmModal({ title: 'Demote Partner', message: 'Demote this partner to a regular user account? They will lose all marketer privileges.', onConfirm: () => router.post(route('admin.marketers.demote', { user: marketer.id })), danger: true })}
                                     className="flex items-center justify-center gap-3 w-full p-5 rounded-2xl bg-blue-50 text-blue-700 text-xs font-black uppercase tracking-widest hover:bg-blue-100 transition-all border border-blue-200 shadow-sm active:scale-95"
                                 >
                                     <FaBriefcase className="opacity-40" /> Demote Partner
@@ -466,7 +468,7 @@ export default function MarketerShow({ marketer, stats, recent_applications }: a
 
                                 <div className="pt-6 mt-6 border-t border-zinc-100">
                                     <button 
-                                        onClick={() => confirm('CONFIRM PERMANENT TERMINATION?') && router.delete(route('admin.marketers.terminate', { user: marketer.id }))}
+                                        onClick={() => setConfirmModal({ title: 'Terminate Account', message: 'PERMANENTLY terminate this account? This action cannot be undone and all partner data will be deleted.', onConfirm: () => router.delete(route('admin.marketers.terminate', { user: marketer.id })), danger: true })}
                                         className="flex items-center justify-center gap-3 w-full p-5 rounded-2xl bg-red-50 text-red-600 text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-all border border-red-200 shadow-sm active:scale-95"
                                     >
                                         <FaTrash className="opacity-40" /> Terminate Account
@@ -557,6 +559,18 @@ export default function MarketerShow({ marketer, stats, recent_applications }: a
                     )}
                 </AnimatePresence>
             </div>
+            
+            {confirmModal && (
+                <ConfirmModal
+                    open
+                    title={confirmModal.title}
+                    message={confirmModal.message}
+                    danger={confirmModal.danger}
+                    confirmLabel={confirmModal.danger ? 'Confirm' : 'Yes'}
+                    onConfirm={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
+                    onCancel={() => setConfirmModal(null)}
+                />
+            )}
         </AdminLayout>
     );
 }

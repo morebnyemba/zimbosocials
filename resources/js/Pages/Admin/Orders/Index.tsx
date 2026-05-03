@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -11,12 +12,13 @@ export default function OrdersIndex({ orders, filters, status_counts }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [statusModal, setStatusModal] = useState<Order | null>(null);
     const [newStatus, setNewStatus] = useState('');
+    const [pendingRefund, setPendingRefund] = useState<Order | null>(null);
 
     const applySearch = () => router.get(route('admin.orders.index'), { ...filters, search }, { preserveState: true });
     const setFilter = (k: string, v: string) => router.get(route('admin.orders.index'), { ...filters, [k]: v || undefined }, { preserveState: true });
 
     const changeStatus = () => { if (!statusModal) return; router.post(route('admin.orders.status', statusModal.id), { status: newStatus }, { preserveScroll: true, onSuccess: () => setStatusModal(null) }); };
-    const refund = (order: Order) => { if (confirm(`Refund order #${order.id} ($${Number(order.charge).toFixed(2)})?`)) router.post(route('admin.orders.refund', order.id), {}, { preserveScroll: true }); };
+    const refund = (order: Order) => { setPendingRefund(order); };
 
     return (
         <AdminLayout>
@@ -92,6 +94,18 @@ export default function OrdersIndex({ orders, filters, status_counts }: Props) {
                     </div>
                 )}
             </div>
+            
+            {pendingRefund && (
+                <ConfirmModal
+                    open
+                    title="Refund Order"
+                    message={`Refund order #${pendingRefund.id} ($${Number(pendingRefund.charge).toFixed(2)})? The amount will be returned to the user's wallet.`}
+                    confirmLabel="Refund"
+                    danger
+                    onConfirm={() => { router.post(route('admin.orders.refund', pendingRefund.id), {}, { preserveScroll: true }); setPendingRefund(null); }}
+                    onCancel={() => setPendingRefund(null)}
+                />
+            )}
         </AdminLayout>
     );
 }

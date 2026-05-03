@@ -3,12 +3,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 
 class Service extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'name', 'name_sn', 'description', 'description_sn',
         'category', 'type', 'upstream_service_id', 'rate', 'min_qty', 'max_qty',

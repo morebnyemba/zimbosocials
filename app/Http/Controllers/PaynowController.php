@@ -8,19 +8,42 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\ReferralService;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Paynow\Payments\Paynow;
+use Paynow\Util\Hash;
 
 class PaynowController extends Controller
 {
+    /**
+     * Supported mobile money providers: method key => Paynow method string + metadata.
+     * Phone prefix lists are the leading digits of a normalised 10-digit Zimbabwean number.
+     */
+    private const MOBILE_PROVIDERS = [
+        'ecocash'  => ['label' => 'EcoCash',  'method' => 'ecocash',  'prefixes' => ['077', '078']],
+        'onemoney' => ['label' => 'OneMoney', 'method' => 'onemoney', 'prefixes' => ['071']],
+        'telecash' => ['label' => 'TeleCash', 'method' => 'telecash', 'prefixes' => ['073']],
+        'innbucks' => ['label' => 'InnBucks', 'method' => 'innbucks', 'prefixes' => []],     // any number can use InnBucks wallet
+        'omari'    => ['label' => "O'mari",   'method' => 'omari',    'prefixes' => ['077', '078']],
+    ];
+
+    public function __construct(private readonly Application $app) {}
+
     private function getPaynow(): Paynow
     {
+        // Resolve through the container so tests can override with a mock
+        if ($this->app->bound(Paynow::class)) {
+            return $this->app->make(Paynow::class);
+        }
+
         return new Paynow(
             config('services.paynow.integration_id'),
             config('services.paynow.integration_key'),
             route('paynow.return'),
-            route('paynow.update') // Webhook URL
+            route('paynow.update')
         );
     }
 
@@ -39,21 +62,281 @@ class PaynowController extends Controller
 
         $request->validate([
             'amount' => 'required|numeric|min:1',
-            'phone'  => 'nullable|string',
             'method' => ['required', \Illuminate\Validation\Rule::in($gatewayMethods)],
         ]);
 
-        $user = $request->user();
+        // Reject mobile methods — they have a dedicated route
+        if ($request->input('method') !== 'paynow') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Use the provider-specific endpoint for mobile money payments.',
+            ], 422);
+        }
+
+        $user   = $request->user();
         $amount = (float) $request->amount;
-        
-        // Create pending transaction
+
+        $transaction = $this->createPendingTransaction($user, $amount, 'paynow');
+
+        $paynow  = $this->getPaynow();
+        $payment = $paynow->createPayment((string) $transaction->id, $user->email);
+        $payment->add('Account Deposit', $amount);
+
+        try {
+            $response = $paynow->send($payment);
+
+            if ($response->success()) {
+                $transaction->update(['reference' => $response->pollUrl()]);
+                return response()->json([
+                    'success'        => true,
+                    'redirect_url'   => $response->redirectUrl(),
+                    'transaction_id' => $transaction->getKey(),
+                ]);
+            }
+
+            return response()->json(['success' => false, 'message' => 'Failed to initiate Paynow transaction.'], 400);
+
+        } catch (\Exception $e) {
+            Log::error('Paynow Init Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Payment gateway error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Initiate an express checkout for a specific mobile money provider.
+     * Route: POST /paynow/mobile/{provider}  (ecocash|onemoney|telecash|innbucks)
+     */
+    public function initMobile(Request $request, string $provider)
+    {
+        if (! array_key_exists($provider, self::MOBILE_PROVIDERS)) {
+            abort(404);
+        }
+
+        $config = self::MOBILE_PROVIDERS[$provider];
+
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'phone'  => 'required|string',
+        ]);
+
+        // Normalize to a local 10-digit Zimbabwe number (0XXXXXXXXX)
+        $phone = $this->normalizeZwPhone((string) $request->input('phone'));
+
+        if ($phone === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please enter a valid Zimbabwean phone number.',
+            ], 422);
+        }
+
+        // Validate that the number belongs to this provider's network (skip if no prefix restriction)
+        if (! empty($config['prefixes'])) {
+            $matchesProvider = false;
+            foreach ($config['prefixes'] as $prefix) {
+                if (str_starts_with($phone, $prefix)) {
+                    $matchesProvider = true;
+                    break;
+                }
+            }
+
+            if (! $matchesProvider) {
+                $expected = implode(' or ', $config['prefixes']);
+                return response()->json([
+                    'success' => false,
+                    'message' => "{$config['label']} numbers must start with {$expected}.",
+                ], 422);
+            }
+        }
+
+        $user   = $request->user();
+        $amount = (float) $request->input('amount');
+
+        $transaction = $this->createPendingTransaction($user, $amount, $provider);
+
+        $paynow  = $this->getPaynow();
+        $payment = $paynow->createPayment((string) $transaction->id, $user->email);
+        $payment->add('Account Deposit', $amount);
+
+        try {
+            $response = $paynow->sendMobile($payment, $phone, $config['method']);
+
+            if ($response->success()) {
+                $data = $response->data();
+
+                // Store poll URL; add provider-specific fields to gateway_meta
+                $updateFields = ['reference' => $response->pollUrl()];
+
+                if ($provider === 'innbucks') {
+                    $authCode    = $data['authorizationcode'] ?? '';
+                    $authExpires = $data['authorizationexpires'] ?? '';
+                    $updateFields['gateway_meta'] = [
+                        'authorizationcode'    => $authCode,
+                        'authorizationexpires' => $authExpires,
+                    ];
+                    $transaction->update($updateFields);
+
+                    $qrUrl    = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=' . urlencode($authCode);
+                    $deepLink = 'com.innbucks.customer://purchase?paymentToken=' . $authCode;
+
+                    return response()->json([
+                        'success'               => true,
+                        'flow'                  => 'innbucks_authcode',
+                        'authorization_code'    => $authCode,
+                        'authorization_expires' => $authExpires,
+                        'qr_url'                => $qrUrl,
+                        'deep_link'             => $deepLink,
+                        'instructions'          => $response->instructions(),
+                        'transaction_id'        => $transaction->getKey(),
+                        'provider'              => $provider,
+                    ]);
+                }
+
+                if ($provider === 'omari') {
+                    $otpReference = $data['otpreference'] ?? '';
+                    $remoteOtpUrl = $data['remoteotpurl'] ?? '';
+                    $updateFields['gateway_meta'] = [
+                        'otpreference' => $otpReference,
+                        'remoteotpurl' => $remoteOtpUrl,
+                    ];
+                    $transaction->update($updateFields);
+
+                    return response()->json([
+                        'success'        => true,
+                        'flow'           => 'omari_otp',
+                        'otp_reference'  => $otpReference,
+                        'transaction_id' => $transaction->getKey(),
+                        'provider'       => $provider,
+                        'message'        => "An OTP has been sent to {$phone}. Please enter it below to complete the payment.",
+                    ]);
+                }
+
+                // EcoCash / OneMoney / TeleCash — standard USSD PIN push
+                $transaction->update($updateFields);
+                return response()->json([
+                    'success'        => true,
+                    'flow'           => 'ussd_pin',
+                    'message'        => "Check your phone and enter your {$config['label']} PIN to complete the payment.",
+                    'instructions'   => $response->instructions(),
+                    'transaction_id' => $transaction->getKey(),
+                    'provider'       => $provider,
+                ]);
+            }
+
+            $transaction->update(['status' => 'rejected', 'notes' => 'Mobile init failed']);
+            return response()->json(['success' => false, 'message' => 'Could not send the payment request. Please try again.'], 400);
+
+        } catch (\Exception $e) {
+            Log::error("Paynow {$config['label']} Init Error: " . $e->getMessage());
+            $transaction->update(['status' => 'rejected', 'notes' => 'Exception: ' . $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Payment gateway error. Please try again later.'], 500);
+        }
+    }
+
+    /**
+     * Normalise an input string to a 10-digit local Zimbabwe number (0XXXXXXXXX).
+     * Accepts: 0771234567 / +263771234567 / 263771234567 / 771234567
+     * Returns null if the result is not exactly 10 digits.
+     */
+    private function normalizeZwPhone(string $raw): ?string
+    {
+        $digits = preg_replace('/[^0-9]/', '', $raw);
+
+        // International with country code: 263XXXXXXXXX (12 digits)
+        if (strlen($digits) === 12 && str_starts_with($digits, '263')) {
+            $digits = '0' . substr($digits, 3);
+        }
+
+        // Without leading zero: XXXXXXXXX (9 digits)
+        if (strlen($digits) === 9) {
+            $digits = '0' . $digits;
+        }
+
+        return (strlen($digits) === 10 && str_starts_with($digits, '0')) ? $digits : null;
+    }
+
+    /**
+     * Submit the OTP received by the customer for an O'mari express checkout transaction.
+     * Route: POST /paynow/omari/otp/{transaction}
+     */
+    public function submitOmariOtp(Request $request, Transaction $transaction): \Illuminate\Http\JsonResponse
+    {
+        if ($transaction->user_id !== (int) $request->user()->getAuthIdentifier()) {
+            abort(403);
+        }
+
+        if ($transaction->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This transaction has already been processed.',
+            ], 422);
+        }
+
+        $request->validate([
+            'otp' => 'required|string|min:4|max:8',
+        ]);
+
+        $meta         = (array) ($transaction->gateway_meta ?? []);
+        $remoteOtpUrl = $meta['remoteotpurl'] ?? null;
+
+        if (empty($remoteOtpUrl)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'OTP submission is not available for this transaction.',
+            ], 422);
+        }
+
+        $integrationId  = (string) config('services.paynow.integration_id');
+        $integrationKey = (string) config('services.paynow.integration_key');
+        $otp            = (string) $request->input('otp');
+
+        // Hash per Paynow spec: SHA-512( id + otp + "Message" + integrationKey ) → uppercase
+        $hash = Hash::make([
+            'id'     => $integrationId,
+            'otp'    => $otp,
+            'status' => 'Message',
+        ], $integrationKey);
+
+        try {
+            $httpResponse = Http::asForm()->post($remoteOtpUrl, [
+                'id'     => $integrationId,
+                'otp'    => $otp,
+                'status' => 'Message',
+                'hash'   => $hash,
+            ]);
+
+            parse_str($httpResponse->body(), $params);
+
+            if (isset($params['status']) && strtolower($params['status']) === 'error') {
+                $error = $params['error'] ?? 'Invalid OTP';
+                return response()->json(['success' => false, 'message' => $error], 422);
+            }
+
+            // OTP accepted — Paynow confirms payment via webhook or poll
+            return response()->json([
+                'success' => true,
+                'message' => 'OTP accepted. Processing your payment…',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Paynow O'mari OTP error: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Could not submit OTP. Please try again.'], 500);
+        }
+    }
+
+    /**
+     * Create a pending deposit transaction and write an audit log entry.
+     */
+    private function createPendingTransaction(\App\Models\User $user, float $amount, string $method): Transaction
+    {
         $transaction = Transaction::create([
-            'user_id' => $user->id,
-            'type'    => 'deposit',
-            'amount'  => $amount,
-            'status'  => 'pending',
-            'notes'   => 'Initiated via Paynow',
-            'payment_method_id' => null, // Dynamic payment
+            'user_id'        => $user->id,
+            'type'           => 'deposit',
+            'amount'         => $amount,
+            'balance_before' => (float) $user->balance,
+            'balance_after'  => (float) $user->balance + $amount,
+            'method'         => $method,
+            'status'         => 'pending',
+            'notes'          => 'Initiated via Paynow (' . strtoupper($method) . ')',
         ]);
 
         AuditLog::log(
@@ -61,62 +344,170 @@ class PaynowController extends Controller
             userId: (int) $user->getAuthIdentifier(),
             modelType: Transaction::class,
             modelId: (int) $transaction->getKey(),
-            newValues: [
-                'status' => 'pending',
-                'method' => (string) $request->input('method'),
-                'amount' => $amount,
-            ],
+            newValues: ['status' => 'pending', 'method' => $method, 'amount' => $amount],
         );
 
-        $paynow = $this->getPaynow();
-        $payment = $paynow->createPayment((string) $transaction->id, $user->email);
-        $payment->add('Account Deposit', $amount);
-
-        try {
-            if ($request->method === 'paynow') {
-                // Redirect user to Paynow website
-                $response = $paynow->send($payment);
-                
-                if ($response->success()) {
-                    $transaction->update(['reference_id' => $response->pollUrl()]);
-                    return response()->json([
-                        'success' => true,
-                        'redirect_url' => $response->redirectUrl()
-                    ]);
-                }
-            } else {
-                // Express Checkout (Mobile Money)
-                $phone = preg_replace('/[^0-9]/', '', $request->phone);
-                $response = $paynow->sendMobile($payment, $phone, $request->method);
-                
-                if ($response->success()) {
-                    $transaction->update(['reference_id' => $response->pollUrl()]);
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'Check your phone to enter your PIN.',
-                        'poll_url' => $response->pollUrl()
-                    ]);
-                }
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to initiate Paynow transaction.'
-            ], 400);
-
-        } catch (\Exception $e) {
-            Log::error('Paynow Init Error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Payment gateway error: ' . $e->getMessage()
-            ], 500);
-        }
+        return $transaction;
     }
 
-    public function returnUrl(Request $request)
+    public function returnUrl(Request $request, ReferralService $referralService)
     {
-        // User is redirected back here from Paynow website
-        return redirect()->route('wallet.index')->with('info', 'Your payment is being processed. It will reflect in your balance shortly.');
+        // Paynow sends: ?reference={our_tx_id}&paynowreference=...&status=Paid|Cancelled|Failed&hash=...
+        $txId      = $request->query('reference');
+        $pnStatus  = (string) $request->query('status', '');
+
+        if (! $txId) {
+            return redirect()->route('wallet.index')
+                ->with('info', 'Payment return received. Your balance will update once confirmed.');
+        }
+
+        $transaction = Transaction::find($txId);
+
+        if (! $transaction || $transaction->user_id !== (int) $request->user()?->getAuthIdentifier()) {
+            return redirect()->route('wallet.index')
+                ->with('warning', 'Could not locate the transaction. Contact support if your balance is not updated.');
+        }
+
+        // Already resolved — no need to poll
+        if ($transaction->status === 'completed') {
+            return redirect()->route('wallet.index')
+                ->with('success', 'Your deposit of $' . number_format((float) $transaction->amount, 2) . ' has been confirmed!');
+        }
+
+        if ($transaction->status === 'rejected') {
+            return redirect()->route('wallet.index')
+                ->with('error', 'Your payment was not successful. No funds were deducted.');
+        }
+
+        // Still pending — do a final poll against Paynow before giving up
+        $pollUrl = $transaction->reference;
+        if (! empty($pollUrl) && str_starts_with($pollUrl, 'http')) {
+            try {
+                $paynow       = $this->getPaynow();
+                $remoteStatus = $paynow->pollTransaction($pollUrl);
+
+                if ($remoteStatus && $remoteStatus->paid()) {
+                    DB::transaction(function () use ($transaction, $referralService): void {
+                        $locked = Transaction::lockForUpdate()->find($transaction->getKey());
+                        if (! $locked || $locked->status !== 'pending') {
+                            return;
+                        }
+
+                        $oldStatus = (string) $locked->getAttribute('status');
+                        $locked->update(['status' => 'completed', 'notes' => 'Completed via return URL poll']);
+
+                        $referralService->rewardReferrerOnFirstDeposit($locked->fresh());
+
+                        AuditLog::log(
+                            action: 'transaction.paynow_status_updated',
+                            userId: null,
+                            modelType: Transaction::class,
+                            modelId: (int) $locked->getKey(),
+                            oldValues: ['status' => $oldStatus],
+                            newValues: ['status' => 'completed', 'source' => 'return_url'],
+                        );
+
+                        $user = User::find($locked->user_id);
+                        if ($user) {
+                            $user->increment('balance', $locked->amount);
+                            NotificationService::notify(
+                                $user->id,
+                                'deposit_confirmed',
+                                'Deposit Confirmed',
+                                "Your deposit of \${$locked->amount} via Paynow was successful.",
+                                ['amount' => "\${$locked->amount}"]
+                            );
+                        }
+                    });
+
+                    return redirect()->route('wallet.index')
+                        ->with('success', 'Your deposit of $' . number_format((float) $transaction->amount, 2) . ' has been confirmed!');
+                }
+
+                if ($remoteStatus && in_array($remoteStatus->status(), ['Cancelled', 'Failed'], true)) {
+                    $transaction->update(['status' => 'rejected', 'notes' => 'Cancelled/Failed via return URL']);
+                    return redirect()->route('wallet.index')
+                        ->with('error', 'Your payment was cancelled or failed. No funds were deducted.');
+                }
+            } catch (\Exception $e) {
+                Log::warning('Paynow return URL poll error: ' . $e->getMessage());
+            }
+        }
+
+        // Fallback: Paynow status hint from query string (not hash-verified — informational only)
+        if (strtolower($pnStatus) === 'cancelled') {
+            return redirect()->route('wallet.index')
+                ->with('warning', 'Payment was cancelled. You can try again from your wallet.');
+        }
+
+        return redirect()->route('wallet.index')
+            ->with('info', 'Your payment is being verified. Your balance will update shortly — refresh in a moment.');
+    }
+
+    /**
+     * Client-side polling endpoint for mobile money (EcoCash/OneMoney) transactions.
+     * The frontend polls this after initiating an express checkout until status
+     * changes from 'pending' or a timeout is reached.
+     */
+    public function pollStatus(Request $request, Transaction $transaction): \Illuminate\Http\JsonResponse
+    {
+        // Ensure the transaction belongs to the authenticated user
+        if ($transaction->user_id !== (int) $request->user()->getAuthIdentifier()) {
+            abort(403);
+        }
+
+        // If already resolved, return immediately (no need to hit Paynow)
+        if ($transaction->status !== 'pending') {
+            return response()->json([
+                'status'   => $transaction->status,
+                'resolved' => true,
+            ]);
+        }
+
+        // Only poll Paynow if we have a stored poll URL
+        $pollUrl = $transaction->reference;
+        if (empty($pollUrl) || !str_starts_with($pollUrl, 'http')) {
+            return response()->json(['status' => 'pending', 'resolved' => false]);
+        }
+
+        try {
+            $paynow = $this->getPaynow();
+            $remoteStatus = $paynow->pollTransaction($pollUrl);
+
+            if ($remoteStatus && $remoteStatus->paid()) {
+                // Trigger the same crediting logic as the webhook, wrapped in a transaction
+                DB::transaction(function () use ($transaction): void {
+                    $locked = Transaction::lockForUpdate()->find($transaction->getKey());
+                    if (! $locked || $locked->status !== 'pending') {
+                        return;
+                    }
+                    $locked->update(['status' => 'completed', 'notes' => 'Completed via poll']);
+
+                    $user = User::find($locked->user_id);
+                    if ($user) {
+                        $user->increment('balance', $locked->amount);
+                        NotificationService::notify(
+                            $user->id,
+                            'deposit_confirmed',
+                            'Deposit Confirmed',
+                            "Your deposit of \${$locked->amount} via Paynow was successful.",
+                            ['amount' => "\${$locked->amount}"]
+                        );
+                    }
+                });
+
+                return response()->json(['status' => 'completed', 'resolved' => true]);
+            }
+
+            if ($remoteStatus && in_array($remoteStatus->status(), ['Cancelled', 'Failed'], true)) {
+                $transaction->update(['status' => 'rejected', 'notes' => 'Failed/Cancelled via poll']);
+                return response()->json(['status' => 'rejected', 'resolved' => true]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('Paynow poll error: ' . $e->getMessage());
+        }
+
+        return response()->json(['status' => 'pending', 'resolved' => false]);
     }
 
     public function webhook(Request $request, ReferralService $referralService)
@@ -133,39 +524,47 @@ class PaynowController extends Controller
             }
 
             if ($status->paid()) {
-                $oldStatus = (string) $transaction->getAttribute('status');
-                $transaction->update([
-                    'status' => 'completed',
-                    'notes' => 'Completed via Paynow'
-                ]);
+                DB::transaction(function () use ($transaction, $referralService): void {
+                    // Re-fetch with a lock to prevent double-crediting
+                    $locked = Transaction::lockForUpdate()->find($transaction->getKey());
+                    if (! $locked || $locked->status !== 'pending') {
+                        return;
+                    }
 
-                $referralService->rewardReferrerOnFirstDeposit($transaction->fresh());
+                    $oldStatus = (string) $locked->getAttribute('status');
+                    $locked->update([
+                        'status' => 'completed',
+                        'notes'  => 'Completed via Paynow',
+                    ]);
 
-                AuditLog::log(
-                    action: 'transaction.paynow_status_updated',
-                    userId: null,
-                    modelType: Transaction::class,
-                    modelId: (int) $transaction->getKey(),
-                    oldValues: ['status' => $oldStatus],
-                    newValues: ['status' => 'completed'],
-                );
+                    $referralService->rewardReferrerOnFirstDeposit($locked->fresh());
 
-                $user = User::find($transaction->user_id);
-                if ($user) {
-                    $user->increment('balance', $transaction->amount);
-                    NotificationService::notify(
-                        $user->id,
-                        'deposit_confirmed',
-                        'Deposit Confirmed',
-                        "Your deposit of \${$transaction->amount} via Paynow was successful.",
-                        ['amount' => "\${$transaction->amount}"]
+                    AuditLog::log(
+                        action: 'transaction.paynow_status_updated',
+                        userId: null,
+                        modelType: Transaction::class,
+                        modelId: (int) $locked->getKey(),
+                        oldValues: ['status' => $oldStatus],
+                        newValues: ['status' => 'completed'],
                     );
-                }
+
+                    $user = User::find($locked->user_id);
+                    if ($user) {
+                        $user->increment('balance', $locked->amount);
+                        NotificationService::notify(
+                            $user->id,
+                            'deposit_confirmed',
+                            'Deposit Confirmed',
+                            "Your deposit of \${$locked->amount} via Paynow was successful.",
+                            ['amount' => "\${$locked->amount}"]
+                        );
+                    }
+                });
             } elseif ($status->status() === 'Cancelled' || $status->status() === 'Failed') {
                 $oldStatus = (string) $transaction->getAttribute('status');
                 $transaction->update([
                     'status' => 'rejected',
-                    'notes' => 'Failed/Cancelled via Paynow'
+                    'notes'  => 'Failed/Cancelled via Paynow',
                 ]);
 
                 AuditLog::log(
@@ -175,7 +574,7 @@ class PaynowController extends Controller
                     modelId: (int) $transaction->getKey(),
                     oldValues: ['status' => $oldStatus],
                     newValues: [
-                        'status' => 'rejected',
+                        'status'          => 'rejected',
                         'provider_status' => (string) $status->status(),
                     ],
                 );

@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -35,6 +36,7 @@ export default function UserShow({ targetUser, recent_orders, recent_transaction
     const [balanceForm, setBalanceForm] = useState({ amount: '', reason: '' });
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [roleForm, setRoleForm] = useState({ role: targetUser.role, admin_role: targetUser.admin_role || 'support' });
+    const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; danger?: boolean } | null>(null);
 
     if (!targetUser) return <AdminLayout><div className="p-8">Loading...</div></AdminLayout>;
 
@@ -273,10 +275,10 @@ export default function UserShow({ targetUser, recent_orders, recent_transaction
                         <div className="bg-white rounded-[2.5rem] border border-zinc-200 p-10 shadow-sm">
                             <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em] mb-10">Security</h3>
                             <div className="space-y-4">
-                                <button onClick={() => confirm('Send reset?') && router.post(route('admin.users.reset-password', { user: targetUser.id }))} className="w-full p-5 rounded-2xl bg-zinc-50 text-zinc-700 text-xs font-black uppercase tracking-widest hover:bg-zinc-100 transition-all border border-zinc-100 shadow-sm">
+                                <button onClick={() => setConfirmModal({ title: 'Reset Password', message: 'Send a password reset email to this user?', onConfirm: () => router.post(route('admin.users.reset-password', { user: targetUser.id })) })} className="w-full p-5 rounded-2xl bg-zinc-50 text-zinc-700 text-xs font-black uppercase tracking-widest hover:bg-zinc-100 transition-all border border-zinc-100 shadow-sm">
                                     <FaLock className="opacity-30 inline mr-2" /> Reset Password
                                 </button>
-                                <button onClick={() => confirm('Change status?') && router.post(route('admin.users.ban', { user: targetUser.id }))} className={`w-full p-5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border shadow-sm ${targetUser.is_active ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                                <button onClick={() => setConfirmModal({ title: targetUser.is_active ? 'Ban Account' : 'Revoke Ban', message: targetUser.is_active ? 'Ban this user account? They will lose access immediately.' : 'Revoke the ban on this account?', onConfirm: () => router.post(route('admin.users.ban', { user: targetUser.id })), danger: targetUser.is_active })} className={`w-full p-5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border shadow-sm ${targetUser.is_active ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
                                     {targetUser.is_active ? 'Ban Account' : 'Revoke Ban'}
                                 </button>
                                 <button onClick={() => setShowRoleModal(true)} className="w-full p-5 rounded-2xl bg-indigo-50 text-indigo-700 text-xs font-black uppercase tracking-widest hover:bg-indigo-100 border border-indigo-200 transition-all">
@@ -358,6 +360,17 @@ export default function UserShow({ targetUser, recent_orders, recent_transaction
                     )}
                 </AnimatePresence>
             </div>
+            
+            {confirmModal && (
+                <ConfirmModal
+                    open
+                    title={confirmModal.title}
+                    message={confirmModal.message}
+                    danger={confirmModal.danger}
+                    onConfirm={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
+                    onCancel={() => setConfirmModal(null)}
+                />
+            )}
         </AdminLayout>
     );
 }

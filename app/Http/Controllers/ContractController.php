@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BusinessContract;
 use App\Models\ContractApplication;
+use App\Models\MarketerReview;
 use App\Models\MarketerSocialLink;
 use App\Models\User;
 use App\Models\Transaction;
@@ -41,9 +42,22 @@ class ContractController extends Controller
             ->latest()
             ->paginate(10);
 
+        // Top-rated marketers for the Rankings tab
+        $top_marketers = User::where('role', 'marketer')
+            ->where('marketer_status', 'approved')
+            ->withAvg('receivedReviews as avg_rating', 'rating')
+            ->withCount('receivedReviews as review_count')
+            ->withCount(['contractApplications as completed_contracts' => fn ($q) => $q->where('status', 'completed')])
+            ->having('review_count', '>', 0)
+            ->orderByDesc('avg_rating')
+            ->orderByDesc('review_count')
+            ->limit(30)
+            ->get(['id', 'name', 'company_name', 'slug', 'profile_image_url']);
+
         return Inertia::render('Contracts/Index', [
             'my_contracts'        => $my_contracts,
             'available_contracts' => $available_contracts,
+            'top_marketers'       => $top_marketers,
         ]);
     }
 
@@ -55,9 +69,18 @@ class ContractController extends Controller
         }
 
         $contract->load([
-            'applications.marketer.socialLinks', 
-            'applications.decider',
-            'applications.proofs'
+            'applications' => function ($q) {
+                $q->with([
+                    'marketer' => function ($q) {
+                        $q->withAvg('receivedReviews as avg_rating', 'rating')
+                          ->withCount('receivedReviews as review_count')
+                          ->with('socialLinks');
+                    },
+                    'decider',
+                    'proofs',
+                    'review',
+                ]);
+            },
         ]);
 
         return Inertia::render('Contracts/Show', [

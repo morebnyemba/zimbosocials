@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 use App\Models\BusinessContract;
 use App\Models\ContractApplication;
 use App\Models\ContractProofSubmission;
+use App\Models\MarketerReview;
 use App\Models\MarketerSocialLink;
 use App\Models\Order;
 use App\Models\Service;
@@ -77,6 +78,25 @@ class MarketerController extends Controller
             'my_approved_contracts' => ContractApplication::where('marketer_id', $userId)->where('status', 'approved')->count(),
         ];
 
+        // Rating stats for this marketer
+        $ratingRow = \Illuminate\Support\Facades\DB::table('marketer_reviews')
+            ->where('marketer_id', $userId)
+            ->selectRaw('ROUND(AVG(rating), 1) as avg_rating, COUNT(*) as review_count')
+            ->first();
+
+        $stats['avg_rating']   = (float) ($ratingRow->avg_rating ?? 0);
+        $stats['review_count'] = (int) ($ratingRow->review_count ?? 0);
+
+        // Recent reviews
+        $recent_reviews = MarketerReview::with([
+            'reviewer:id,name,company_name',
+            'contract:id,title',
+        ])
+            ->where('marketer_id', $userId)
+            ->latest()
+            ->limit(5)
+            ->get();
+
         // Social links
         $social_links = MarketerSocialLink::where('user_id', $userId)->get();
 
@@ -98,7 +118,8 @@ class MarketerController extends Controller
             'my_contract_applications',
             'contract_stats',
             'social_links',
-            'approved_apps'
+            'approved_apps',
+            'recent_reviews'
         ));
     }
 }

@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout'
+import ConfirmModal from '@/Components/ConfirmModal'
 import { PageProps } from '@/types'
 import { Head, router } from '@inertiajs/react'
 import { useState } from 'react'
@@ -20,6 +21,7 @@ interface WhatsAppTemplatesProps extends PageProps {
 
 export default function WhatsAppTemplates({ auth, remoteTemplates, localConfig, error, provider }: WhatsAppTemplatesProps) {
     const [syncing, setSyncing] = useState(false)
+    const [pendingDelete, setPendingDelete] = useState<string | null>(null)
 
     const handleSync = () => {
         setSyncing(true)
@@ -30,9 +32,7 @@ export default function WhatsAppTemplates({ auth, remoteTemplates, localConfig, 
     }
 
     const handleDelete = (name: string) => {
-        if (confirm(`Are you sure you want to delete template '${name}' from Meta?`)) {
-            router.delete(route('admin.whatsapp.delete', name))
-        }
+        setPendingDelete(name)
     }
 
     const localKeys = Object.keys(localConfig)
@@ -163,6 +163,18 @@ export default function WhatsAppTemplates({ auth, remoteTemplates, localConfig, 
                     </div>
                 </div>
             </div>
+            
+            {pendingDelete && (
+                <ConfirmModal
+                    open
+                    title="Delete WhatsApp Template"
+                    message={`Are you sure you want to delete template '${pendingDelete}' from Meta? This cannot be undone.`}
+                    confirmLabel="Delete"
+                    danger
+                    onConfirm={() => { router.delete(route('admin.whatsapp.delete', pendingDelete)); setPendingDelete(null); }}
+                    onCancel={() => setPendingDelete(null)}
+                />
+            )}
         </AdminLayout>
     )
 }

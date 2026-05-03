@@ -1,5 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Order { id: number; user?: any; service?: any; status: string; charge: string; quantity: number; link: string; external_order_id?: string; push_attempts?: number; pushed_to_upstream?: boolean; upstream_last_error?: string; created_at: string; started_at?: string; completed_at?: string; transaction?: any; }
 interface Props { order: Order; }
@@ -7,6 +9,7 @@ interface Props { order: Order; }
 const sC: Record<string, string> = { pending: 'bg-amber-100 text-amber-800 border-amber-200', processing: 'bg-blue-100 text-blue-800 border-blue-200', in_progress: 'bg-indigo-100 text-indigo-800 border-indigo-200', completed: 'bg-brand-green/10 text-brand-green border-brand-green/20', cancelled: 'bg-red-100 text-red-800 border-red-200', refunded: 'bg-gray-100 text-gray-800 border-gray-200' };
 
 export default function OrderShow({ order }: Props) {
+    const [showRefundConfirm, setShowRefundConfirm] = useState(false);
     return (
         <AdminLayout>
             <Head title={`Order #${order.id}`} />
@@ -71,10 +74,20 @@ export default function OrderShow({ order }: Props) {
                         </div>
                     </div>
                     <div className="flex gap-3 pt-6 border-t border-gray-100">
-                        {order.status !== 'refunded' && <button onClick={() => { if (confirm('Refund?')) router.post(route('admin.orders.refund', order.id)); }} className="px-4 py-2 text-sm font-medium rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors shadow-sm">Refund Order</button>}
+                        {order.status !== 'refunded' && <button onClick={() => setShowRefundConfirm(true)} className="px-4 py-2 text-sm font-medium rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors shadow-sm">Refund Order</button>}
                     </div>
                 </div>
             </div>
+            
+            <ConfirmModal
+                open={showRefundConfirm}
+                title="Refund Order"
+                message={`Refund order #${order.id}? The charge amount will be returned to the user's wallet.`}
+                confirmLabel="Refund"
+                danger
+                onConfirm={() => { setShowRefundConfirm(false); router.post(route('admin.orders.refund', order.id)); }}
+                onCancel={() => setShowRefundConfirm(false)}
+            />
         </AdminLayout>
     );
 }

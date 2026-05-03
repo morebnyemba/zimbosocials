@@ -29,21 +29,21 @@ class WalletController extends Controller
             ->latest()
             ->paginate(20);
 
+        // Single aggregate query instead of 4 separate SUM queries
+        $totalsRow = Transaction::where('user_id', $userId)
+            ->selectRaw("
+                SUM(CASE WHEN type = 'deposit' AND status = 'completed' THEN amount ELSE 0 END)          AS deposited,
+                SUM(CASE WHEN type = 'contract_earning' AND status = 'completed' THEN amount ELSE 0 END) AS contract_earnings,
+                ABS(SUM(CASE WHEN type = 'withdrawal' THEN amount ELSE 0 END))                           AS withdrawn,
+                ABS(SUM(CASE WHEN type = 'order_charge' THEN amount ELSE 0 END))                         AS spent
+            ")
+            ->first();
+
         $totals = [
-            'deposited' => Transaction::where('user_id', $userId)
-                ->where('type', 'deposit')
-                ->where('status', 'completed')
-                ->sum('amount'),
-            'contract_earnings' => Transaction::where('user_id', $userId)
-                ->where('type', 'contract_earning')
-                ->where('status', 'completed')
-                ->sum('amount'),
-            'withdrawn' => abs(Transaction::where('user_id', $userId)
-                ->where('type', 'withdrawal')
-                ->sum('amount')),
-            'spent' => abs(Transaction::where('user_id', $userId)
-                ->where('type', 'order_charge')
-                ->sum('amount')),
+            'deposited'         => (float) ($totalsRow->deposited         ?? 0),
+            'contract_earnings' => (float) ($totalsRow->contract_earnings ?? 0),
+            'withdrawn'         => (float) ($totalsRow->withdrawn         ?? 0),
+            'spent'             => (float) ($totalsRow->spent             ?? 0),
         ];
 
         $manualPaymentDetails = ManualPaymentDetail::active()

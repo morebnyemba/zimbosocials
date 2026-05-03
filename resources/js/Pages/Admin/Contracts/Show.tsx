@@ -1,5 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 import { 
     Calendar, 
     DollarSign, 
@@ -63,10 +65,9 @@ const statusColors: Record<string, string> = {
 };
 
 export default function ContractShow({ contract }: Props) {
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const deleteContract = () => {
-        if (confirm('Are you sure you want to delete this contract? All applications will be lost.')) {
-            router.delete(route('admin.contracts.destroy', contract.id));
-        }
+        setShowDeleteConfirm(true);
     };
 
     return (
@@ -220,6 +221,16 @@ export default function ContractShow({ contract }: Props) {
                     </div>
                 </div>
             </div>
+            
+            <ConfirmModal
+                open={showDeleteConfirm}
+                title="Delete Contract"
+                message="Are you sure you want to delete this contract? All applications will be permanently lost."
+                confirmLabel="Delete"
+                danger
+                onConfirm={() => { setShowDeleteConfirm(false); router.delete(route('admin.contracts.destroy', contract.id)); }}
+                onCancel={() => setShowDeleteConfirm(false)}
+            />
         </AdminLayout>
     );
 }

@@ -3,15 +3,18 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Transaction extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'user_id', 'order_id', 'type', 'amount',
         'balance_before', 'balance_after',
-        'method', 'reference', 'status', 'notes',
+        'method', 'reference', 'status', 'notes', 'gateway_meta',
         'proof_url', 'processed_by', 'processed_at', 'admin_notes',
     ];
 
@@ -21,6 +24,7 @@ class Transaction extends Model
             'amount'         => 'decimal:4',
             'balance_before' => 'decimal:4',
             'balance_after'  => 'decimal:4',
+            'gateway_meta'   => 'array',
         ];
     }
 

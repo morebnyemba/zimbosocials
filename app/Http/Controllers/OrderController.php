@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Service;
+use App\Services\OrderService;
 use App\Services\ReferralService;
 use App\Services\Upstream\OrderDispatchService;
 use Illuminate\Http\Request;
@@ -36,7 +37,7 @@ class OrderController extends Controller
     /**
      * Store a new order.
      */
-    public function store(Request $request, OrderDispatchService $dispatchService, ReferralService $referralService): RedirectResponse
+    public function store(Request $request, OrderService $orderService, OrderDispatchService $dispatchService, ReferralService $referralService): RedirectResponse
     {
         $data = $request->validate([
             'service_id' => ['required', 'exists:services,id'],
@@ -49,59 +50,27 @@ class OrderController extends Controller
 
         // Hard guard: users with empty balance cannot place orders.
         if ((float) $user->balance <= 0) {
-            return back()->withErrors([
-                'balance' => __('orders.insufficient_balance'),
-            ])->withInput();
-        }
-
-        // Validate quantity range
-        if ($data['quantity'] < $service->min_qty || $data['quantity'] > $service->max_qty) {
-            return back()->withErrors([
-                'quantity' => __('orders.qty_range', [
-                    'min' => number_format($service->min_qty),
-                    'max' => number_format($service->max_qty),
-                ]),
-            ])->withInput();
-        }
-
-        $charge = $service->calculateCharge($data['quantity']);
-        $availableBalance = (float) $user->balance;
-
-        // Check balance
-        if ($availableBalance < $charge) {
-            return back()->withErrors([
-                'balance' => __('orders.insufficient_balance'),
-            ])->withInput();
-        }
-
-        // Create order first (pending)
-        $order = Order::create([
-            'user_id'       => $user->id,
-            'service_id'    => $service->id,
-            'link'          => $data['link'],
-            'quantity'      => $data['quantity'],
-            'charge'        => $charge,
-            'rate_at_order' => $service->rate,
-            'status'        => 'pending',
-        ]);
-
-        // Deduct balance and record transaction
-        $deducted = $user->deductBalance(
-            $charge,
-            $order,
-            "Order #{$order->id} — {$service->name}"
-        );
-
-        if (! $deducted) {
-            $order->delete();
             return back()->withErrors(['balance' => __('orders.insufficient_balance')])->withInput();
         }
 
+        $result = $orderService->placeOrder(
+            $user,
+            $service,
+            $data['link'],
+            (int) $data['quantity'],
+            $dispatchService,
+            'Order'
+        );
+
+        if (! $result['ok']) {
+            $field = ($result['code'] ?? 0) === 402 ? 'balance' : 'quantity';
+            return back()->withErrors([$field => $result['error']])->withInput();
+        }
+
+        $order = $result['order'];
         $referralService->rewardReferrerOnReferredOrder($order);
 
-        $dispatchResult = $dispatchService->dispatch($order);
-
-        if (! $dispatchResult['ok']) {
+        if (! $result['dispatch']['ok']) {
             return redirect()->route('orders.index')
                 ->with('success', __('orders.placed_success', ['id' => $order->id]))
                 ->with('info', app()->getLocale() === 'sn'

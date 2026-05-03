@@ -1,4 +1,6 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
+import ToastContainer, { ToastKind } from '@/Components/Toast';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -15,6 +17,13 @@ export default function ServicesIndex({ services, categories, providers, stats, 
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [form, setForm] = useState<any>(emptyForm);
+    const [pendingDeactivateId, setPendingDeactivateId] = useState<number | null>(null);
+    const [activeToast, setActiveToast] = useState<{ kind: ToastKind; message: string } | null>(null);
+
+    const showToast = (kind: ToastKind, message: string) => {
+        setActiveToast({ kind, message });
+        setTimeout(() => setActiveToast(null), 4000);
+    };
 
     const applySearch = () => router.get(route('admin.services.index'), { ...filters, search }, { preserveState: true });
     const filterCategory = (cat: string) => router.get(route('admin.services.index'), { ...filters, category: cat || undefined }, { preserveState: true });
@@ -42,10 +51,10 @@ export default function ServicesIndex({ services, categories, providers, stats, 
         }
     };
 
-    const deactivate = (id: number) => { if (confirm('Deactivate this service?')) router.delete(route('admin.services.destroy', id), { preserveScroll: true }); };
+    const deactivate = (id: number) => { setPendingDeactivateId(id); };
 
     const addUpstream = () => {
-        if (providers.length === 0) return alert('No active providers available.');
+        if (providers.length === 0) return showToast('warn', 'No active providers available.');
         setForm({
             ...form,
             upstreams: [...form.upstreams, { upstream_provider_id: providers[0].id, external_service_id: '', priority: form.upstreams.length + 1 }]
@@ -200,7 +209,7 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                                             ))
                                         )}
                                         {form.upstreams.length > 0 && (
-                                            <p className="text-xs text-gray-500 mt-2 flex items-center gap-1.5 bg-blue-50 text-blue-700 p-2.5 rounded-lg border border-blue-100">
+                                            <p className="text-xs mt-2 flex items-center gap-1.5 bg-blue-50 text-blue-700 p-2.5 rounded-lg border border-blue-100">
                                                 <span className="font-bold">Info:</span> Orders will route to Priority 1 first. If failed, it tries Priority 2, etc.
                                             </p>
                                         )}
@@ -225,6 +234,19 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                     </div>
                 )}
             </div>
+
+            {pendingDeactivateId !== null && (
+                <ConfirmModal
+                    open
+                    title="Deactivate Service"
+                    message="Deactivate this service? It will no longer be visible to users."
+                    confirmLabel="Deactivate"
+                    danger
+                    onConfirm={() => { router.delete(route('admin.services.destroy', pendingDeactivateId), { preserveScroll: true }); setPendingDeactivateId(null); }}
+                    onCancel={() => setPendingDeactivateId(null)}
+                />
+            )}
+            <ToastContainer toast={activeToast} onClose={() => setActiveToast(null)} />
         </AdminLayout>
     );
 }

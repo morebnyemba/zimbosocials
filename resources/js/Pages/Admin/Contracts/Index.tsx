@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { Search, ExternalLink, Trash2, Briefcase, Users, Calendar, DollarSign } from 'lucide-react';
@@ -35,6 +36,7 @@ interface Props {
 
 export default function ContractsIndex({ contracts, filters, status_counts }: Props) {
     const [search, setSearch] = useState(filters.search || '');
+    const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
     const applySearch = () => {
         router.get(route('admin.contracts.index'), { ...filters, search }, { preserveState: true });
@@ -45,9 +47,7 @@ export default function ContractsIndex({ contracts, filters, status_counts }: Pr
     };
 
     const deleteContract = (id: number) => {
-        if (confirm('Are you sure you want to delete this contract? This cannot be undone.')) {
-            router.delete(route('admin.contracts.destroy', id));
-        }
+        setPendingDeleteId(id);
     };
 
     const statusBadge = (status: string) => {
@@ -157,6 +157,18 @@ export default function ContractsIndex({ contracts, filters, status_counts }: Pr
                     </table>
                 </div>
             </div>
+            
+            {pendingDeleteId !== null && (
+                <ConfirmModal
+                    open
+                    title="Delete Contract"
+                    message="Are you sure you want to delete this contract? This cannot be undone."
+                    confirmLabel="Delete"
+                    danger
+                    onConfirm={() => { router.delete(route('admin.contracts.destroy', pendingDeleteId)); setPendingDeleteId(null); }}
+                    onCancel={() => setPendingDeleteId(null)}
+                />
+            )}
         </AdminLayout>
     );
 }

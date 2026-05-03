@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
@@ -9,6 +10,7 @@ interface Props { paymentDetails: PaymentDetail[]; }
 export default function PaymentDetails({ paymentDetails }: Props) {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
     const { data, setData, post, put, processing, reset } = useForm({ method_key: '', label: '', account_name: '', account_number: '', instructions: '', sort_order: 0, is_active: true, gateway_type: '' });
 
     const openCreate = () => { reset(); setEditingId(null); setShowForm(true); };
@@ -20,7 +22,7 @@ export default function PaymentDetails({ paymentDetails }: Props) {
         else { post(route('admin.payment-details.store'), { preserveScroll: true, onSuccess: () => { setShowForm(false); reset(); } }); }
     };
 
-    const del = (id: number) => { if (confirm('Delete this payment method?')) router.delete(route('admin.payment-details.destroy', id), { preserveScroll: true }); };
+    const del = (id: number) => { setPendingDeleteId(id); };
 
     return (
         <AdminLayout>
@@ -110,6 +112,18 @@ export default function PaymentDetails({ paymentDetails }: Props) {
                     </div>
                 )}
             </div>
+            
+            {pendingDeleteId !== null && (
+                <ConfirmModal
+                    open
+                    title="Delete Payment Method"
+                    message="Are you sure you want to delete this payment method? This cannot be undone."
+                    confirmLabel="Delete"
+                    danger
+                    onConfirm={() => { router.delete(route('admin.payment-details.destroy', pendingDeleteId), { preserveScroll: true }); setPendingDeleteId(null); }}
+                    onCancel={() => setPendingDeleteId(null)}
+                />
+            )}
         </AdminLayout>
     );
 }

@@ -1,6 +1,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout'
+import ConfirmModal from '@/Components/ConfirmModal'
 import { PageProps } from '@/types'
 import { Head, router } from '@inertiajs/react'
+import { useState } from 'react'
 
 interface Service { name: string; category: string }
 interface Transaction { id: number; amount: number; type: string; description: string }
@@ -23,9 +25,10 @@ const statusColors: Record<string, string> = {
 }
 
 export default function OrderShow({ order }: Props) {
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+
     function cancelOrder() {
-        if (!confirm('Cancel this order and receive a refund?')) return
-        router.post(route('orders.cancel', order.id))
+        setShowCancelConfirm(true)
     }
 
     return (
@@ -70,6 +73,16 @@ export default function OrderShow({ order }: Props) {
                     )}
                 </div>
             </div>
+            
+            <ConfirmModal
+                open={showCancelConfirm}
+                title="Cancel Order"
+                message="Are you sure you want to cancel this order? A refund will be issued to your wallet balance."
+                confirmLabel="Cancel Order"
+                danger
+                onConfirm={() => { setShowCancelConfirm(false); router.post(route('orders.cancel', order.id)); }}
+                onCancel={() => setShowCancelConfirm(false)}
+            />
         </AuthenticatedLayout>
     )
 }

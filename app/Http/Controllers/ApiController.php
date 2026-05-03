@@ -1,12 +1,13 @@
 <?php
 // app/Http/Controllers/ApiController.php
-// REST API for resellers — authenticate via ?key=YOUR_API_KEY
+// REST API for resellers — authenticate via: Authorization: Bearer YOUR_API_KEY
 
 namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\OrderService;
 use App\Services\Upstream\OrderDispatchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ class ApiController extends Controller
 
     private function resolveUser(Request $request): ?User
     {
-        $key = $request->input('key') ?? $request->bearerToken();
+        $key = $request->bearerToken();
         if (! $key) return null;
         return User::where('api_key', $key)->where('is_active', true)->first();
     }
@@ -58,7 +59,7 @@ class ApiController extends Controller
 
     // ─── POST /api/v1/order ───────────────────────────────────────────────────
 
-    public function placeOrder(Request $request, OrderDispatchService $dispatchService): JsonResponse
+    public function placeOrder(Request $request, OrderService $orderService, OrderDispatchService $dispatchService): JsonResponse
     {
         $user = $this->resolveUser($request);
         if (! $user) return $this->unauthorized();
@@ -71,41 +72,30 @@ class ApiController extends Controller
 
         $service = Service::active()->findOrFail($data['service']);
 
-        if ($data['quantity'] < $service->min_qty || $data['quantity'] > $service->max_qty) {
-            return response()->json([
-                'error' => "Quantity must be between {$service->min_qty} and {$service->max_qty}.",
-            ], 422);
+        $result = $orderService->placeOrder(
+            $user,
+            $service,
+            $data['link'],
+            (int) $data['quantity'],
+            $dispatchService,
+            'API Order'
+        );
+
+        if (! $result['ok']) {
+            $payload = ['error' => $result['error']];
+            if (isset($result['balance']))  $payload['balance']  = $result['balance'];
+            if (isset($result['required'])) $payload['required'] = $result['required'];
+            return response()->json($payload, $result['code'] ?? 422);
         }
 
-        $charge = $service->calculateCharge($data['quantity']);
-
-        if ($user->balance < $charge) {
-            return response()->json([
-                'error' => 'Insufficient balance.',
-                'balance' => (float) $user->balance,
-                'required' => $charge,
-            ], 402);
-        }
-
-        $order = Order::create([
-            'user_id'       => $user->id,
-            'service_id'    => $service->id,
-            'link'          => $data['link'],
-            'quantity'      => $data['quantity'],
-            'charge'        => $charge,
-            'rate_at_order' => $service->rate,
-            'status'        => 'pending',
-        ]);
-
-        $user->deductBalance($charge, $order, "API Order #{$order->id}");
-
-        $dispatch = $dispatchService->dispatch($order);
+        $order    = $result['order'];
+        $dispatch = $result['dispatch'];
 
         return response()->json([
-            'order' => $order->id,
-            'external_order_id' => $order->external_order_id,
-            'upstream_pushed' => (bool) $dispatch['ok'],
-            'upstream_message' => $dispatch['message'],
+            'order'              => $order->id,
+            'external_order_id'  => $order->external_order_id,
+            'upstream_pushed'    => (bool) $dispatch['ok'],
+            'upstream_message'   => $dispatch['message'],
         ]);
     }
 
@@ -185,8 +175,10 @@ class ApiController extends Controller
             return response()->json(['error' => 'Order cannot be cancelled.'], 422);
         }
 
-        $order->update(['status' => 'cancelled']);
-        $user->creditBalance($order->charge, 'refund', '', 'refund');
+        \Illuminate\Support\Facades\DB::transaction(function () use ($order, $user): void {
+            $order->update(['status' => 'cancelled']);
+            $user->creditBalance($order->charge, 'refund', '', 'refund');
+        });
 
         return response()->json(['cancel' => $order->id]);
     }

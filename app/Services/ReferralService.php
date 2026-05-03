@@ -26,6 +26,15 @@ class ReferralService
         return (float) Setting::get('order_commission_min_total', config('services.referral.order_commission_min_total', 20.00));
     }
 
+    /**
+     * Maximum number of order commissions to award per referral relationship.
+     * 0 = unlimited (default, backward-compatible).
+     */
+    private function maxReferralCommissionOrders(): int
+    {
+        return (int) Setting::get('max_referral_commission_orders', 0);
+    }
+
     public function rewardReferrerOnFirstDeposit(Transaction $depositTransaction): void
     {
         if ($depositTransaction->getAttribute('type') !== 'deposit') {
@@ -141,9 +150,8 @@ class ReferralService
             return;
         }
 
-        $reference = 'REF-ORDER-' . $order->getKey();
-
         // Idempotency guard in case order handling is retried.
+        $reference = 'REF-ORDER-' . $order->getKey();
         $alreadyRewarded = Transaction::query()
             ->where('user_id', (int) $referrerId)
             ->where('type', 'bonus')
@@ -152,6 +160,26 @@ class ReferralService
 
         if ($alreadyRewarded) {
             return;
+        }
+
+        // Cap: check how many order commissions have been awarded for this referral relationship
+        $maxOrders = $this->maxReferralCommissionOrders();
+        if ($maxOrders > 0) {
+            // Collect all order IDs belonging to the referred user, then count matching bonus TXs
+            $referredOrderIds = Order::where('user_id', $referredUser->getKey())
+                ->pluck('id')
+                ->map(fn ($id) => 'REF-ORDER-' . $id)
+                ->all();
+
+            $awardedCount = Transaction::query()
+                ->where('user_id', (int) $referrerId)
+                ->where('type', 'bonus')
+                ->whereIn('reference', $referredOrderIds)
+                ->count();
+
+            if ($awardedCount >= $maxOrders) {
+                return;
+            }
         }
 
         $referrer = User::find($referrerId);
