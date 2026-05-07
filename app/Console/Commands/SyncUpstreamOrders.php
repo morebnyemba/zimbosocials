@@ -106,7 +106,7 @@ class SyncUpstreamOrders extends Command
             
             $refundAmount = 0;
 
-            if ($newStatus === 'canceled') {
+            if (in_array($newStatus, ['canceled', 'cancelled', 'refunded', 'failed'])) {
                 $refundAmount = $charge;
             } elseif ($newStatus === 'partial') {
                 // Refund proportional to remains

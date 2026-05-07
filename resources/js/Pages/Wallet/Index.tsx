@@ -590,7 +590,6 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                                         <p className="text-[10px] text-zinc-500 ml-4">An OTP will be sent to your phone via SMS.</p>
                                                     )}
                                                 </div>
-                                                </div>
                                             ) : (
                                                 <div className="p-6 rounded-3xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium leading-relaxed">
                                                     <p className="font-black uppercase tracking-widest text-[9px] mb-2 flex items-center gap-2">

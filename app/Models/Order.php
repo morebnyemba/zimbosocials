@@ -81,7 +81,9 @@ class Order extends Model
 
     public function canCancel(): bool
     {
-        return $this->status === 'pending';
+        // Users can only cancel orders that are still pending
+        // AND have not yet been sent to the external SMM provider.
+        return $this->status === 'pending' && ! $this->pushed_to_upstream;
     }
 
     /** Shona status label */
