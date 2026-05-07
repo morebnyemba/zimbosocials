@@ -2,8 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\BusinessContract;
+use App\Policies\BusinessContractPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
@@ -25,7 +28,13 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::prefetch(concurrency: 3);
         $this->registerRateLimiters();
+        $this->registerPolicies();
         $this->loadSettings();
+    }
+
+    protected function registerPolicies(): void
+    {
+        Gate::policy(BusinessContract::class, BusinessContractPolicy::class);
     }
 
     protected function registerRateLimiters(): void
@@ -53,39 +62,63 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(10)->by('manual-deposit:' . $key),
             ];
         });
+
+        RateLimiter::for('wallet-withdraw', function (Request $request) {
+            $key = (string) ($request->user()?->id ?? $request->ip());
+
+            return [
+                Limit::perMinute(3)->by('withdraw:' . $key),
+            ];
+        });
+
+        RateLimiter::for('api-key', function (Request $request) {
+            $apiKey = $request->bearerToken() ?? $request->ip();
+
+            return [
+                Limit::perMinute(60)->by('api:' . $apiKey),
+            ];
+        });
     }
 
     protected function loadSettings(): void
     {
         try {
-            if (!\Illuminate\Support\Facades\Schema::hasTable('settings')) {
+            // Cache settings as raw arrays for 5 minutes (Eloquent collections don't serialize reliably)
+            $settingsArray = \Illuminate\Support\Facades\Cache::remember('app:boot_settings', 300, function () {
+                if (!\Illuminate\Support\Facades\Schema::hasTable('settings')) {
+                    return [];
+                }
+                return \App\Models\Setting::all(['key', 'value', 'group'])->toArray();
+            });
+
+            if (empty($settingsArray)) {
                 return;
             }
 
-            $settings = \App\Models\Setting::all();
+            $mailKeyMap = [
+                'host'         => 'mail.mailers.smtp.host',
+                'port'         => 'mail.mailers.smtp.port',
+                'username'     => 'mail.mailers.smtp.username',
+                'password'     => 'mail.mailers.smtp.password',
+                'encryption'   => 'mail.mailers.smtp.encryption',
+                'from_address' => 'mail.from.address',
+                'from_name'    => 'mail.from.name',
+            ];
 
-            foreach ($settings as $setting) {
-                if ($setting->group === 'mail') {
-                    config(["mail.mailers.smtp.{$setting->key}" => $setting->value]);
-                    
-                    if ($setting->key === 'host') config(['mail.mailers.smtp.host' => $setting->value]);
-                    if ($setting->key === 'port') config(['mail.mailers.smtp.port' => $setting->value]);
-                    if ($setting->key === 'username') config(['mail.mailers.smtp.username' => $setting->value]);
-                    if ($setting->key === 'password') config(['mail.mailers.smtp.password' => $setting->value]);
-                    if ($setting->key === 'encryption') config(['mail.mailers.smtp.encryption' => $setting->value]);
-                    if ($setting->key === 'from_address') config(['mail.from.address' => $setting->value]);
-                    if ($setting->key === 'from_name') config(['mail.from.name' => $setting->value]);
+            foreach ($settingsArray as $setting) {
+                if ($setting['group'] === 'mail' && isset($mailKeyMap[$setting['key']])) {
+                    config([$mailKeyMap[$setting['key']] => $setting['value']]);
                 }
 
-                if ($setting->group === 'whatsapp') {
-                    config(["services.whatsapp.{$setting->key}" => $setting->value]);
-                }
-                
-                if ($setting->group === 'app') {
-                    config(["app.{$setting->key}" => $setting->value]);
+                if ($setting['group'] === 'whatsapp') {
+                    config(["services.whatsapp.{$setting['key']}" => $setting['value']]);
                 }
 
-                config(["settings.{$setting->key}" => $setting->value]);
+                if ($setting['group'] === 'app') {
+                    config(["app.{$setting['key']}" => $setting['value']]);
+                }
+
+                config(["settings.{$setting['key']}" => $setting['value']]);
             }
         } catch (\Exception $e) {
             // Fail silently if DB not ready

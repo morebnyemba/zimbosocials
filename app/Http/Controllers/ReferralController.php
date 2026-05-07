@@ -25,27 +25,21 @@ class ReferralController extends Controller
         $referrals = User::query()
             ->where('referred_by', $user->getKey())
             ->select(['id', 'name', 'email', 'created_at', 'referred_bonus_awarded_at'])
+            ->withCount([
+                'transactions as completed_deposits' => fn ($q) => $q->where('type', 'deposit')->where('status', 'completed'),
+                'orders as orders_count',
+            ])
             ->latest()
             ->get()
-            ->map(function (User $referral) {
-                $completedDeposits = Transaction::query()
-                    ->where('user_id', $referral->getKey())
-                    ->where('type', 'deposit')
-                    ->where('status', 'completed')
-                    ->count();
-
-                $ordersCount = $referral->orders()->count();
-
-                return [
-                    'id' => $referral->getKey(),
-                    'name' => $referral->getAttribute('name'),
-                    'email' => $referral->getAttribute('email'),
-                    'joined_at' => optional($referral->getAttribute('created_at'))->toISOString(),
-                    'first_deposit_rewarded' => (bool) $referral->getAttribute('referred_bonus_awarded_at'),
-                    'completed_deposits' => $completedDeposits,
-                    'orders_count' => $ordersCount,
-                ];
-            })
+            ->map(fn (User $referral) => [
+                'id' => $referral->getKey(),
+                'name' => $referral->getAttribute('name'),
+                'email' => $referral->getAttribute('email'),
+                'joined_at' => optional($referral->getAttribute('created_at'))->toISOString(),
+                'first_deposit_rewarded' => (bool) $referral->getAttribute('referred_bonus_awarded_at'),
+                'completed_deposits' => (int) $referral->completed_deposits,
+                'orders_count' => (int) $referral->orders_count,
+            ])
             ->values();
 
         $rewardTransactions = Transaction::query()

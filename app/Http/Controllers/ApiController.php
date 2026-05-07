@@ -176,8 +176,16 @@ class ApiController extends Controller
         }
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($order, $user): void {
-            $order->update(['status' => 'cancelled']);
-            $user->creditBalance($order->charge, 'refund', '', 'refund');
+            $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
+
+            if (! $lockedOrder->canCancel()) {
+                throw new \RuntimeException('Order cannot be cancelled.');
+            }
+
+            $lockedOrder->update(['status' => 'cancelled']);
+
+            $lockedUser = User::lockForUpdate()->findOrFail($user->id);
+            $lockedUser->creditBalance($lockedOrder->charge, 'refund', "API cancel order #{$lockedOrder->id}", 'refund');
         });
 
         return response()->json(['cancel' => $order->id]);

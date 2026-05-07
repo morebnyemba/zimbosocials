@@ -37,11 +37,16 @@ class AdminTicketController extends Controller
 
         $tickets = $query->latest('last_reply_at')->latest()->paginate(25)->withQueryString();
 
+        // Consolidated: 1 GROUP BY instead of 4 separate counts
+        $rawCounts = Ticket::selectRaw('status, COUNT(*) as cnt')
+            ->groupBy('status')
+            ->pluck('cnt', 'status');
+
         $status_counts = [
-            'all'     => Ticket::count(),
-            'open'    => Ticket::where('status', 'open')->count(),
-            'pending' => Ticket::where('status', 'pending')->count(),
-            'closed'  => Ticket::where('status', 'closed')->count(),
+            'all'     => $rawCounts->sum(),
+            'open'    => (int) ($rawCounts['open']    ?? 0),
+            'pending' => (int) ($rawCounts['pending'] ?? 0),
+            'closed'  => (int) ($rawCounts['closed']  ?? 0),
         ];
 
         return Inertia::render('Admin/Tickets/Index', [

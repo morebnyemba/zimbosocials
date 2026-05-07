@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -50,12 +51,17 @@ class AdminUserController extends Controller
 
         $users = $query->paginate(25)->withQueryString();
 
+        // Consolidated: 1 GROUP BY instead of 5 separate counts
+        $rawCounts = User::selectRaw('role, COUNT(*) as cnt')
+            ->groupBy('role')
+            ->pluck('cnt', 'role');
+
         $role_counts = [
-            'all'      => User::count(),
-            'user'     => User::where('role', 'user')->count(),
-            'marketer' => User::where('role', 'marketer')->count(),
-            'reseller' => User::where('role', 'reseller')->count(),
-            'admin'    => User::where('role', 'admin')->count(),
+            'all'      => $rawCounts->sum(),
+            'user'     => (int) ($rawCounts['user']     ?? 0),
+            'marketer' => (int) ($rawCounts['marketer'] ?? 0),
+            'reseller' => (int) ($rawCounts['reseller'] ?? 0),
+            'admin'    => (int) ($rawCounts['admin']    ?? 0),
         ];
 
         return Inertia::render('Admin/Users/Index', [
@@ -80,20 +86,36 @@ class AdminUserController extends Controller
             ->limit(10)
             ->get();
 
+        // Consolidated: 1 aggregate query instead of 4
+        $orderRow = Order::where('user_id', $user->id)
+            ->selectRaw("
+                COUNT(*) AS total,
+                SUM(CASE WHEN status IN ('pending','processing','in_progress') THEN 1 ELSE 0 END) AS active,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+                SUM(charge) AS total_spent
+            ")
+            ->first();
+
         $order_stats = [
-            'total'     => Order::where('user_id', $user->id)->count(),
-            'active'    => Order::where('user_id', $user->id)->active()->count(),
-            'completed' => Order::where('user_id', $user->id)->where('status', 'completed')->count(),
-            'total_spent' => Order::where('user_id', $user->id)->sum('charge'),
+            'total'      => (int) ($orderRow->total      ?? 0),
+            'active'     => (int) ($orderRow->active     ?? 0),
+            'completed'  => (int) ($orderRow->completed  ?? 0),
+            'total_spent'=> (float) ($orderRow->total_spent ?? 0),
         ];
 
+        // Consolidated: 1 aggregate query instead of 3
+        $finRow = Transaction::where('user_id', $user->id)
+            ->selectRaw("
+                SUM(CASE WHEN type = 'deposit' AND status = 'completed' THEN amount ELSE 0 END)          AS deposited,
+                ABS(SUM(CASE WHEN type = 'withdrawal' THEN amount ELSE 0 END))                           AS withdrawn,
+                SUM(CASE WHEN type = 'contract_earning' AND status = 'completed' THEN amount ELSE 0 END) AS earnings
+            ")
+            ->first();
+
         $financial_stats = [
-            'deposited' => Transaction::where('user_id', $user->id)
-                ->where('type', 'deposit')->where('status', 'completed')->sum('amount'),
-            'withdrawn' => abs(Transaction::where('user_id', $user->id)
-                ->where('type', 'withdrawal')->sum('amount')),
-            'earnings'  => Transaction::where('user_id', $user->id)
-                ->where('type', 'contract_earning')->where('status', 'completed')->sum('amount'),
+            'deposited' => (float) ($finRow->deposited ?? 0),
+            'withdrawn' => (float) ($finRow->withdrawn ?? 0),
+            'earnings'  => (float) ($finRow->earnings  ?? 0),
         ];
 
         $services = \App\Models\Service::where('is_active', true)->orderBy('category')->orderBy('name')->get();
@@ -189,6 +211,9 @@ class AdminUserController extends Controller
         return back()->with('success', "User role changed from {$oldRole} to {$data['role']}.");
     }
 
+    /**
+     * Adjust a user's balance — atomic with row locking to prevent concurrent overwrites.
+     */
     public function adjustBalance(User $user, Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -197,41 +222,45 @@ class AdminUserController extends Controller
         ]);
 
         $amount = (float) $data['amount'];
-        $before = (float) $user->balance;
 
-        if ($amount > 0) {
-            $user->increment('balance', $amount);
-        } else {
-            $user->decrement('balance', abs($amount));
-        }
+        DB::transaction(function () use ($user, $amount, $data): void {
+            $lockedUser = User::lockForUpdate()->findOrFail($user->id);
+            $before = (float) $lockedUser->balance;
 
-        Transaction::create([
-            'user_id'        => $user->id,
-            'type'           => 'adjustment',
-            'amount'         => $amount,
-            'balance_before' => $before,
-            'balance_after'  => $before + $amount,
-            'status'         => 'completed',
-            'notes'          => $data['reason'],
-            'processed_by'   => Auth::id(),
-            'processed_at'   => now(),
-        ]);
+            if ($amount > 0) {
+                $lockedUser->increment('balance', $amount);
+            } else {
+                $lockedUser->decrement('balance', abs($amount));
+            }
 
-        AuditLog::log(
-            'user.balance_adjusted',
-            Auth::id(),
-            User::class,
-            $user->id,
-            ['balance' => $before],
-            ['balance' => $before + $amount, 'reason' => $data['reason']],
-        );
+            Transaction::create([
+                'user_id'        => $lockedUser->id,
+                'type'           => 'adjustment',
+                'amount'         => $amount,
+                'balance_before' => $before,
+                'balance_after'  => $before + $amount,
+                'status'         => 'completed',
+                'notes'          => $data['reason'],
+                'processed_by'   => Auth::id(),
+                'processed_at'   => now(),
+            ]);
+
+            AuditLog::log(
+                'user.balance_adjusted',
+                Auth::id(),
+                User::class,
+                $lockedUser->id,
+                ['balance' => $before],
+                ['balance' => $before + $amount, 'reason' => $data['reason']],
+            );
+        });
 
         NotificationService::notify(
             $user->id,
             'balance_adjusted',
             'Balance Adjustment',
             "Your balance has been adjusted by \${$amount}. Reason: {$data['reason']}",
-            ['amount' => $amount, 'new_balance' => $before + $amount]
+            ['amount' => $amount]
         );
 
         $formatted = number_format(abs($amount), 2);

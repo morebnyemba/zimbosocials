@@ -33,9 +33,14 @@ class NotificationController extends Controller
 
     public function markAllRead(): RedirectResponse
     {
-        Notification::where('user_id', Auth::id())
+        $userId = (int) Auth::id();
+
+        Notification::where('user_id', $userId)
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
+
+        // Bulk update bypasses Eloquent model events — manually bust cache
+        \Illuminate\Support\Facades\Cache::forget("user:{$userId}:unread_notifications");
 
         return back()->with('success', 'All notifications marked as read.');
     }

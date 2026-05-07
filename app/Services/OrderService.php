@@ -36,40 +36,52 @@ class OrderService
 
         $charge = $service->calculateCharge($quantity);
 
-        if ((float) $user->balance < $charge) {
+        // --- Atomically create order and deduct balance ---
+        // Balance check is inside the transaction with lockForUpdate to prevent
+        // two concurrent orders from both passing a stale balance check.
+        try {
+            $order = DB::transaction(function () use ($user, $service, $link, $quantity, $charge, $notePrefix): Order {
+                $lockedUser = User::lockForUpdate()->findOrFail($user->id);
+
+                if ((float) $lockedUser->balance < $charge) {
+                    throw new \App\Exceptions\InsufficientBalanceException(
+                        'Insufficient balance.',
+                        (float) $lockedUser->balance,
+                        $charge
+                    );
+                }
+
+                $order = Order::create([
+                    'user_id'       => $lockedUser->id,
+                    'service_id'    => $service->id,
+                    'link'          => $link,
+                    'quantity'      => $quantity,
+                    'charge'        => $charge,
+                    'rate_at_order' => $service->rate,
+                    'status'        => 'pending',
+                ]);
+
+                $deducted = $lockedUser->deductBalance(
+                    $charge,
+                    $order,
+                    "{$notePrefix} #{$order->id} — {$service->name}"
+                );
+
+                if (! $deducted) {
+                    throw new \RuntimeException('Balance deduction failed inside transaction.');
+                }
+
+                return $order;
+            });
+        } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return [
                 'ok'       => false,
-                'error'    => 'Insufficient balance.',
-                'balance'  => (float) $user->balance,
-                'required' => $charge,
+                'error'    => $e->getMessage(),
+                'balance'  => $e->balance,
+                'required' => $e->required,
                 'code'     => 402,
             ];
         }
-
-        // --- Atomically create order and deduct balance ---
-        $order = DB::transaction(function () use ($user, $service, $link, $quantity, $charge, $notePrefix): Order {
-            $order = Order::create([
-                'user_id'       => $user->id,
-                'service_id'    => $service->id,
-                'link'          => $link,
-                'quantity'      => $quantity,
-                'charge'        => $charge,
-                'rate_at_order' => $service->rate,
-                'status'        => 'pending',
-            ]);
-
-            $deducted = $user->deductBalance(
-                $charge,
-                $order,
-                "{$notePrefix} #{$order->id} — {$service->name}"
-            );
-
-            if (! $deducted) {
-                throw new \RuntimeException('Balance deduction failed inside transaction.');
-            }
-
-            return $order;
-        });
 
         // --- Dispatch upstream (outside transaction; failure is recoverable) ---
         $dispatch = $dispatchService->dispatch($order);

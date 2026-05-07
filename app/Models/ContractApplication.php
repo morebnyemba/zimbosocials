@@ -39,9 +39,21 @@ class ContractApplication extends Model
         return $this->belongsTo(User::class, 'decided_by');
     }
 
+    /** Alias used by ContractController::show() eager loading. */
+    public function decider(): BelongsTo
+    {
+        return $this->decisionMaker();
+    }
+
     public function proofSubmissions(): HasMany
     {
         return $this->hasMany(ContractProofSubmission::class);
+    }
+
+    /** Alias used by ContractController::show() eager loading. */
+    public function proofs(): HasMany
+    {
+        return $this->proofSubmissions();
     }
 
     public function review(): \Illuminate\Database\Eloquent\Relations\HasOne
@@ -49,3 +61,4 @@ class ContractApplication extends Model
         return $this->hasOne(MarketerReview::class, 'contract_application_id');
     }
 }
+

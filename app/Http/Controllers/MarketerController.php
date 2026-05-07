@@ -22,22 +22,33 @@ class MarketerController extends Controller
         $user = Auth::user();
         $userId = (int) $user->getAuthIdentifier();
 
+        // Consolidated: 1 aggregate query instead of 4 Order queries
+        $orderRow = Order::forUser($userId)
+            ->selectRaw("
+                COUNT(*)                                                                     AS total_orders,
+                SUM(CASE WHEN status IN ('pending','processing','in_progress') THEN 1 ELSE 0 END) AS active_orders,
+                SUM(charge)                                                                  AS total_spend,
+                SUM(CASE WHEN created_at >= ? AND created_at <= ? THEN 1 ELSE 0 END)         AS client_orders_this_month
+            ", [now()->startOfMonth(), now()->endOfMonth()])
+            ->first();
+
+        // Consolidated: 1 aggregate query instead of 2 Transaction queries
+        $finRow = Transaction::where('user_id', $userId)
+            ->selectRaw("
+                SUM(CASE WHEN type = 'contract_earning' AND status = 'completed' THEN amount ELSE 0 END) AS contract_earnings,
+                ABS(SUM(CASE WHEN type = 'withdrawal' THEN amount ELSE 0 END))                           AS withdrawn
+            ")
+            ->first();
+
         $stats = [
-            'total_orders'  => Order::forUser($userId)->count(),
-            'active_orders' => Order::forUser($userId)->active()->count(),
-            'total_spend'   => Order::forUser($userId)->sum('charge'),
-            'balance'       => $user->balance,
-            'services'      => Service::active()->count(),
-            'contract_earnings' => Transaction::where('user_id', $userId)
-                ->where('type', 'contract_earning')
-                ->where('status', 'completed')
-                ->sum('amount'),
-            'withdrawn' => abs(Transaction::where('user_id', $userId)
-                ->where('type', 'withdrawal')
-                ->sum('amount')),
-            'client_orders_this_month' => Order::forUser($userId)
-                ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
-                ->count(),
+            'total_orders'             => (int) ($orderRow->total_orders  ?? 0),
+            'active_orders'            => (int) ($orderRow->active_orders ?? 0),
+            'total_spend'              => (float) ($orderRow->total_spend ?? 0),
+            'balance'                  => $user->balance,
+            'services'                 => Service::active()->count(),
+            'contract_earnings'        => (float) ($finRow->contract_earnings ?? 0),
+            'withdrawn'                => (float) ($finRow->withdrawn ?? 0),
+            'client_orders_this_month' => (int) ($orderRow->client_orders_this_month ?? 0),
         ];
 
         $recent_orders = Order::with('service')

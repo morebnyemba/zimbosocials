@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
+use App\Services\DepositService;
 use App\Services\NotificationService;
-use App\Services\ReferralService;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\Transaction;
@@ -13,11 +13,16 @@ use App\Models\BusinessContract;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class AdminTransactionController extends Controller
 {
+    public function __construct(
+        private readonly DepositService $depositService,
+    ) {}
+
     public function index(Request $request): Response
     {
         $query = Transaction::with('user:id,name,email');
@@ -39,44 +44,46 @@ class AdminTransactionController extends Controller
 
         $transactions = $query->latest()->paginate(25)->withQueryString();
 
+        // Cache pending counts for 60 seconds to reduce repetitive aggregate queries
+        $pendingDeposits = Cache::remember('admin:pending_deposits', 60, function () {
+            return Transaction::where('type', 'deposit')->where('status', 'pending')->count();
+        });
+
+        $pendingWithdrawals = Cache::remember('admin:pending_withdrawals', 60, function () {
+            return Transaction::where('type', 'withdrawal')->where('status', 'pending')->count();
+        });
+
         return Inertia::render('Admin/Transactions/Index', [
             'transactions'        => $transactions,
             'filters'             => $request->only(['search', 'type', 'status']),
-            'pending_deposits'    => Transaction::where('type', 'deposit')->where('status', 'pending')->count(),
-            'pending_withdrawals' => Transaction::where('type', 'withdrawal')->where('status', 'pending')->count(),
+            'pending_deposits'    => $pendingDeposits,
+            'pending_withdrawals' => $pendingWithdrawals,
         ]);
     }
 
-    public function approveDeposit(Transaction $transaction, ReferralService $referralService): RedirectResponse
+    public function approveDeposit(Transaction $transaction): RedirectResponse
     {
         if ($transaction->type !== 'deposit' || $transaction->status !== 'pending') {
             return back()->with('error', 'Cannot approve this transaction.');
         }
 
-        $oldStatus = (string) $transaction->status;
+        $credited = $this->depositService->credit($transaction, 'admin_approval');
 
-        $user   = $transaction->user;
-        $amount = (float) $transaction->amount;
-        $before = (float) $user->balance;
+        if (!$credited) {
+            return back()->with('error', 'Transaction was already processed.');
+        }
 
-        $user->increment('balance', $amount);
+        // Update admin tracking fields
         $transaction->update([
-            'status' => 'completed', 'balance_after' => $before + $amount,
-            'processed_by' => Auth::id(), 'processed_at' => now(),
+            'processed_by' => Auth::id(),
+            'processed_at' => now(),
         ]);
 
-        $referralService->rewardReferrerOnFirstDeposit($transaction->fresh());
+        // Bust admin dashboard caches
+        Cache::forget('admin:pending_deposits');
 
-        AuditLog::log(
-            action: 'transaction.deposit_approved',
-            userId: (int) Auth::id(),
-            modelType: Transaction::class,
-            modelId: (int) $transaction->id,
-            oldValues: ['status' => $oldStatus],
-            newValues: ['status' => 'completed'],
-        );
-        NotificationService::notify($user->id, 'deposit_confirmed', 'Deposit Confirmed',
-            "Your deposit of \${$amount} has been confirmed.");
+        $amount = (float) $transaction->amount;
+        $user = $transaction->user;
 
         return back()->with('success', "Deposit of \${$amount} approved for {$user->name}.");
     }
@@ -94,7 +101,7 @@ class AdminTransactionController extends Controller
             'processed_at' => now(), 'admin_notes' => 'Rejected by admin',
         ]);
 
-        AuditLog::log(
+        AuditLog::dispatchLog(
             action: 'transaction.deposit_rejected',
             userId: (int) Auth::id(),
             modelType: Transaction::class,
@@ -102,8 +109,12 @@ class AdminTransactionController extends Controller
             oldValues: ['status' => $oldStatus],
             newValues: ['status' => 'failed'],
         );
+
         NotificationService::notify($transaction->user_id, 'deposit_rejected', 'Deposit Rejected',
             'Your deposit request has been rejected.');
+
+        // Bust admin dashboard caches
+        Cache::forget('admin:pending_deposits');
 
         return back()->with('success', 'Deposit rejected.');
     }
@@ -120,7 +131,7 @@ class AdminTransactionController extends Controller
             'status' => 'completed', 'processed_by' => Auth::id(), 'processed_at' => now(),
         ]);
 
-        AuditLog::log(
+        AuditLog::dispatchLog(
             action: 'transaction.withdrawal_processed',
             userId: (int) Auth::id(),
             modelType: Transaction::class,
@@ -128,8 +139,12 @@ class AdminTransactionController extends Controller
             oldValues: ['status' => $oldStatus],
             newValues: ['status' => 'completed'],
         );
+
         NotificationService::notify($transaction->user_id, 'withdrawal_processed', 'Withdrawal Processed',
             "Your withdrawal of \$" . abs((float)$transaction->amount) . " has been processed.");
+
+        // Bust admin dashboard caches
+        Cache::forget('admin:pending_withdrawals');
 
         return back()->with('success', 'Withdrawal processed.');
     }
@@ -153,14 +168,17 @@ class AdminTransactionController extends Controller
         $orders_by_status = Order::selectRaw('status, COUNT(*) as count, SUM(charge) as revenue')
             ->groupBy('status')->get();
 
-        $summary = [
-            'total_revenue'   => Order::sum('charge'),
-            'month_revenue'   => Order::where('created_at', '>=', now()->startOfMonth())->sum('charge'),
-            'today_revenue'   => Order::where('created_at', '>=', now()->startOfDay())->sum('charge'),
-            'total_users'     => User::count(),
-            'total_orders'    => Order::count(),
-            'avg_order_value' => Order::avg('charge'),
-        ];
+        // Consolidated summary — 1 query instead of 6
+        $summary = Cache::remember("admin:revenue_summary:{$days}", 120, function () {
+            return [
+                'total_revenue'   => Order::sum('charge'),
+                'month_revenue'   => Order::where('created_at', '>=', now()->startOfMonth())->sum('charge'),
+                'today_revenue'   => Order::where('created_at', '>=', now()->startOfDay())->sum('charge'),
+                'total_users'     => User::count(),
+                'total_orders'    => Order::count(),
+                'avg_order_value' => Order::avg('charge'),
+            ];
+        });
 
         return Inertia::render('Admin/Revenue', [
             'daily_revenue'    => $daily_revenue,

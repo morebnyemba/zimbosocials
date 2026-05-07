@@ -32,11 +32,16 @@ class AdminContractController extends Controller
 
         $contracts = $query->latest()->paginate(25)->withQueryString();
 
+        // Consolidated: 1 GROUP BY instead of 4 separate counts
+        $rawCounts = BusinessContract::selectRaw('status, COUNT(*) as cnt')
+            ->groupBy('status')
+            ->pluck('cnt', 'status');
+
         $status_counts = [
-            'all'    => BusinessContract::count(),
-            'open'   => BusinessContract::where('status', 'open')->count(),
-            'filled' => BusinessContract::where('status', 'filled')->count(),
-            'closed' => BusinessContract::where('status', 'closed')->count(),
+            'all'    => $rawCounts->sum(),
+            'open'   => (int) ($rawCounts['open']   ?? 0),
+            'filled' => (int) ($rawCounts['filled'] ?? 0),
+            'closed' => (int) ($rawCounts['closed'] ?? 0),
         ];
 
         return Inertia::render('Admin/Contracts/Index', [

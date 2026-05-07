@@ -10,3 +10,10 @@ Artisan::command('inspire', function () {
 
 Schedule::command('upstream:sync-orders')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('upstream:sync-services')->dailyAt('02:00')->withoutOverlapping();
+
+// Expire stale pending transactions older than 24 hours
+Schedule::command('transactions:cleanup-stale --hours=24')->hourly()->withoutOverlapping();
+
+// Prune completed queue jobs older than 48 hours
+Schedule::command('queue:prune-batches --hours=48')->daily();
+

@@ -42,6 +42,7 @@ class ProfileController extends Controller
 
     /**
      * Delete the user's account.
+     * Blocked if the user has a positive balance to prevent fund loss.
      */
     public function destroy(Request $request): RedirectResponse
     {
@@ -50,6 +51,12 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+
+        if ((float) $user->balance > 0) {
+            return back()->withErrors([
+                'password' => 'Please withdraw your remaining balance before deleting your account.',
+            ]);
+        }
 
         Auth::logout();
 

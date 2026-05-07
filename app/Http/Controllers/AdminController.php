@@ -9,6 +9,7 @@ use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\Transaction;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,23 +17,52 @@ class AdminController extends Controller
 {
     public function index(): Response
     {
-        $stats = [
-            'users'           => User::count(),
-            'active_users'    => User::where('is_active', true)->count(),
-            'marketers'       => User::whereIn('role', ['marketer', 'reseller'])->count(),
-            'admins'          => User::where('role', 'admin')->count(),
-            'services'        => Service::active()->count(),
-            'orders'          => Order::count(),
-            'active_orders'   => Order::active()->count(),
-            'open_tickets'    => Ticket::whereIn('status', ['open', 'pending'])->count(),
-            'revenue'         => Order::sum('charge'),
-            'today_revenue'   => Order::where('created_at', '>=', now()->startOfDay())->sum('charge'),
-            'month_revenue'   => Order::where('created_at', '>=', now()->startOfMonth())->sum('charge'),
-            'pending_deposits'    => Transaction::where('type', 'deposit')->where('status', 'pending')->count(),
-            'pending_withdrawals' => Transaction::where('type', 'withdrawal')->where('status', 'pending')->count(),
-            'pending_marketers'   => User::whereIn('role', ['marketer', 'reseller'])->where('marketer_status', 'pending')->count(),
-            'total_contracts'     => BusinessContract::count(),
-        ];
+        // Cache admin dashboard stats for 60 seconds to avoid query storm on refresh
+        $stats = Cache::remember('admin:dashboard_stats', 60, function () {
+            // User counts — 1 query instead of 4
+            $userCounts = User::selectRaw("
+                COUNT(*)                                                             AS total,
+                SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END)                      AS active,
+                SUM(CASE WHEN role IN ('marketer','reseller') THEN 1 ELSE 0 END)     AS marketers,
+                SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END)                     AS admins,
+                SUM(CASE WHEN role IN ('marketer','reseller') AND marketer_status = 'pending' THEN 1 ELSE 0 END) AS pending_marketers
+            ")->first();
+
+            // Order counts + revenue — 1 query instead of 5
+            $orderStats = Order::selectRaw("
+                COUNT(*)                                                                            AS total,
+                SUM(CASE WHEN status IN ('pending','processing','in_progress') THEN 1 ELSE 0 END)   AS active,
+                SUM(charge)                                                                         AS revenue,
+                SUM(CASE WHEN created_at >= ? THEN charge ELSE 0 END)                               AS today_revenue,
+                SUM(CASE WHEN created_at >= ? THEN charge ELSE 0 END)                               AS month_revenue
+            ", [now()->startOfDay(), now()->startOfMonth()])->first();
+
+            // Transaction pending counts — 1 query instead of 2
+            $txPending = Transaction::where('status', 'pending')
+                ->selectRaw("
+                    SUM(CASE WHEN type = 'deposit' THEN 1 ELSE 0 END)    AS pending_deposits,
+                    SUM(CASE WHEN type = 'withdrawal' THEN 1 ELSE 0 END) AS pending_withdrawals
+                ")
+                ->first();
+
+            return [
+                'users'               => (int) ($userCounts->total            ?? 0),
+                'active_users'        => (int) ($userCounts->active           ?? 0),
+                'marketers'           => (int) ($userCounts->marketers        ?? 0),
+                'admins'              => (int) ($userCounts->admins           ?? 0),
+                'pending_marketers'   => (int) ($userCounts->pending_marketers ?? 0),
+                'services'            => Service::active()->count(),
+                'orders'              => (int) ($orderStats->total            ?? 0),
+                'active_orders'       => (int) ($orderStats->active           ?? 0),
+                'open_tickets'        => Ticket::whereIn('status', ['open', 'pending'])->count(),
+                'revenue'             => (float) ($orderStats->revenue        ?? 0),
+                'today_revenue'       => (float) ($orderStats->today_revenue  ?? 0),
+                'month_revenue'       => (float) ($orderStats->month_revenue  ?? 0),
+                'pending_deposits'    => (int) ($txPending->pending_deposits    ?? 0),
+                'pending_withdrawals' => (int) ($txPending->pending_withdrawals ?? 0),
+                'total_contracts'     => BusinessContract::count(),
+            ];
+        });
 
         $recent_orders = Order::with(['user:id,name,email', 'service:id,name,name_sn,category'])
             ->latest()

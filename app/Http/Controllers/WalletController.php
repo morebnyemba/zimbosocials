@@ -9,16 +9,21 @@ use App\Models\Transaction;
 use App\Models\ContractApplication;
 use App\Models\ContractProofSubmission;
 use App\Models\User;
-use App\Services\ReferralService;
+use App\Services\DepositService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class WalletController extends Controller
 {
+    public function __construct(
+        private readonly DepositService $depositService,
+    ) {}
+
     public function index(): Response
     {
         /** @var User $user */
@@ -83,7 +88,7 @@ class WalletController extends Controller
 
     private function getPendingProofCount(int $userId): int
     {
-        $role = (string) (User::find($userId)?->getAttribute('role') ?? '');
+        $role = (string) (Auth::user()?->getAttribute('role') ?? '');
         if (!in_array($role, ['marketer', 'reseller'], true)) {
             return 0;
         }
@@ -142,9 +147,9 @@ class WalletController extends Controller
             'notes'          => 'Awaiting proof of payment submission',
         ]);
 
-        AuditLog::log(
+        AuditLog::dispatchLog(
             action: 'transaction.deposit_created_pending',
-            userId: (int) $request->user()->getAuthIdentifier(),
+            userId: $userId,
             modelType: Transaction::class,
             modelId: (int) $transaction->getKey(),
             newValues: [
@@ -196,23 +201,23 @@ class WalletController extends Controller
                 'public'
             );
 
+            $oldProofUrl = $transaction->proof_url;
+
             $transaction->update([
                 'proof_url' => '/storage/' . $storedPath,
                 'notes' => 'Proof of payment submitted. Awaiting admin approval.',
             ]);
 
-            AuditLog::log(
+            AuditLog::dispatchLog(
                 action: 'transaction.deposit_proof_submitted',
-                userId: (int) $request->user()->getAuthIdentifier(),
+                userId: $userId,
                 modelType: Transaction::class,
                 modelId: (int) $transaction->getKey(),
                 oldValues: [
-                    'proof_url' => null,
-                    'status' => (string) $transaction->getAttribute('status'),
+                    'proof_url' => $oldProofUrl,
                 ],
                 newValues: [
                     'proof_url' => (string) $transaction->getAttribute('proof_url'),
-                    'status' => (string) $transaction->getAttribute('status'),
                 ],
             );
 
@@ -222,8 +227,13 @@ class WalletController extends Controller
         return back()->with('error', 'Failed to upload proof file. Please try again.');
     }
 
+    /**
+     * Request a withdrawal. Wrapped in a DB transaction with pessimistic locking
+     * to prevent race conditions from concurrent requests.
+     */
     public function withdraw(Request $request): RedirectResponse
     {
+        /** @var User $user */
         $user = Auth::user();
         $role = (string) $user->getAttribute('role');
 
@@ -232,21 +242,15 @@ class WalletController extends Controller
         }
 
         $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:1'],
-            'method' => ['required', 'string', 'max:60'],
+            'amount'    => ['required', 'numeric', 'min:1'],
+            'method'    => ['required', 'string', 'max:60'],
             'reference' => ['nullable', 'string', 'max:120'],
         ]);
 
         $amount = (float) $data['amount'];
-        $balanceBefore = (float) $user->balance;
-
-        if ($amount > $balanceBefore) {
-            return back()->with('error', 'Insufficient balance for this withdrawal request.');
-        }
-
-        // Require approved proof for every approved contract application that paid out earnings
         $userId = (int) $user->getAuthIdentifier();
 
+        // Require approved proof for every approved contract application
         $approvedApps = ContractApplication::where('marketer_id', $userId)
             ->where('status', 'approved')
             ->pluck('id');
@@ -266,32 +270,45 @@ class WalletController extends Controller
             }
         }
 
-        $user->decrement('balance', $amount);
+        // Atomic: lock user row → re-check balance → decrement → create transaction
+        try {
+            DB::transaction(function () use ($userId, $amount, $data): void {
+                $lockedUser = User::lockForUpdate()->findOrFail($userId);
+                $balanceBefore = (float) $lockedUser->balance;
 
-        Transaction::create([
-            'user_id' => (int) $user->getAuthIdentifier(),
-            'type' => 'withdrawal',
-            'amount' => -$amount,
-            'balance_before' => $balanceBefore,
-            'balance_after' => $balanceBefore - $amount,
-            'method' => $data['method'],
-            'reference' => $data['reference'] ?? null,
-            'status' => 'pending',
-            'notes' => 'Marketer withdrawal request',
-        ]);
+                if ($amount > $balanceBefore) {
+                    throw new \RuntimeException('Insufficient balance for this withdrawal request.');
+                }
 
-        return back()->with('success', 'Withdrawal request submitted. Funds have been reserved.');
+                $lockedUser->decrement('balance', $amount);
+
+                Transaction::create([
+                    'user_id'        => $userId,
+                    'type'           => 'withdrawal',
+                    'amount'         => -$amount,
+                    'balance_before' => $balanceBefore,
+                    'balance_after'  => $balanceBefore - $amount,
+                    'method'         => $data['method'],
+                    'reference'      => $data['reference'] ?? null,
+                    'status'         => 'pending',
+                    'notes'          => 'Marketer withdrawal request',
+                ]);
+            });
+
+            return back()->with('success', 'Withdrawal request submitted. Funds have been reserved.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     /**
      * Webhook called by payment gateway after successful payment.
-     * This should be called by your payment provider (e.g. PayPal IPN, EcoCash callback).
+     * Uses DepositService for atomic crediting with proper locking.
      */
-    public function handleWebhook(Request $request, ReferralService $referralService): \Illuminate\Http\JsonResponse
+    public function handleWebhook(Request $request): \Illuminate\Http\JsonResponse
     {
         // TODO: Verify webhook signature for your payment provider
         $reference = $request->input('reference');
-        $amount    = (float) $request->input('amount');
 
         $transaction = Transaction::where('reference', $reference)
             ->where('status', 'pending')
@@ -301,30 +318,7 @@ class WalletController extends Controller
             return response()->json(['error' => 'Transaction not found'], 404);
         }
 
-        $user = $transaction->user;
-        $oldStatus = (string) $transaction->getAttribute('status');
-        $user->increment('balance', $transaction->amount);
-
-        $transaction->update([
-            'status'       => 'completed',
-            'balance_after'=> $user->fresh()->balance,
-        ]);
-
-        $referralService->rewardReferrerOnFirstDeposit($transaction->fresh());
-
-        AuditLog::log(
-            action: 'transaction.webhook_status_updated',
-            userId: null,
-            modelType: Transaction::class,
-            modelId: (int) $transaction->getKey(),
-            oldValues: [
-                'status' => $oldStatus,
-            ],
-            newValues: [
-                'status' => 'completed',
-                'reference' => (string) $transaction->getAttribute('reference'),
-            ],
-        );
+        $this->depositService->credit($transaction, 'external_webhook');
 
         return response()->json(['success' => true]);
     }

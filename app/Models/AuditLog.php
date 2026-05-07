@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\WriteAuditLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -25,7 +26,7 @@ class AuditLog extends Model
         return $this->belongsTo(User::class);
     }
 
-    // ─── Static helper ───────────────────────────────────────────────────────
+    // ─── Static helper (synchronous — use inside DB transactions) ────────────
 
     public static function log(
         string $action,
@@ -45,5 +46,31 @@ class AuditLog extends Model
             'ip_address' => request()?->ip(),
             'user_agent' => request()?->userAgent(),
         ]);
+    }
+
+    // ─── Queued helper (async — use outside DB transactions) ─────────────────
+
+    /**
+     * Dispatch an audit log entry to the queue for async writing.
+     * Use this for non-transactional audit entries to reduce request latency.
+     */
+    public static function dispatchLog(
+        string $action,
+        ?int $userId = null,
+        ?string $modelType = null,
+        ?int $modelId = null,
+        ?array $oldValues = null,
+        ?array $newValues = null,
+    ): void {
+        WriteAuditLog::dispatch(
+            action: $action,
+            userId: $userId,
+            modelType: $modelType,
+            modelId: $modelId,
+            oldValues: $oldValues,
+            newValues: $newValues,
+            ipAddress: request()?->ip(),
+            userAgent: request()?->userAgent(),
+        )->onQueue('default');
     }
 }

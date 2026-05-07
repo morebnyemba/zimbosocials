@@ -199,7 +199,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/wallet',              [WalletController::class, 'index'])->name('wallet.index');
     Route::post('/wallet/add-funds',   [WalletController::class, 'manualDeposit'])->middleware('throttle:wallet-manual-deposit')->name('wallet.add');
     Route::post('/wallet/submit-proof', [WalletController::class, 'submitProof'])->middleware('throttle:wallet-proof-submit')->name('wallet.submit-proof');
-    Route::post('/wallet/withdraw',    [WalletController::class, 'withdraw'])->name('wallet.withdraw');
+    Route::post('/wallet/withdraw',    [WalletController::class, 'withdraw'])->middleware('throttle:wallet-withdraw')->name('wallet.withdraw');
 
     // Referrals
     Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');

@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -51,15 +52,20 @@ class AdminOrderController extends Controller
 
         $orders = $query->latest()->paginate(25)->withQueryString();
 
+        // Consolidated: 1 GROUP BY query instead of 8 separate counts
+        $rawCounts = Order::selectRaw('status, COUNT(*) as cnt')
+            ->groupBy('status')
+            ->pluck('cnt', 'status');
+
         $status_counts = [
-            'all'         => Order::count(),
-            'pending'     => Order::where('status', 'pending')->count(),
-            'processing'  => Order::where('status', 'processing')->count(),
-            'in_progress' => Order::where('status', 'in_progress')->count(),
-            'completed'   => Order::where('status', 'completed')->count(),
-            'partial'     => Order::where('status', 'partial')->count(),
-            'cancelled'   => Order::where('status', 'cancelled')->count(),
-            'refunded'    => Order::where('status', 'refunded')->count(),
+            'all'         => $rawCounts->sum(),
+            'pending'     => (int) ($rawCounts['pending']     ?? 0),
+            'processing'  => (int) ($rawCounts['processing']  ?? 0),
+            'in_progress' => (int) ($rawCounts['in_progress'] ?? 0),
+            'completed'   => (int) ($rawCounts['completed']   ?? 0),
+            'partial'     => (int) ($rawCounts['partial']     ?? 0),
+            'cancelled'   => (int) ($rawCounts['cancelled']   ?? 0),
+            'refunded'    => (int) ($rawCounts['refunded']    ?? 0),
         ];
 
         return Inertia::render('Admin/Orders/Index', [
@@ -97,7 +103,7 @@ class AdminOrderController extends Controller
 
         $order->update($updates);
 
-        AuditLog::log(
+        AuditLog::dispatchLog(
             'order.status_changed',
             Auth::id(),
             Order::class,
@@ -117,36 +123,53 @@ class AdminOrderController extends Controller
         return back()->with('success', "Order #{$order->id} status changed to {$data['status']}.");
     }
 
+    /**
+     * Refund an order — atomic with row locking to prevent double-refunds.
+     */
     public function refund(Order $order): RedirectResponse
     {
         if ($order->status === 'refunded') {
             return back()->with('error', 'Order is already refunded.');
         }
 
-        $user = $order->user;
+        try {
+            DB::transaction(function () use ($order): void {
+                $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
+
+                if ($lockedOrder->status === 'refunded') {
+                    throw new \RuntimeException('Order is already refunded.');
+                }
+
+                $lockedOrder->update(['status' => 'refunded']);
+
+                $user = User::lockForUpdate()->findOrFail($lockedOrder->user_id);
+                $charge = (float) $lockedOrder->charge;
+
+                $user->creditBalance($charge, 'refund', "Admin refund for order #{$lockedOrder->id}", 'refund');
+
+                AuditLog::log(
+                    'order.refunded',
+                    Auth::id(),
+                    Order::class,
+                    $lockedOrder->id,
+                    ['status' => $lockedOrder->getOriginal('status')],
+                    ['status' => 'refunded', 'refund_amount' => $charge],
+                );
+
+                NotificationService::notify(
+                    $user->id,
+                    'order_refunded',
+                    'Order #' . $lockedOrder->id . ' Refunded',
+                    "Your order has been refunded. \${$charge} has been credited to your account.",
+                    ['order_id' => $lockedOrder->id, 'amount' => $charge]
+                );
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
         $charge = (float) $order->charge;
-
-        $order->update(['status' => 'refunded']);
-
-        $user->creditBalance($charge, 'refund', "Admin refund for order #{$order->id}", 'refund');
-
-        AuditLog::log(
-            'order.refunded',
-            Auth::id(),
-            Order::class,
-            $order->id,
-            ['status' => $order->getOriginal('status')],
-            ['status' => 'refunded', 'refund_amount' => $charge],
-        );
-
-        NotificationService::notify(
-            $user->id,
-            'order_refunded',
-            'Order #' . $order->id . ' Refunded',
-            "Your order has been refunded. \${$charge} has been credited to your account.",
-            ['order_id' => $order->id, 'amount' => $charge]
-        );
-
+        $user = $order->user;
         return back()->with('success', "Order #{$order->id} refunded. \${$charge} credited to {$user->name}.");
     }
 
@@ -169,7 +192,7 @@ class AdminOrderController extends Controller
             'status'     => 'pending',
         ]);
 
-        AuditLog::log(
+        AuditLog::dispatchLog(
             'order.created_by_admin',
             Auth::id(),
             Order::class,

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Notification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -50,12 +51,16 @@ class HandleInertiaRequests extends Middleware
                 'error'   => $request->session()->get('error'),
                 'info'    => $request->session()->get('info'),
             ],
+            // Cached for 30 seconds to avoid a COUNT query on every page load
             'notifications_count' => $user
-                ? Notification::unreadCountFor($user->id)
+                ? Cache::remember(
+                    "user:{$user->id}:unread_notifications",
+                    30,
+                    fn () => Notification::unreadCountFor($user->id)
+                )
                 : 0,
                 'locale'       => app()->getLocale(),
-                'translations' => __('messages'),
+                'translations' => fn () => __('messages'),
         ];
     }
 }
-

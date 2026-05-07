@@ -5,7 +5,7 @@
 use App\Http\Controllers\ApiController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
+Route::prefix('v1')->middleware('throttle:api-key')->group(function () {
     Route::get('services', [ApiController::class, 'services']);
     Route::post('order',   [ApiController::class, 'placeOrder']);
     Route::get('status',   [ApiController::class, 'orderStatus']);

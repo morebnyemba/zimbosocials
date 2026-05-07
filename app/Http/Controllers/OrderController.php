@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Service;
+use App\Models\User;
 use App\Services\OrderService;
 use App\Services\ReferralService;
 use App\Services\Upstream\OrderDispatchService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -132,15 +134,23 @@ class OrderController extends Controller
             return back()->withErrors(['order' => __('orders.cannot_cancel')]);
         }
 
-        $order->update(['status' => 'cancelled']);
+        DB::transaction(function () use ($order): void {
+            $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
 
-        // Refund
-        Auth::user()->creditBalance(
-            $order->charge,
-            'refund',
-            '',
-            'refund'
-        );
+            if (! $lockedOrder->canCancel()) {
+                throw new \RuntimeException(__('orders.cannot_cancel'));
+            }
+
+            $lockedOrder->update(['status' => 'cancelled']);
+
+            $user = User::lockForUpdate()->findOrFail(Auth::id());
+            $user->creditBalance(
+                $lockedOrder->charge,
+                'refund',
+                "Cancelled order #{$lockedOrder->id}",
+                'refund'
+            );
+        });
 
         return back()->with('success', __('orders.cancelled_success'));
     }

@@ -182,13 +182,13 @@ class NotificationService
                 $user->name,
                 (string)($data['order_id'] ?? ''),
                 $data['refund_amount'] ?? '—',
-                '$' . number_format((float)$user->fresh()->balance, 2),
+                $data['amount'] ?? '—',
             ],
             'balance_adjusted' => [
                 $user->name,
-                $data['adjustment'] ?? '—',
+                $data['adjustment'] ?? $data['amount'] ?? '—',
                 $data['reason'] ?? '—',
-                '$' . number_format((float)$user->fresh()->balance, 2),
+                '$' . number_format((float)$user->balance, 2),
             ],
             'role_changed' => [
                 $user->name,

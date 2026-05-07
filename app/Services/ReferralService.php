@@ -187,27 +187,29 @@ class ReferralService
             return;
         }
 
-        $bonusTx = $referrer->creditBalance(
-            $commissionAmount,
-            'referral_order',
-            $reference,
-            'bonus'
-        );
+        DB::transaction(function () use ($referrer, $commissionAmount, $reference, $referredUser, $order, $charge, $commissionPercent, $minimumOrderTotal): void {
+            $bonusTx = $referrer->creditBalance(
+                $commissionAmount,
+                'referral_order',
+                $reference,
+                'bonus'
+            );
 
-        AuditLog::log(
-            action: 'referral.order_commission_awarded',
-            userId: null,
-            modelType: Transaction::class,
-            modelId: (int) $bonusTx->getKey(),
-            newValues: [
-                'referred_user_id' => (int) $referredUser->getKey(),
-                'referrer_id' => (int) $referrer->getKey(),
-                'source_order_id' => (int) $order->getKey(),
-                'order_charge' => $charge,
-                'commission_percent' => $commissionPercent,
-                'minimum_order_total' => $minimumOrderTotal,
-                'commission_amount' => $commissionAmount,
-            ]
-        );
+            AuditLog::log(
+                action: 'referral.order_commission_awarded',
+                userId: null,
+                modelType: Transaction::class,
+                modelId: (int) $bonusTx->getKey(),
+                newValues: [
+                    'referred_user_id' => (int) $referredUser->getKey(),
+                    'referrer_id' => (int) $referrer->getKey(),
+                    'source_order_id' => (int) $order->getKey(),
+                    'order_charge' => $charge,
+                    'commission_percent' => $commissionPercent,
+                    'minimum_order_total' => $minimumOrderTotal,
+                    'commission_amount' => $commissionAmount,
+                ]
+            );
+        });
     }
 }

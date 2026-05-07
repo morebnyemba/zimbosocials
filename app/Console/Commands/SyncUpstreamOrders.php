@@ -124,14 +124,19 @@ class SyncUpstreamOrders extends Command
 
             // Process refund if needed
             if ($refundAmount > 0 && $user) {
-                $user->increment('balance', $refundAmount);
-                
+                $lockedUser = User::lockForUpdate()->findOrFail($user->id);
+                $balanceBefore = (float) $lockedUser->balance;
+                $lockedUser->increment('balance', $refundAmount);
+
                 Transaction::create([
-                    'user_id' => $user->id,
-                    'type' => 'refund',
-                    'amount' => $refundAmount,
-                    'status' => 'completed',
-                    'notes' => "Auto-refund for order #{$order->id} ({$newStatus})",
+                    'user_id'        => $lockedUser->id,
+                    'order_id'       => $order->id,
+                    'type'           => 'refund',
+                    'amount'         => $refundAmount,
+                    'balance_before' => $balanceBefore,
+                    'balance_after'  => $balanceBefore + $refundAmount,
+                    'status'         => 'completed',
+                    'notes'          => "Auto-refund for order #{$order->id} ({$newStatus})",
                 ]);
 
                 NotificationService::notify(

@@ -6,15 +6,13 @@ use App\Models\AuditLog;
 use App\Models\ManualPaymentDetail;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Services\NotificationService;
-use App\Services\ReferralService;
+use App\Services\DepositService;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Paynow\Payments\Paynow;
 use Paynow\Util\Hash;
+use Illuminate\Support\Facades\Http;
 
 class PaynowController extends Controller
 {
@@ -30,7 +28,10 @@ class PaynowController extends Controller
         'omari'    => ['label' => "O'mari",   'method' => 'omari',    'prefixes' => ['077', '078']],
     ];
 
-    public function __construct(private readonly Application $app) {}
+    public function __construct(
+        private readonly Application $app,
+        private readonly DepositService $depositService,
+    ) {}
 
     private function getPaynow(): Paynow
     {
@@ -326,7 +327,7 @@ class PaynowController extends Controller
     /**
      * Create a pending deposit transaction and write an audit log entry.
      */
-    private function createPendingTransaction(\App\Models\User $user, float $amount, string $method): Transaction
+    private function createPendingTransaction(User $user, float $amount, string $method): Transaction
     {
         $transaction = Transaction::create([
             'user_id'        => $user->id,
@@ -339,7 +340,8 @@ class PaynowController extends Controller
             'notes'          => 'Initiated via Paynow (' . strtoupper($method) . ')',
         ]);
 
-        AuditLog::log(
+        // Audit asynchronously — not critical to the request path
+        AuditLog::dispatchLog(
             action: 'transaction.paynow_created_pending',
             userId: (int) $user->getAuthIdentifier(),
             modelType: Transaction::class,
@@ -350,7 +352,7 @@ class PaynowController extends Controller
         return $transaction;
     }
 
-    public function returnUrl(Request $request, ReferralService $referralService)
+    public function returnUrl(Request $request)
     {
         // Paynow sends: ?reference={our_tx_id}&paynowreference=...&status=Paid|Cancelled|Failed&hash=...
         $txId      = $request->query('reference');
@@ -387,45 +389,15 @@ class PaynowController extends Controller
                 $remoteStatus = $paynow->pollTransaction($pollUrl);
 
                 if ($remoteStatus && $remoteStatus->paid()) {
-                    DB::transaction(function () use ($transaction, $referralService): void {
-                        $locked = Transaction::lockForUpdate()->find($transaction->getKey());
-                        if (! $locked || $locked->status !== 'pending') {
-                            return;
-                        }
-
-                        $oldStatus = (string) $locked->getAttribute('status');
-                        $locked->update(['status' => 'completed', 'notes' => 'Completed via return URL poll']);
-
-                        $referralService->rewardReferrerOnFirstDeposit($locked->fresh());
-
-                        AuditLog::log(
-                            action: 'transaction.paynow_status_updated',
-                            userId: null,
-                            modelType: Transaction::class,
-                            modelId: (int) $locked->getKey(),
-                            oldValues: ['status' => $oldStatus],
-                            newValues: ['status' => 'completed', 'source' => 'return_url'],
-                        );
-
-                        $user = User::find($locked->user_id);
-                        if ($user) {
-                            $user->increment('balance', $locked->amount);
-                            NotificationService::notify(
-                                $user->id,
-                                'deposit_confirmed',
-                                'Deposit Confirmed',
-                                "Your deposit of \${$locked->amount} via Paynow was successful.",
-                                ['amount' => "\${$locked->amount}"]
-                            );
-                        }
-                    });
+                    $this->depositService->credit($transaction, 'return_url_poll');
 
                     return redirect()->route('wallet.index')
                         ->with('success', 'Your deposit of $' . number_format((float) $transaction->amount, 2) . ' has been confirmed!');
                 }
 
                 if ($remoteStatus && in_array($remoteStatus->status(), ['Cancelled', 'Failed'], true)) {
-                    $transaction->update(['status' => 'rejected', 'notes' => 'Cancelled/Failed via return URL']);
+                    $this->depositService->reject($transaction, 'return_url');
+
                     return redirect()->route('wallet.index')
                         ->with('error', 'Your payment was cancelled or failed. No funds were deducted.');
                 }
@@ -475,32 +447,13 @@ class PaynowController extends Controller
             $remoteStatus = $paynow->pollTransaction($pollUrl);
 
             if ($remoteStatus && $remoteStatus->paid()) {
-                // Trigger the same crediting logic as the webhook, wrapped in a transaction
-                DB::transaction(function () use ($transaction): void {
-                    $locked = Transaction::lockForUpdate()->find($transaction->getKey());
-                    if (! $locked || $locked->status !== 'pending') {
-                        return;
-                    }
-                    $locked->update(['status' => 'completed', 'notes' => 'Completed via poll']);
-
-                    $user = User::find($locked->user_id);
-                    if ($user) {
-                        $user->increment('balance', $locked->amount);
-                        NotificationService::notify(
-                            $user->id,
-                            'deposit_confirmed',
-                            'Deposit Confirmed',
-                            "Your deposit of \${$locked->amount} via Paynow was successful.",
-                            ['amount' => "\${$locked->amount}"]
-                        );
-                    }
-                });
-
+                // Use DepositService — fixes the missing referral reward bug
+                $this->depositService->credit($transaction, 'client_poll');
                 return response()->json(['status' => 'completed', 'resolved' => true]);
             }
 
             if ($remoteStatus && in_array($remoteStatus->status(), ['Cancelled', 'Failed'], true)) {
-                $transaction->update(['status' => 'rejected', 'notes' => 'Failed/Cancelled via poll']);
+                $this->depositService->reject($transaction, 'client_poll');
                 return response()->json(['status' => 'rejected', 'resolved' => true]);
             }
         } catch (\Exception $e) {
@@ -510,7 +463,7 @@ class PaynowController extends Controller
         return response()->json(['status' => 'pending', 'resolved' => false]);
     }
 
-    public function webhook(Request $request, ReferralService $referralService)
+    public function webhook(Request $request)
     {
         $paynow = $this->getPaynow();
         $status = $paynow->processStatusUpdate();
@@ -524,60 +477,9 @@ class PaynowController extends Controller
             }
 
             if ($status->paid()) {
-                DB::transaction(function () use ($transaction, $referralService): void {
-                    // Re-fetch with a lock to prevent double-crediting
-                    $locked = Transaction::lockForUpdate()->find($transaction->getKey());
-                    if (! $locked || $locked->status !== 'pending') {
-                        return;
-                    }
-
-                    $oldStatus = (string) $locked->getAttribute('status');
-                    $locked->update([
-                        'status' => 'completed',
-                        'notes'  => 'Completed via Paynow',
-                    ]);
-
-                    $referralService->rewardReferrerOnFirstDeposit($locked->fresh());
-
-                    AuditLog::log(
-                        action: 'transaction.paynow_status_updated',
-                        userId: null,
-                        modelType: Transaction::class,
-                        modelId: (int) $locked->getKey(),
-                        oldValues: ['status' => $oldStatus],
-                        newValues: ['status' => 'completed'],
-                    );
-
-                    $user = User::find($locked->user_id);
-                    if ($user) {
-                        $user->increment('balance', $locked->amount);
-                        NotificationService::notify(
-                            $user->id,
-                            'deposit_confirmed',
-                            'Deposit Confirmed',
-                            "Your deposit of \${$locked->amount} via Paynow was successful.",
-                            ['amount' => "\${$locked->amount}"]
-                        );
-                    }
-                });
+                $this->depositService->credit($transaction, 'paynow_webhook');
             } elseif ($status->status() === 'Cancelled' || $status->status() === 'Failed') {
-                $oldStatus = (string) $transaction->getAttribute('status');
-                $transaction->update([
-                    'status' => 'rejected',
-                    'notes'  => 'Failed/Cancelled via Paynow',
-                ]);
-
-                AuditLog::log(
-                    action: 'transaction.paynow_status_updated',
-                    userId: null,
-                    modelType: Transaction::class,
-                    modelId: (int) $transaction->getKey(),
-                    oldValues: ['status' => $oldStatus],
-                    newValues: [
-                        'status'          => 'rejected',
-                        'provider_status' => (string) $status->status(),
-                    ],
-                );
+                $this->depositService->reject($transaction, 'paynow_webhook');
             }
 
             return response()->json(['status' => 'ok']);

@@ -31,11 +31,17 @@ class AdminMarketerController extends Controller
 
         $marketers = $query->latest()->paginate(25)->withQueryString();
 
+        // Consolidated: 1 GROUP BY instead of 4 separate counts
+        $rawCounts = User::whereIn('role', ['marketer', 'reseller'])
+            ->selectRaw('marketer_status, COUNT(*) as cnt')
+            ->groupBy('marketer_status')
+            ->pluck('cnt', 'marketer_status');
+
         $status_counts = [
-            'all'      => User::whereIn('role', ['marketer', 'reseller'])->count(),
-            'pending'  => User::whereIn('role', ['marketer', 'reseller'])->where('marketer_status', 'pending')->count(),
-            'approved' => User::whereIn('role', ['marketer', 'reseller'])->where('marketer_status', 'approved')->count(),
-            'rejected' => User::whereIn('role', ['marketer', 'reseller'])->where('marketer_status', 'rejected')->count(),
+            'all'      => $rawCounts->sum(),
+            'pending'  => (int) ($rawCounts['pending']  ?? 0),
+            'approved' => (int) ($rawCounts['approved'] ?? 0),
+            'rejected' => (int) ($rawCounts['rejected'] ?? 0),
         ];
 
         return Inertia::render('Admin/Marketers/Index', [

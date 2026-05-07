@@ -49,10 +49,15 @@ class AdminServiceController extends Controller
             ->orderBy('category')
             ->pluck('category');
 
+        // Consolidated: 1 GROUP BY instead of 3 separate counts
+        $rawCounts = Service::selectRaw('is_active, COUNT(*) as cnt')
+            ->groupBy('is_active')
+            ->pluck('cnt', 'is_active');
+
         $stats = [
-            'total'    => Service::count(),
-            'active'   => Service::where('is_active', true)->count(),
-            'inactive' => Service::where('is_active', false)->count(),
+            'total'    => $rawCounts->sum(),
+            'active'   => (int) ($rawCounts[1] ?? $rawCounts['1'] ?? 0),
+            'inactive' => (int) ($rawCounts[0] ?? $rawCounts['0'] ?? 0),
         ];
 
         return Inertia::render('Admin/Services/Index', [
@@ -93,7 +98,7 @@ class AdminServiceController extends Controller
         $data['is_dripfeed'] = $request->boolean('is_dripfeed');
         $data['is_refill']   = $request->boolean('is_refill');
 
-        DB::transaction(function () use ($data) {
+        $service = DB::transaction(function () use ($data) {
             $service = Service::create($data);
 
             if (isset($data['upstreams'])) {
@@ -108,6 +113,8 @@ class AdminServiceController extends Controller
             }
 
             AuditLog::log('service.created', Auth::id(), Service::class, $service->id, null, $data);
+
+            return $service;
         });
 
         return back()->with('success', "Service \"{$service->name}\" created.");

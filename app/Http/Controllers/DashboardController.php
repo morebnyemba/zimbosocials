@@ -19,11 +19,6 @@ class DashboardController extends Controller
     {
         /** @var User $user */
         $user = Auth::user();
-        \Illuminate\Support\Facades\Log::info('Dashboard Hit', [
-            'id' => $user->id,
-            'account_type' => $user->account_type,
-            'role' => $user->role
-        ]);
         $userId = (int) $user->getAuthIdentifier();
 
         if ($user->isAdmin()) {
@@ -34,16 +29,27 @@ class DashboardController extends Controller
             return redirect()->route('marketer.dashboard');
         }
 
+        // Consolidated order stats — 1 query instead of 6
+        $orderStatsRow = Order::forUser($userId)
+            ->selectRaw("
+                COUNT(*)                                                                     AS total_orders,
+                SUM(CASE WHEN status IN ('pending','processing','in_progress') THEN 1 ELSE 0 END) AS active_orders,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)                       AS completed_orders,
+                SUM(charge)                                                                  AS total_spent,
+                SUM(CASE WHEN DATE(created_at) = DATE('now') THEN 1 ELSE 0 END)              AS orders_today
+            ")
+            ->first();
+
         $stats = [
-            'total_orders'      => Order::forUser($userId)->count(),
-            'active_orders'     => Order::forUser($userId)->active()->count(),
-            'completed_orders'  => Order::forUser($userId)->byStatus('completed')->count(),
-            'total_spent'       => Order::forUser($userId)->sum('charge'),
+            'total_orders'      => (int) ($orderStatsRow->total_orders     ?? 0),
+            'active_orders'     => (int) ($orderStatsRow->active_orders    ?? 0),
+            'completed_orders'  => (int) ($orderStatsRow->completed_orders ?? 0),
+            'total_spent'       => (float) ($orderStatsRow->total_spent    ?? 0),
             'services_available'=> \App\Models\Service::active()->count(),
-            'orders_today'      => Order::forUser($userId)->whereDate('created_at', today())->count(),
+            'orders_today'      => (int) ($orderStatsRow->orders_today     ?? 0),
         ];
 
-        $recent_orders = Order::with('service')
+        $recent_orders = Order::with('service:id,name,category')
             ->forUser($userId)
             ->latest()
             ->limit(5)
@@ -60,6 +66,7 @@ class DashboardController extends Controller
             ->groupBy('services.category')
             ->pluck('count', 'category');
 
+        // Consolidated contract queries — 1 query for contracts + 1 for applications
         $business_contracts = BusinessContract::where('user_id', $userId)
             ->withCount([
                 'applications',
@@ -80,12 +87,18 @@ class DashboardController extends Controller
             ->limit(8)
             ->get();
 
+        // Consolidated contract stats — 1 query instead of 3
+        $contractStatsRow = BusinessContract::where('user_id', $userId)
+            ->selectRaw("
+                COUNT(*)                                                   AS total_contracts,
+                SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END)          AS open_contracts
+            ")
+            ->first();
+
         $contract_stats = [
-            'open_contracts' => BusinessContract::where('user_id', $userId)->where('status', 'open')->count(),
-            'total_contracts' => BusinessContract::where('user_id', $userId)->count(),
-            'pending_applications' => ContractApplication::where('status', 'pending')
-                ->whereHas('contract', fn ($query) => $query->where('user_id', $userId))
-                ->count(),
+            'open_contracts'       => (int) ($contractStatsRow->open_contracts ?? 0),
+            'total_contracts'      => (int) ($contractStatsRow->total_contracts ?? 0),
+            'pending_applications' => $incoming_contract_applications->count(),
         ];
 
         return Inertia::render('Dashboard', [

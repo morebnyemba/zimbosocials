@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class Notification extends Model
@@ -29,6 +30,15 @@ class Notification extends Model
             if (empty($notification->id)) {
                 $notification->id = (string) Str::uuid();
             }
+        });
+
+        // Bust the cached unread count whenever a notification is created or updated
+        static::created(function (Notification $notification) {
+            Cache::forget("user:{$notification->user_id}:unread_notifications");
+        });
+
+        static::updated(function (Notification $notification) {
+            Cache::forget("user:{$notification->user_id}:unread_notifications");
         });
     }
 
