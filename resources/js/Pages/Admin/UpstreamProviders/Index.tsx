@@ -3,7 +3,7 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import { PageProps } from '@/types';
 import { Head, useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Edit2, Plus, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { Edit2, Plus, Trash2, CheckCircle2, XCircle, RefreshCcw, Download } from 'lucide-react';
 
 interface UpstreamProvider {
     id: number;
@@ -65,6 +65,20 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
 
     const deleteProvider = (id: number) => {
         setPendingDeleteId(id);
+    };
+
+    const syncBalance = (id: number) => {
+        router.post(route('admin.upstream-providers.sync-balance', id), {}, {
+            preserveScroll: true,
+        });
+    };
+
+    const importServices = (id: number) => {
+        if (confirm('Are you sure you want to import all active services from this provider? This may take a while.')) {
+            router.post(route('admin.upstream-providers.import-services', id), {}, {
+                preserveScroll: true,
+            });
+        }
     };
 
     return (
@@ -201,14 +215,28 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-4 text-right">
                                                     <button
+                                                        onClick={() => syncBalance(p.id)}
+                                                        title="Sync Balance"
+                                                        className="inline-flex items-center gap-1 rounded-md p-2 text-blue-600 hover:bg-blue-50 transition-colors"
+                                                    >
+                                                        <RefreshCcw className="h-4 w-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => importServices(p.id)}
+                                                        title="Import Services"
+                                                        className="inline-flex items-center gap-1 rounded-md p-2 text-indigo-600 hover:bg-indigo-50 ms-1 transition-colors"
+                                                    >
+                                                        <Download className="h-4 w-4" />
+                                                    </button>
+                                                    <button
                                                         onClick={() => openEdit(p)}
-                                                        className="inline-flex items-center gap-1 rounded-md p-2 text-brand-green hover:bg-brand-green/10 transition-colors"
+                                                        className="inline-flex items-center gap-1 rounded-md p-2 text-brand-green hover:bg-brand-green/10 transition-colors ms-1"
                                                     >
                                                         <Edit2 className="h-4 w-4" />
                                                     </button>
                                                     <button
                                                         onClick={() => deleteProvider(p.id)}
-                                                        className="inline-flex items-center gap-1 rounded-md p-2 text-red-600 hover:bg-red-50 ms-2 transition-colors"
+                                                        className="inline-flex items-center gap-1 rounded-md p-2 text-red-600 hover:bg-red-50 ms-1 transition-colors"
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </button>

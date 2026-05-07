@@ -178,6 +178,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/upstream-providers', [AdminUpstreamProviderController::class, 'store'])->name('upstream-providers.store');
         Route::put('/upstream-providers/{upstreamProvider}', [AdminUpstreamProviderController::class, 'update'])->name('upstream-providers.update');
         Route::delete('/upstream-providers/{upstreamProvider}', [AdminUpstreamProviderController::class, 'destroy'])->name('upstream-providers.destroy');
+        Route::post('/upstream-providers/{upstreamProvider}/sync-balance', [AdminUpstreamProviderController::class, 'syncBalance'])->name('upstream-providers.sync-balance');
+        Route::post('/upstream-providers/{upstreamProvider}/import-services', [AdminUpstreamProviderController::class, 'importServices'])->name('upstream-providers.import-services');
     });
 
     // ─── Marketer panel ───────────────────────────────────────────────────────

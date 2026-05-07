@@ -17,4 +17,7 @@ require __DIR__.'/../vendor/autoload.php';
 /** @var Application $app */
 $app = require_once __DIR__.'/../bootstrap/app.php';
 
+// Ensure Laravel knows the public path when deployed to cPanel's public_html
+$app->usePublicPath(__DIR__);
+
 $app->handleRequest(Request::capture());

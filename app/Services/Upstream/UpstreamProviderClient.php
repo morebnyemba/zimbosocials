@@ -149,4 +149,34 @@ class UpstreamProviderClient
             return [];
         }
     }
+
+    public function getBalance(): ?float
+    {
+        if (! $this->provider) {
+            return null;
+        }
+
+        $url = $this->provider->url;
+        $key = $this->provider->api_key;
+
+        try {
+            $response = Http::timeout((int) config('upstream.timeout', 20))
+                ->asForm()
+                ->post($url, [
+                    'key'    => $key,
+                    'action' => 'balance',
+                ]);
+
+            if ($response->ok() && is_array($response->json())) {
+                $data = $response->json();
+                if (isset($data['balance'])) {
+                    return (float) $data['balance'];
+                }
+            }
+
+            return null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
 }
