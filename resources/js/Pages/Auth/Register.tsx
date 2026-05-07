@@ -2,6 +2,7 @@ import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel'
 import TextInput from '@/Components/TextInput'
 import { Head, Link, useForm, usePage } from '@inertiajs/react'
+import { PageProps } from '@/types'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { FormEventHandler, ReactNode } from 'react'
 import { useState } from 'react'
@@ -55,7 +56,7 @@ const paths: PathDef[] = [
 ]
 
 export default function Register() {
-    const { referralCode, referrerName } = usePage<{ props: RegisterPageProps }>().props as unknown as RegisterPageProps
+    const { referralCode, referrerName } = usePage<PageProps<RegisterPageProps>>().props
     const [step, setStep] = useState<1 | 2>(1)
     const [selectedPath, setSelectedPath] = useState<AccountPath | null>(null)
 

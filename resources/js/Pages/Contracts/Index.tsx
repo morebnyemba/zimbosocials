@@ -1,4 +1,4 @@
-2import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';1
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { useTranslation } from '@/lib/i18n';

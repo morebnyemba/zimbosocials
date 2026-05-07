@@ -27,6 +27,8 @@ interface Transaction {
     amount: number;
     description: string;
     created_at: string;
+    status?: string;
+    method?: string;
 }
 
 interface ManualPaymentDetail {
@@ -718,7 +720,7 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                 {transactions.data && (
                     (() => {
                         const pendingManualDeposits = (transactions.data ?? []).filter(
-                            t => t.type === 'deposit' && t.status === 'pending' && !gatewaySet.has(t.method)
+                            t => t.type === 'deposit' && t.status === 'pending' && !gatewaySet.has(t.method ?? '')
                         );
                         
                         return pendingManualDeposits.length > 0 ? (
