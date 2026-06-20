@@ -1,9 +1,10 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import ConfirmModal from '@/Components/ConfirmModal';
+import Modal from '@/Components/Modal';
 import { PageProps } from '@/types';
 import { Head, useForm, router } from '@inertiajs/react';
-import { useState } from 'react';
-import { Edit2, Plus, Trash2, CheckCircle2, XCircle, RefreshCcw, Download } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Edit2, Plus, Trash2, CheckCircle2, XCircle, RefreshCcw, Download, LoaderCircle, Search } from 'lucide-react';
 
 interface UpstreamProvider {
     id: number;
@@ -15,10 +16,39 @@ interface UpstreamProvider {
     created_at: string;
 }
 
+interface ImportableService {
+    external_service_id: string;
+    name: string;
+    description: string;
+    category: string;
+    type: string;
+    external_rate: number;
+    min_qty: number;
+    max_qty: number;
+    is_dripfeed: boolean;
+    is_refill: boolean;
+    already_imported: boolean;
+    existing_service_name?: string | null;
+    default_markup_percentage: number;
+}
+
+interface ImportSelection {
+    selected: boolean;
+    markup_percentage: string;
+}
+
 export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ providers: UpstreamProvider[] }>) {
     const [editingProvider, setEditingProvider] = useState<UpstreamProvider | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+    const [importProvider, setImportProvider] = useState<UpstreamProvider | null>(null);
+    const [availableServices, setAvailableServices] = useState<ImportableService[]>([]);
+    const [serviceSelections, setServiceSelections] = useState<Record<string, ImportSelection>>({});
+    const [loadingImportServices, setLoadingImportServices] = useState(false);
+    const [importingServices, setImportingServices] = useState(false);
+    const [importSearch, setImportSearch] = useState('');
+    const [bulkMarkup, setBulkMarkup] = useState('');
+    const [importError, setImportError] = useState('');
 
     const { data, setData, post, put, delete: destroy, processing, errors, reset } = useForm({
         name: '',
@@ -73,12 +103,161 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
         });
     };
 
-    const importServices = (id: number) => {
-        if (confirm('Are you sure you want to import all active services from this provider? This may take a while.')) {
-            router.post(route('admin.upstream-providers.import-services', id), {}, {
-                preserveScroll: true,
+    const closeImportModal = () => {
+        setImportProvider(null);
+        setAvailableServices([]);
+        setServiceSelections({});
+        setLoadingImportServices(false);
+        setImportingServices(false);
+        setImportSearch('');
+        setBulkMarkup('');
+        setImportError('');
+    };
+
+    const openImportModal = async (provider: UpstreamProvider) => {
+        setImportProvider(provider);
+        setLoadingImportServices(true);
+        setAvailableServices([]);
+        setServiceSelections({});
+        setImportSearch('');
+        setBulkMarkup('');
+        setImportError('');
+
+        try {
+            const response = await fetch(route('admin.upstream-providers.available-services', provider.id), {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
             });
+
+            const payload = await response.json();
+
+            if (!response.ok) {
+                throw new Error(payload.message || 'Failed to load services from provider.');
+            }
+
+            const services = Array.isArray(payload.services) ? payload.services as ImportableService[] : [];
+            const initialSelections = services.reduce<Record<string, ImportSelection>>((acc, service) => {
+                acc[service.external_service_id] = {
+                    selected: !service.already_imported,
+                    markup_percentage: String(service.default_markup_percentage),
+                };
+
+                return acc;
+            }, {});
+
+            setAvailableServices(services);
+            setServiceSelections(initialSelections);
+            setBulkMarkup(services[0] ? String(services[0].default_markup_percentage) : '');
+        } catch (error) {
+            setImportError(error instanceof Error ? error.message : 'Failed to load services from provider.');
+        } finally {
+            setLoadingImportServices(false);
         }
+    };
+
+    const updateServiceSelection = (externalServiceId: string, patch: Partial<ImportSelection>) => {
+        setServiceSelections(current => ({
+            ...current,
+            [externalServiceId]: {
+                ...current[externalServiceId],
+                ...patch,
+            },
+        }));
+    };
+
+    const visibleServices = useMemo(() => {
+        const query = importSearch.trim().toLowerCase();
+
+        if (!query) {
+            return availableServices;
+        }
+
+        return availableServices.filter(service => (
+            service.name.toLowerCase().includes(query)
+            || service.category.toLowerCase().includes(query)
+            || service.type.toLowerCase().includes(query)
+            || service.external_service_id.toLowerCase().includes(query)
+        ));
+    }, [availableServices, importSearch]);
+
+    const selectableVisibleServices = visibleServices.filter(service => !service.already_imported);
+    const allVisibleSelected = selectableVisibleServices.length > 0
+        && selectableVisibleServices.every(service => serviceSelections[service.external_service_id]?.selected);
+
+    const selectedCount = availableServices.filter(service => (
+        !service.already_imported && serviceSelections[service.external_service_id]?.selected
+    )).length;
+
+    const toggleVisibleSelections = (selected: boolean) => {
+        setServiceSelections(current => {
+            const next = { ...current };
+
+            selectableVisibleServices.forEach(service => {
+                next[service.external_service_id] = {
+                    ...next[service.external_service_id],
+                    selected,
+                };
+            });
+
+            return next;
+        });
+    };
+
+    const applyBulkMarkup = () => {
+        if (bulkMarkup.trim() === '') {
+            return;
+        }
+
+        setServiceSelections(current => {
+            const next = { ...current };
+
+            availableServices.forEach(service => {
+                if (service.already_imported || !next[service.external_service_id]?.selected) {
+                    return;
+                }
+
+                next[service.external_service_id] = {
+                    ...next[service.external_service_id],
+                    markup_percentage: bulkMarkup,
+                };
+            });
+
+            return next;
+        });
+    };
+
+    const submitImport = () => {
+        if (!importProvider) {
+            return;
+        }
+
+        const services = availableServices
+            .filter(service => !service.already_imported && serviceSelections[service.external_service_id]?.selected)
+            .map(service => ({
+                external_service_id: service.external_service_id,
+                markup_percentage: Number(serviceSelections[service.external_service_id]?.markup_percentage ?? 0),
+            }));
+
+        if (services.length === 0) {
+            setImportError('Select at least one service to import.');
+            return;
+        }
+
+        setImportingServices(true);
+        setImportError('');
+
+        router.post(route('admin.upstream-providers.import-services', importProvider.id), { services }, {
+            preserveScroll: true,
+            onSuccess: () => closeImportModal(),
+            onError: (formErrors) => {
+                const firstError = Object.values(formErrors)[0];
+                setImportError(Array.isArray(firstError) ? firstError[0] : firstError || 'Import failed.');
+            },
+            onFinish: () => setImportingServices(false),
+        });
     };
 
     return (
@@ -222,7 +401,7 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
                                                         <RefreshCcw className="h-4 w-4" />
                                                     </button>
                                                     <button
-                                                        onClick={() => importServices(p.id)}
+                                                        onClick={() => openImportModal(p)}
                                                         title="Import Services"
                                                         className="inline-flex items-center gap-1 rounded-md p-2 text-indigo-600 hover:bg-indigo-50 ms-1 transition-colors"
                                                     >
@@ -263,6 +442,192 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
                     onCancel={() => setPendingDeleteId(null)}
                 />
             )}
+
+            <Modal show={importProvider !== null} onClose={closeImportModal} maxWidth="2xl">
+                <div className="space-y-5 p-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900">Import Provider Services</h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                                {importProvider
+                                    ? `Choose which ${importProvider.name} services to import and set their markup percentage.`
+                                    : 'Choose services and markup percentages before importing.'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={closeImportModal}
+                            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                        >
+                            Close
+                        </button>
+                    </div>
+
+                    {loadingImportServices ? (
+                        <div className="flex items-center justify-center gap-3 rounded-xl border border-dashed border-gray-300 px-6 py-14 text-sm text-gray-500">
+                            <LoaderCircle className="h-5 w-5 animate-spin" />
+                            Loading provider services...
+                        </div>
+                    ) : (
+                        <>
+                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={importSearch}
+                                        onChange={e => setImportSearch(e.target.value)}
+                                        placeholder="Search by name, category, type, or service ID..."
+                                        className="w-full rounded-xl border border-gray-300 px-10 py-2.5 text-sm text-gray-900 outline-none transition focus:border-brand-green focus:ring-1 focus:ring-brand-green/20"
+                                    />
+                                </div>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={bulkMarkup}
+                                    onChange={e => setBulkMarkup(e.target.value)}
+                                    placeholder="Markup %"
+                                    className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-brand-green focus:ring-1 focus:ring-brand-green/20"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={applyBulkMarkup}
+                                    className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                                >
+                                    Apply to Selected
+                                </button>
+                            </div>
+
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3 text-sm">
+                                <label className="inline-flex items-center gap-2 text-gray-700">
+                                    <input
+                                        type="checkbox"
+                                        checked={allVisibleSelected}
+                                        onChange={e => toggleVisibleSelections(e.target.checked)}
+                                        disabled={selectableVisibleServices.length === 0}
+                                        className="rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                                    />
+                                    Select visible importable services
+                                </label>
+                                <span className="font-medium text-gray-600">
+                                    {selectedCount} selected for import
+                                </span>
+                            </div>
+
+                            {importError && (
+                                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                    {importError}
+                                </div>
+                            )}
+
+                            <div className="max-h-[28rem] overflow-y-auto rounded-xl border border-gray-200">
+                                <table className="min-w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-gray-50 text-gray-500">
+                                        <tr>
+                                            <th className="px-4 py-3 font-medium">Import</th>
+                                            <th className="px-4 py-3 font-medium">Service</th>
+                                            <th className="px-4 py-3 font-medium">Provider Rate</th>
+                                            <th className="px-4 py-3 font-medium">Markup %</th>
+                                            <th className="px-4 py-3 font-medium">Local Rate</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 bg-white">
+                                        {visibleServices.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                                                    No services match this search.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            visibleServices.map(service => {
+                                                const selection = serviceSelections[service.external_service_id] ?? {
+                                                    selected: false,
+                                                    markup_percentage: String(service.default_markup_percentage),
+                                                };
+                                                const markup = Number(selection.markup_percentage || 0);
+                                                const localRate = service.external_rate * (1 + (markup / 100));
+
+                                                return (
+                                                    <tr key={service.external_service_id} className={service.already_imported ? 'bg-gray-50/80' : ''}>
+                                                        <td className="px-4 py-4 align-top">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={service.already_imported ? true : selection.selected}
+                                                                disabled={service.already_imported}
+                                                                onChange={e => updateServiceSelection(service.external_service_id, { selected: e.target.checked })}
+                                                                className="mt-1 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                                                            />
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top">
+                                                            <div className="font-semibold text-gray-900">{service.name}</div>
+                                                            <div className="mt-1 text-xs text-gray-500">
+                                                                ID {service.external_service_id} • {service.category} • {service.type}
+                                                            </div>
+                                                            <div className="mt-1 text-xs text-gray-500">
+                                                                Qty {service.min_qty} - {service.max_qty}
+                                                                {service.is_refill ? ' • Refill' : ''}
+                                                                {service.is_dripfeed ? ' • Dripfeed' : ''}
+                                                            </div>
+                                                            {service.description && (
+                                                                <p className="mt-2 line-clamp-2 text-xs text-gray-500">{service.description}</p>
+                                                            )}
+                                                            {service.already_imported && (
+                                                                <p className="mt-2 text-xs font-medium text-amber-700">
+                                                                    Already linked{service.existing_service_name ? ` to ${service.existing_service_name}` : ''}.
+                                                                </p>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top font-mono text-gray-900">
+                                                            ${service.external_rate.toFixed(4)}
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top">
+                                                            <div className="flex items-center gap-2">
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="0.01"
+                                                                    value={selection.markup_percentage}
+                                                                    disabled={service.already_imported || !selection.selected}
+                                                                    onChange={e => updateServiceSelection(service.external_service_id, { markup_percentage: e.target.value })}
+                                                                    className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 disabled:bg-gray-100 disabled:text-gray-400"
+                                                                />
+                                                                <span className="text-gray-500">%</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top font-mono text-gray-900">
+                                                            ${localRate.toFixed(4)}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeImportModal}
+                                    className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={submitImport}
+                                    disabled={importingServices || loadingImportServices}
+                                    className="inline-flex items-center gap-2 rounded-xl bg-brand-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-green/90 disabled:opacity-50"
+                                >
+                                    {importingServices && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                                    Import Selected Services
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </Modal>
         </AdminLayout>
     );
 }

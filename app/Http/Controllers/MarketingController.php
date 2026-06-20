@@ -12,9 +12,10 @@ class MarketingController extends Controller
 {
     public function home(): Response
     {
-        $featuredServices = Service::active()
-            ->orderBy('display_order')
-            ->limit(8)
+        $activityServices = Service::active()
+            ->select(['id', 'name', 'name_sn', 'category'])
+            ->inRandomOrder()
+            ->limit(200)
             ->get();
 
         $categories = Service::active()
@@ -24,7 +25,7 @@ class MarketingController extends Controller
             ->pluck('category');
 
         return Inertia::render('Marketing/Home', [
-            'featuredServices' => $featuredServices,
+            'activityServices' => $activityServices,
             'categories' => $categories,
         ]);
     }

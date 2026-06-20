@@ -12,14 +12,18 @@ import {
 import { PageProps } from "@/types"
 import { motion } from "framer-motion"
 import { Link, usePage } from "@inertiajs/react"
+import { useEffect, useState } from "react"
 import {
   FiArrowRight,
   FiBarChart2,
+  FiBell,
   FiBriefcase,
   FiCheckCircle,
   FiClock,
   FiDollarSign,
+  FiEye,
   FiLock,
+  FiRadio,
   FiShield,
   FiTrendingUp,
   FiUsers,
@@ -40,13 +44,23 @@ type Service = {
   name: string
   name_sn?: string | null
   category: string
-  min_qty: number
-  max_qty: number
 }
 
 type Props = {
-  featuredServices: Service[]
+  activityServices: Service[]
   categories: string[]
+}
+
+type LiveActivity = {
+  id: string
+  serviceId: number
+  buyer: string
+  town: string
+  service: string
+  category: string
+  quantity: number
+  timeAgo: string
+  action: string
 }
 
 const sectionViewport = { once: true, amount: 0.2 }
@@ -74,8 +88,253 @@ const itemVariants = {
   },
 }
 
+const shonaNames = [
+  "Tendai",
+  "Rudo",
+  "Nyasha",
+  "Tafadzwa",
+  "Rutendo",
+  "Tadiwa",
+  "Munashe",
+  "Anesu",
+  "Tanaka",
+  "Kudakwashe",
+  "Ropafadzo",
+  "Simbarashe",
+  "Chiedza",
+  "Farai",
+  "Shingirai",
+  "Vimbai",
+  "Tinashe",
+  "Mufaro",
+  "Tawananyasha",
+  "Tatenda",
+  "Tonderai",
+  "Tariro",
+  "Tsitsi",
+  "Tapiwa",
+  "Blessing",
+  "Panashe",
+  "Takudzwa",
+  "Nomsa",
+  "Memory",
+  "Ashley",
+  "Rumbidzai",
+  "Kundai",
+  "Loveness",
+  "Virginia",
+  "Fadzai",
+  "Priscilla",
+  "Taurai",
+  "Melody",
+  "Shamiso",
+  "Takunda",
+  "Wadzi",
+  "Yamurai",
+  "Munyaradzi",
+  "Chenai",
+  "Rangarirai",
+  "Dzimbanhete",
+  "Tafara",
+  "Tashinga",
+  "Vongai",
+  "Nyaradzo",
+  "Ruramai",
+  "Tendekai",
+  "Makanaka",
+  "Tinotenda",
+  "Kudzai",
+  "Marvellous",
+  "Ratidzo",
+  "Yeukai",
+]
+
+const zimbabweTowns = [
+  "Harare",
+  "Chitungwiza",
+  "Mutare",
+  "Gweru",
+  "Masvingo",
+  "Kadoma",
+  "Marondera",
+  "Bindura",
+  "Chegutu",
+  "Kwekwe",
+  "Norton",
+  "Rusape",
+  "Karoi",
+  "Chipinge",
+  "Zvishavane",
+  "Redcliff",
+  "Shurugwi",
+  "Mvurwi",
+  "Gokwe",
+  "Hwange",
+]
+
+const timePool = ["just now", "8 sec ago", "14 sec ago", "22 sec ago", "41 sec ago", "1 min ago", "2 min ago", "3 min ago", "5 min ago"]
+const activityWindowSize = 5
+const categoryWeights: Record<string, number> = {
+  instagram: 1.25,
+  tiktok: 1.22,
+  youtube: 1.16,
+  facebook: 1.08,
+  telegram: 1.04,
+  twitter: 0.96,
+  whatsapp: 0.92,
+}
+const fallbackServices: Service[] = [
+  { id: 1, name: "Instagram Followers", name_sn: "Instagram Followers", category: "instagram" },
+  { id: 2, name: "TikTok Views", name_sn: "TikTok Views", category: "tiktok" },
+  { id: 3, name: "YouTube Likes", name_sn: "YouTube Likes", category: "youtube" },
+  { id: 4, name: "Facebook Page Likes", name_sn: "Facebook Page Likes", category: "facebook" },
+  { id: 5, name: "Telegram Members", name_sn: "Telegram Members", category: "telegram" },
+]
+
+type WeightedItem<T> = {
+  item: T
+  weight: number
+}
+
+type ServiceProfile = {
+  weight: number
+  quantityOptions: number[]
+  actionPhrases: string[]
+}
+
+function pickRandom<T>(items: T[]): T {
+  return items[Math.floor(Math.random() * items.length)]
+}
+
+function pickWithCooldown<T>(items: T[], recent: T[]): T {
+  const freshItems = items.filter((item) => !recent.includes(item))
+  return pickRandom(freshItems.length > 0 ? freshItems : items)
+}
+
+function pickWeighted<T>(items: Array<WeightedItem<T>>): T {
+  const totalWeight = items.reduce((sum, entry) => sum + entry.weight, 0)
+  let cursor = Math.random() * totalWeight
+
+  for (const entry of items) {
+    cursor -= entry.weight
+    if (cursor <= 0) {
+      return entry.item
+    }
+  }
+
+  return items[items.length - 1].item
+}
+
+function pickWeightedQuantity(quantityOptions: number[]): number {
+  const middleIndex = (quantityOptions.length - 1) / 2
+
+  return pickWeighted(quantityOptions.map((quantity, index) => ({
+    item: quantity,
+    weight: Math.max(1, quantityOptions.length - Math.abs(index - middleIndex) * 1.4),
+  })))
+}
+
+function getServiceProfile(service: Service): ServiceProfile {
+  const name = `${service.name} ${service.name_sn ?? ""}`.toLowerCase()
+  const categoryWeight = categoryWeights[service.category.toLowerCase()] ?? 1
+  let weight = 1.2 * categoryWeight
+  let quantityOptions = [100, 250, 500, 1000, 1500]
+  let actionPhrases = ["just ordered", "is boosting", "queued up"]
+
+  if (name.includes("view") || name.includes("watch")) {
+    weight += 4.8
+    quantityOptions = [500, 1000, 2000, 5000, 10000, 15000]
+    actionPhrases = ["is pushing", "just boosted", "started a run for"]
+  } else if (name.includes("follower") || name.includes("subscriber")) {
+    weight += 4.2
+    quantityOptions = [50, 100, 250, 500, 1000, 2000]
+    actionPhrases = ["is growing with", "just ordered", "is building momentum with"]
+  } else if (name.includes("like") || name.includes("heart")) {
+    weight += 3.7
+    quantityOptions = [100, 250, 500, 1000, 1500, 2500]
+    actionPhrases = ["is topping up", "just boosted", "queued up"]
+  } else if (name.includes("comment")) {
+    weight += 2.6
+    quantityOptions = [10, 20, 30, 50, 75, 100, 150]
+    actionPhrases = ["is sparking chatter with", "just ordered", "is warming up"]
+  } else if (name.includes("share") || name.includes("retweet")) {
+    weight += 2.9
+    quantityOptions = [25, 50, 100, 200, 300, 500]
+    actionPhrases = ["is widening reach with", "queued up", "just pushed"]
+  } else if (name.includes("member") || name.includes("join")) {
+    weight += 3.1
+    quantityOptions = [50, 100, 250, 500, 1000, 1500]
+    actionPhrases = ["is filling up", "just ordered", "is growing"]
+  }
+
+  if (name.includes("real") || name.includes("premium")) {
+    weight += 1.1
+  }
+
+  if (name.includes("instant") || name.includes("fast")) {
+    weight += 0.6
+  }
+
+  return {
+    weight,
+    quantityOptions,
+    actionPhrases,
+  }
+}
+
+function createLiveActivity(pool: Service[], previousActivities: LiveActivity[]): LiveActivity {
+  const services = pool.length > 0 ? pool : fallbackServices
+  const recentServiceIds = previousActivities.slice(0, 3).map((activity) => activity.serviceId)
+  const recentBuyers = previousActivities.slice(0, 4).map((activity) => activity.buyer)
+  const recentTowns = previousActivities.slice(0, 3).map((activity) => activity.town)
+
+  const weightedServices = services.map((service) => {
+    const profile = getServiceProfile(service)
+    const repetitionPenalty = recentServiceIds.includes(service.id) ? 0.14 : 1
+
+    return {
+      item: service,
+      weight: Math.max(profile.weight * repetitionPenalty, 0.08),
+    }
+  })
+
+  const service = pickWeighted(weightedServices)
+  const profile = getServiceProfile(service)
+  const buyer = pickWithCooldown(shonaNames, recentBuyers)
+  const town = pickWithCooldown(zimbabweTowns, recentTowns)
+  const quantity = pickWeightedQuantity(profile.quantityOptions)
+  const action = pickRandom(profile.actionPhrases)
+  const timeAgo = pickRandom(timePool)
+
+  return {
+    id: `${service.id}-${buyer}-${town}-${Date.now()}`,
+    serviceId: service.id,
+    buyer,
+    town,
+    service: service.name_sn || service.name,
+    category: service.category,
+    quantity,
+    timeAgo,
+    action,
+  }
+}
+
+function createInitialLiveActivities(pool: Service[], count: number): LiveActivity[] {
+  let activities: LiveActivity[] = []
+
+  for (let index = 0; index < count; index += 1) {
+    activities = [createLiveActivity(pool, activities), ...activities]
+  }
+
+  return activities
+}
+
 export default function Home() {
   const { props } = usePage<PageProps<Props>>()
+  const servicePool = props.activityServices.length > 0 ? props.activityServices : fallbackServices
+  const [liveActivities, setLiveActivities] = useState<LiveActivity[]>(() => (
+    createInitialLiveActivities(servicePool, activityWindowSize)
+  ))
 
   const homeStructuredData: Array<Record<string, unknown>> = [
     {
@@ -91,14 +350,27 @@ export default function Home() {
     {
       "@context": "https://schema.org",
       "@type": "ItemList",
-      name: "Featured Social Growth Services",
-      itemListElement: props.featuredServices.slice(0, 8).map((service, index) => ({
+      name: "Popular Social Growth Services",
+      itemListElement: servicePool.slice(0, 8).map((service, index) => ({
         "@type": "ListItem",
         position: index + 1,
         name: service.name,
       })),
     },
   ]
+
+  useEffect(() => {
+    setLiveActivities(createInitialLiveActivities(servicePool, activityWindowSize))
+
+    const intervalId = window.setInterval(() => {
+      setLiveActivities((current) => [
+        createLiveActivity(servicePool, current),
+        ...current,
+      ].slice(0, activityWindowSize))
+    }, 1800)
+
+    return () => window.clearInterval(intervalId)
+  }, [servicePool])
 
   const categoryLabel = (category: string) => {
     if (category === "twitter") return "X / Twitter"
@@ -346,32 +618,125 @@ export default function Home() {
         whileInView="visible"
         viewport={sectionViewport}
       >
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-zinc-950">Featured Services</h2>
-          <p className="text-sm text-zinc-700">High demand services with proven delivery performance.</p>
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-red-700">
+              <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+              Live Broadcasting
+            </div>
+            <h2 className="text-2xl font-bold text-zinc-950">Real-time buyer activity that stays lightweight.</h2>
+            <p className="mt-1 max-w-2xl text-sm text-zinc-700">
+              Instead of loading a growing services block, the homepage now keeps a fixed layout and rotates recent purchase-style activity using Zimbabwean names and a small service pool.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:w-auto">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700">Layout</p>
+              <p className="mt-1 text-lg font-extrabold text-zinc-950">Fixed</p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">Broadcast</p>
+              <p className="mt-1 text-lg font-extrabold text-zinc-950">Live</p>
+            </div>
+          </div>
         </div>
 
-        <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" variants={sectionVariants}>
-          {props.featuredServices.map((service, index) => (
-            <motion.div key={service.id} variants={itemVariants} whileHover={{ y: -10 }}>
-            <Card className={`border transition-transform duration-300 hover:shadow-xl ${index % 3 === 0 ? "border-emerald-300 bg-white" : index % 3 === 1 ? "border-amber-300 bg-amber-50/40" : "border-red-300 bg-red-50/40"}`}>
-              <CardHeader>
-                <div className="mb-2 inline-flex w-fit rounded-full bg-zinc-950 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white">Popular</div>
-                <CardTitle className="line-clamp-2 text-base text-zinc-950">{service.name}</CardTitle>
-                <CardDescription className="capitalize text-zinc-600">{service.category}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-3 flex items-center justify-between text-xs text-zinc-600">
-                  <span>Min: {Number(service.min_qty).toLocaleString()}</span>
-                  <span>Max: {Number(service.max_qty).toLocaleString()}</span>
+        <motion.div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]" variants={sectionVariants}>
+          <motion.div variants={itemVariants} whileHover={{ y: -6 }}>
+            <Card className="overflow-hidden border-zinc-950 shadow-xl">
+              <div className="border-b border-zinc-200 bg-gradient-to-r from-zinc-950 via-red-600 to-emerald-600 px-5 py-4 text-white">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-white/80">
+                      <FiRadio className="h-3.5 w-3.5" />
+                      Activity Stream
+                    </p>
+                    <h3 className="mt-1 text-xl font-bold">People are ordering right now</h3>
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur">
+                    <FiEye className="h-4 w-4" />
+                    Watching 24/7
+                  </div>
                 </div>
-                <Link href={route("login")} className="block">
-                  <Button className="h-9 w-full bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white transition duration-300 hover:scale-[1.02]">Order Now</Button>
-                </Link>
+              </div>
+              <CardContent className="space-y-4 p-5">
+                <div className="rounded-2xl border border-red-100 bg-red-50/70 p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-700">Latest Broadcast</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-800">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 font-semibold shadow-sm">
+                      <FiBell className="h-4 w-4 text-red-500" />
+                      {liveActivities[0]?.buyer} from {liveActivities[0]?.town}
+                    </span>
+                    <span>{liveActivities[0]?.action}</span>
+                    <span className="rounded-full bg-zinc-950 px-3 py-1 font-semibold text-white">
+                      {liveActivities[0]?.service}
+                    </span>
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-800">
+                      {liveActivities[0]?.quantity.toLocaleString()} qty
+                    </span>
+                    <span className="text-zinc-500">{liveActivities[0]?.timeAgo}</span>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {liveActivities.slice(1, 5).map((activity, index) => (
+                    <motion.div
+                      key={activity.id}
+                      variants={itemVariants}
+                      whileHover={{ y: -4 }}
+                      className={`rounded-2xl border p-4 ${index % 3 === 0 ? "border-emerald-200 bg-emerald-50/70" : index % 3 === 1 ? "border-amber-200 bg-amber-50/70" : "border-red-200 bg-red-50/70"}`}
+                    >
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">{activity.timeAgo}</p>
+                      <h4 className="mt-2 text-base font-bold text-zinc-950">{activity.buyer} • {activity.town}</h4>
+                      <p className="mt-1 text-sm text-zinc-700">{activity.action} <span className="font-semibold text-zinc-950">{activity.service}</span></p>
+                      <div className="mt-3 flex items-center justify-between text-xs">
+                        <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-zinc-700 shadow-sm">{categoryLabel(activity.category)}</span>
+                        <span className="font-bold text-zinc-950">{activity.quantity.toLocaleString()} qty</span>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
-            </motion.div>
-          ))}
+          </motion.div>
+
+          <motion.div variants={itemVariants} whileHover={{ y: -6 }}>
+            <Card className="border-zinc-950 bg-zinc-950 text-white shadow-2xl">
+              <CardHeader>
+                <CardTitle className="text-2xl">Why this works better</CardTitle>
+                <CardDescription className="text-zinc-300">
+                  The homepage stays visually consistent even if your catalog grows far beyond 1,000 services.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {[
+                  "We only send a small random sample of services to the homepage instead of growing the whole layout.",
+                  "The activity feed rotates automatically, so visitors feel motion and demand without seeing a long service wall.",
+                  "Shona buyer names make the stream feel more local and familiar for your audience.",
+                  "Your full catalog still lives on the dedicated services page where depth belongs.",
+                ].map((point) => (
+                  <div key={point} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90">
+                    <p className="inline-flex items-start gap-2">
+                      <FiCheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                      <span>{point}</span>
+                    </p>
+                  </div>
+                ))}
+              </CardContent>
+              <CardFooter className="flex flex-wrap gap-3">
+                <Link href={route("marketing.services")}>
+                  <Button className="bg-white text-zinc-950 transition duration-300 hover:-translate-y-1 hover:bg-amber-100">
+                    Browse Full Catalog
+                  </Button>
+                </Link>
+                <Link href={route("register")}>
+                  <Button variant="outline" className="border-white text-white hover:bg-white hover:text-zinc-950">
+                    Start Growing
+                  </Button>
+                </Link>
+              </CardFooter>
+            </Card>
+          </motion.div>
         </motion.div>
       </motion.section>
 

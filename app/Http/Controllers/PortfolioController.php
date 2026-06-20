@@ -22,7 +22,7 @@ class PortfolioController extends Controller
         $user->load(['socialLinks', 'portfolios' => fn ($q) => $q->orderBy('sort_order')]);
 
         $stats = [
-            'completed_contracts' => $user->contractApplications()->where('status', 'approved')->count(),
+            'completed_contracts' => $user->contractApplications()->where('status', 'completed')->count(),
             'social_accounts'    => $user->socialLinks()->count(),
         ];
 

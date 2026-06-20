@@ -16,8 +16,11 @@ class LocalizedTemplateMail extends Mailable
         public readonly string $subjectLine,
         public readonly string $template,
         public readonly array $payload,
-        public readonly string $locale,
+        string $locale,
     ) {
+        // Mailable already declares a public $locale property; assign to it
+        // (it cannot be redeclared as a readonly promoted property).
+        $this->locale = $locale;
     }
 
     public function envelope(): Envelope

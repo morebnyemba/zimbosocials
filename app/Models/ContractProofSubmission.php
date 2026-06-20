@@ -29,6 +29,11 @@ class ContractProofSubmission extends Model
         return $this->belongsTo(ContractApplication::class);
     }
 
+    public function application(): BelongsTo
+    {
+        return $this->contractApplication();
+    }
+
     public function marketer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'marketer_id');

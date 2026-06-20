@@ -61,13 +61,15 @@ export default function ContractsIndex({ my_contracts, available_contracts, top_
     const { auth } = usePage().props as any;
     const user = auth.user;
     const isBusinessAccount = user.account_type === 'business';
+    const platformFeeRate = 0.10;
     
     const [tab, setTab] = useState<'available' | 'my' | 'rankings'>(isBusinessAccount ? 'my' : 'available');
     const [showCreate, setShowCreate] = useState(false);
+    const [editingContract, setEditingContract] = useState<Contract | null>(null);
     const [applyingContract, setApplyingContract] = useState<Contract | null>(null);
     const [closingContractId, setClosingContractId] = useState<number | null>(null);
 
-    const { data, setData, post, processing, reset, errors } = useForm({ 
+    const { data, setData, post, put, processing, reset, clearErrors, errors } = useForm({ 
         title: '', 
         platform: '', 
         description: '', 
@@ -76,19 +78,59 @@ export default function ContractsIndex({ my_contracts, available_contracts, top_
         deadline_at: '' 
     });
 
+    const formBudget = Number(data.budget) || 0;
+    const formSlots = Number(data.slots) || 0;
+    const fundingSubtotal = formBudget * formSlots;
+    const fundingFee = fundingSubtotal * platformFeeRate;
+    const fundingTotal = fundingSubtotal + fundingFee;
+
     const { data: applyData, setData: setApplyData, post: postApply, processing: applying } = useForm({
         pitch: ''
     });
 
-    const submitCreate = (e: React.FormEvent) => { 
+    const closeContractModal = () => {
+        setShowCreate(false);
+        setEditingContract(null);
+        reset();
+        clearErrors();
+    };
+
+    const openCreateModal = () => {
+        setEditingContract(null);
+        reset();
+        clearErrors();
+        setShowCreate(true);
+    };
+
+    const openEditModal = (contract: Contract) => {
+        setEditingContract(contract);
+        clearErrors();
+        setData({
+            title: contract.title || '',
+            platform: contract.platform || '',
+            description: contract.description || '',
+            budget: contract.budget ? String(contract.budget) : '',
+            slots: contract.slots ? String(contract.slots) : '1',
+            deadline_at: contract.deadline_at ? contract.deadline_at.slice(0, 10) : '',
+        });
+        setShowCreate(true);
+    };
+
+    const submitContract = (e: React.FormEvent) => { 
         e.preventDefault(); 
-        post(route('contracts.store'), { 
-            preserveScroll: true, 
-            onSuccess: () => { 
-                setShowCreate(false); 
-                reset(); 
-            } 
-        }); 
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => {
+                closeContractModal();
+            },
+        };
+
+        if (editingContract) {
+            put(route('contracts.update', editingContract.id), options);
+            return;
+        }
+
+        post(route('contracts.store'), options);
     };
 
     const submitApply = (e: React.FormEvent) => {
@@ -138,7 +180,7 @@ export default function ContractsIndex({ my_contracts, available_contracts, top_
 
                     {isBusinessAccount && (
                         <button 
-                            onClick={() => setShowCreate(true)} 
+                            onClick={openCreateModal} 
                             className="group relative px-8 py-4 rounded-2xl bg-zinc-950 text-white font-black uppercase tracking-widest text-xs shadow-2xl hover:scale-105 transition-all flex items-center gap-3 overflow-hidden"
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 opacity-90 group-hover:opacity-100 transition-opacity" />
@@ -206,10 +248,11 @@ export default function ContractsIndex({ my_contracts, available_contracts, top_
                         ) : (
                             my_contracts.data.length > 0 ? (
                                 my_contracts.data.map(contract => (
-                                    <MyContractCard 
-                                        key={contract.id} 
-                                        contract={contract} 
-                                        onClose={closeContract} 
+                                    <MyContractCard
+                                        key={contract.id}
+                                        contract={contract}
+                                        onEdit={openEditModal}
+                                        onClose={closeContract}
                                     />
                                 ))
                             ) : (
@@ -267,14 +310,18 @@ export default function ContractsIndex({ my_contracts, available_contracts, top_
             </Modal>
 
             {/* Create Modal */}
-            <Modal show={showCreate} onClose={() => setShowCreate(false)}>
-                <form onSubmit={submitCreate} className="p-8 space-y-6">
+            <Modal show={showCreate} onClose={closeContractModal}>
+                <form onSubmit={submitContract} className="p-8 space-y-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">{t('post_opportunity')}</h3>
-                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('define_campaign_requirements')}</p>
+                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">
+                                {editingContract ? 'Edit Contract' : t('post_opportunity')}
+                            </h3>
+                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">
+                                {editingContract ? 'Update campaign funding and requirements' : t('define_campaign_requirements')}
+                            </p>
                         </div>
-                        <button type="button" onClick={() => setShowCreate(false)} className="h-10 w-10 rounded-xl bg-zinc-100 flex items-center justify-center hover:bg-zinc-200">
+                        <button type="button" onClick={closeContractModal} className="h-10 w-10 rounded-xl bg-zinc-100 flex items-center justify-center hover:bg-zinc-200">
                             <FaTimes />
                         </button>
                     </div>
@@ -352,20 +399,31 @@ export default function ContractsIndex({ my_contracts, available_contracts, top_
                         </div>
                     </div>
 
-                    {Number(data.budget) > 0 && (
-                        <div className="p-6 rounded-[2rem] bg-zinc-900 text-white flex items-center justify-between shadow-xl">
-                            <div className="space-y-1">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{t('total_campaign_value')}</p>
-                                <p className="text-xl font-black tracking-tighter">
-                                    ${(Number(data.budget) * (Number(data.slots) || 1)).toFixed(2)}
-                                </p>
+                    {formBudget > 0 && formSlots > 0 && (
+                        <div className="p-6 rounded-[2rem] bg-zinc-900 text-white shadow-xl space-y-4">
+                            <div className="grid gap-4 sm:grid-cols-4">
+                                <div className="space-y-1">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Budget Total</p>
+                                    <p className="text-lg font-black tracking-tighter">${fundingSubtotal.toFixed(2)}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Platform Fee</p>
+                                    <p className="text-lg font-black tracking-tighter">${fundingFee.toFixed(2)}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Escrow Total</p>
+                                    <p className="text-xl font-black tracking-tighter">${fundingTotal.toFixed(2)}</p>
+                                </div>
+                                <div className="space-y-1 text-right">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{t('your_wallet')}</p>
+                                    <p className={`text-xs font-black ${Number(user.balance) < fundingTotal ? 'text-red-400' : 'text-emerald-400'}`}>
+                                        ${Number(user.balance).toFixed(2)}
+                                    </p>
+                                </div>
                             </div>
-                            <div className="text-right">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500">{t('your_wallet')}</p>
-                                <p className={`text-xs font-black ${Number(user.balance) < (Number(data.budget) * (Number(data.slots) || 1)) ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    ${Number(user.balance).toFixed(2)}
-                                </p>
-                            </div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-400">
+                                Funding includes the 10% platform fee held with escrow.
+                            </p>
                         </div>
                     )}
 
@@ -373,7 +431,13 @@ export default function ContractsIndex({ my_contracts, available_contracts, top_
                         disabled={processing}
                         className="w-full py-4 rounded-2xl bg-zinc-900 text-white font-black uppercase tracking-widest text-xs shadow-xl hover:bg-zinc-800 disabled:opacity-50 flex items-center justify-center gap-3"
                     >
-                        {processing ? t('launching') : <><FaPlus /> {t('launch_contract')}</>}
+                        {processing
+                            ? (editingContract ? 'Saving…' : t('launching'))
+                            : (
+                                <>
+                                    <FaPlus /> {editingContract ? 'Save Changes' : t('launch_contract')}
+                                </>
+                            )}
                     </button>
                 </form>
             </Modal>
@@ -461,7 +525,7 @@ function AvailableContractCard({ contract, onApply }: { contract: Contract; onAp
     );
 }
 
-function MyContractCard({ contract, onClose }: { contract: Contract; onClose: (id: number) => void }) {
+function MyContractCard({ contract, onEdit, onClose }: { contract: Contract; onEdit: (contract: Contract) => void; onClose: (id: number) => void }) {
     const { t } = useTranslation();
     const style = statusStyles[contract.status] || statusStyles.closed;
     const StatusIcon = style.icon;
@@ -504,12 +568,20 @@ function MyContractCard({ contract, onClose }: { contract: Contract; onClose: (i
                     {t('manage_applications')}
                 </Link>
                 {contract.status === 'open' && (
-                    <button 
-                        onClick={() => onClose(contract.id)}
-                        className="h-12 w-12 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
-                    >
-                        <FaTimes />
-                    </button>
+                    <>
+                        <button
+                            onClick={() => onEdit(contract)}
+                            className="h-12 px-4 rounded-2xl bg-white border border-zinc-200 text-zinc-600 text-[10px] font-black uppercase tracking-widest flex items-center justify-center hover:bg-zinc-100 transition-all"
+                        >
+                            Edit
+                        </button>
+                        <button 
+                            onClick={() => onClose(contract.id)}
+                            className="h-12 w-12 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
+                        >
+                            <FaTimes />
+                        </button>
+                    </>
                 )}
             </div>
         </div>
@@ -603,4 +675,3 @@ function Modal({ show, onClose, children }: { show: boolean; onClose: () => void
         </AnimatePresence>
     );
 }
-

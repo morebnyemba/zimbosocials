@@ -179,6 +179,7 @@ Route::middleware('auth')->group(function () {
         Route::put('/upstream-providers/{upstreamProvider}', [AdminUpstreamProviderController::class, 'update'])->name('upstream-providers.update');
         Route::delete('/upstream-providers/{upstreamProvider}', [AdminUpstreamProviderController::class, 'destroy'])->name('upstream-providers.destroy');
         Route::post('/upstream-providers/{upstreamProvider}/sync-balance', [AdminUpstreamProviderController::class, 'syncBalance'])->name('upstream-providers.sync-balance');
+        Route::get('/upstream-providers/{upstreamProvider}/available-services', [AdminUpstreamProviderController::class, 'availableServices'])->name('upstream-providers.available-services');
         Route::post('/upstream-providers/{upstreamProvider}/import-services', [AdminUpstreamProviderController::class, 'importServices'])->name('upstream-providers.import-services');
     });
 

@@ -19,6 +19,8 @@ use Inertia\Response;
 
 class ContractController extends Controller
 {
+    private const PLATFORM_FEE_RATE = 0.10;
+
     public function index(Request $request): Response
     {
         $user = Auth::user();
@@ -26,6 +28,9 @@ class ContractController extends Controller
         if ($user->account_type === 'business') {
             $my_contracts = BusinessContract::where('user_id', $user->id)
                 ->withCount('applications')
+                ->withCount([
+                    'applications as pending_applications_count' => fn ($query) => $query->where('status', ContractApplication::STATUS_PENDING),
+                ])
                 ->latest()
                 ->paginate(10);
         } else {
@@ -49,7 +54,7 @@ class ContractController extends Controller
                 ->where('marketer_status', 'approved')
                 ->withAvg('receivedReviews as avg_rating', 'rating')
                 ->withCount('receivedReviews as review_count')
-                ->withCount(['contractApplications as completed_contracts' => fn ($q) => $q->where('status', 'completed')])
+                ->withCount(['contractApplications as completed_contracts' => fn ($q) => $q->where('status', ContractApplication::STATUS_COMPLETED)])
                 ->having('review_count', '>', 0)
                 ->orderByDesc('avg_rating')
                 ->orderByDesc('review_count')
@@ -95,22 +100,8 @@ class ContractController extends Controller
 
         $this->authorize('create', BusinessContract::class);
 
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:140'],
-            'platform' => ['nullable', 'string', 'max:80'],
-            'description' => ['required', 'string', 'max:5000'],
-            'budget' => ['required', 'numeric', 'min:0.5'],
-            'slots' => ['required', 'integer', 'min:1', 'max:20'],
-            'deadline_at' => ['nullable', 'date', 'after_or_equal:today'],
-        ]);
-
-        $unitBudget = (float) $data['budget'];
-        $slots = (int) $data['slots'];
-        $platformFeeRate = 0.10; // 10% Service Fee
-
-        $totalBudget = $unitBudget * $slots;
-        $totalFee = $totalBudget * $platformFeeRate;
-        $totalCharge = $totalBudget + $totalFee;
+        $data = $this->validateContractData($request);
+        [, , $totalBudget, $totalFee, $totalCharge] = $this->calculateFundingTotals($data);
 
         if ((float) $user->balance < $totalCharge) {
             return back()->with('error', "Insufficient balance. Total campaign cost is $" . number_format($totalCharge, 2) . " (incl. 10% service fee). Please top up.");
@@ -147,7 +138,7 @@ class ContractController extends Controller
                     'slots' => $data['slots'],
                     'funded_amount' => $totalCharge,
                     'deadline_at' => $data['deadline_at'],
-                    'status' => 'open',
+                    'status' => BusinessContract::STATUS_OPEN,
                 ]);
             });
 
@@ -156,6 +147,96 @@ class ContractController extends Controller
             return back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to deploy contract: ' . $e->getMessage());
+        }
+    }
+
+    public function update(Request $request, BusinessContract $contract): RedirectResponse
+    {
+        $this->authorize('update', $contract);
+
+        $data = $this->validateContractData($request);
+
+        try {
+            DB::transaction(function () use ($contract, $data): void {
+                $lockedContract = BusinessContract::lockForUpdate()->findOrFail($contract->getKey());
+
+                if ($lockedContract->status !== BusinessContract::STATUS_OPEN) {
+                    throw new \RuntimeException('Only open contracts can be edited.');
+                }
+
+                [$unitBudget, $slots, $totalBudget, $totalFee, $totalCharge] = $this->calculateFundingTotals($data);
+                $currentFundedAmount = $this->resolveFundedAmount($lockedContract);
+                $activeAssignments = ContractApplication::where('business_contract_id', $lockedContract->getKey())
+                    ->whereIn('status', ContractApplication::slotConsumingStatuses())
+                    ->count();
+
+                $financialsChanged = round((float) $lockedContract->budget, 2) !== $unitBudget
+                    || (int) $lockedContract->slots !== $slots;
+
+                if ($slots < $activeAssignments) {
+                    throw new \RuntimeException("This contract already has {$activeAssignments} active slot(s). Increase slots or keep the current value.");
+                }
+
+                if ($financialsChanged && $activeAssignments > 0) {
+                    throw new \RuntimeException('Budget and slot changes are locked once a marketer has been hired. You can still update the brief, platform, or deadline.');
+                }
+
+                $lockedUser = User::lockForUpdate()->findOrFail((int) $lockedContract->user_id);
+                $chargeDifference = round($totalCharge - $currentFundedAmount, 2);
+
+                if ($chargeDifference > 0) {
+                    $balanceBefore = (float) $lockedUser->balance;
+
+                    if ($balanceBefore < $chargeDifference) {
+                        throw new \RuntimeException('Insufficient balance to increase contract funding by $' . number_format($chargeDifference, 2) . '.');
+                    }
+
+                    $lockedUser->decrement('balance', $chargeDifference);
+
+                    Transaction::create([
+                        'user_id' => (int) $lockedUser->getKey(),
+                        'type' => 'contract_payout',
+                        'amount' => -$chargeDifference,
+                        'balance_before' => $balanceBefore,
+                        'balance_after' => $balanceBefore - $chargeDifference,
+                        'status' => 'completed',
+                        'notes' => 'Escrow increase for contract #' . $lockedContract->getKey() . ' (Budget: $' . $totalBudget . ', Fee: $' . $totalFee . ')',
+                    ]);
+                } elseif ($chargeDifference < 0) {
+                    $refundAmount = abs($chargeDifference);
+                    $balanceBefore = (float) $lockedUser->balance;
+                    $lockedUser->increment('balance', $refundAmount);
+
+                    Transaction::create([
+                        'user_id' => (int) $lockedUser->getKey(),
+                        'type' => 'refund',
+                        'amount' => $refundAmount,
+                        'balance_before' => $balanceBefore,
+                        'balance_after' => $balanceBefore + $refundAmount,
+                        'status' => 'completed',
+                        'notes' => 'Escrow adjustment refund for contract #' . $lockedContract->getKey(),
+                    ]);
+                }
+
+                $lockedContract->update([
+                    'title' => $data['title'],
+                    'platform' => $data['platform'],
+                    'description' => $data['description'],
+                    'budget' => $unitBudget,
+                    'slots' => $slots,
+                    'funded_amount' => $totalCharge,
+                    'deadline_at' => $data['deadline_at'],
+                    'status' => $activeAssignments >= $slots
+                        ? BusinessContract::STATUS_FILLED
+                        : BusinessContract::STATUS_OPEN,
+                ]);
+            });
+
+            return back()->with('success', 'Contract updated successfully.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to update contract: ' . $e->getMessage());
         }
     }
 
@@ -178,6 +259,14 @@ class ContractController extends Controller
             return back()->with('error', 'Add at least one managed social account in your Settings before applying to contracts.');
         }
 
+        $existingApplication = ContractApplication::where('business_contract_id', $contractId)
+            ->where('marketer_id', (int) $user->getAuthIdentifier())
+            ->first();
+
+        if ($existingApplication && in_array($existingApplication->status, ContractApplication::slotConsumingStatuses(), true)) {
+            return back()->with('error', 'You already hold a live slot on this contract.');
+        }
+
         ContractApplication::updateOrCreate(
             [
                 'business_contract_id' => $contractId,
@@ -185,7 +274,7 @@ class ContractController extends Controller
             ],
             [
                 'pitch' => $data['pitch'] ?? null,
-                'status' => 'pending',
+                'status' => ContractApplication::STATUS_PENDING,
                 'decided_by' => null,
                 'reviewed_at' => null,
             ]
@@ -213,11 +302,15 @@ class ContractController extends Controller
         $userId = (int) Auth::id();
         $contractId = (int) $contract->getKey();
 
+        if ((int) $application->getAttribute('business_contract_id') !== $contractId) {
+            abort(404);
+        }
+
         $decision = $request->validate([
-            'decision' => ['required', 'in:approved,denied'],
+            'decision' => ['required', 'in:' . ContractApplication::STATUS_APPROVED . ',' . ContractApplication::STATUS_DENIED],
         ])['decision'];
 
-        if ($decision === 'approved') {
+        if ($decision === ContractApplication::STATUS_APPROVED) {
             try {
                 DB::transaction(function () use ($contract, $application, $contractId, $userId): void {
                     // Lock the contract row to prevent concurrent slot allocation
@@ -225,11 +318,11 @@ class ContractController extends Controller
                     $totalSlots = (int) $lockedContract->slots;
 
                     $filledSlots = ContractApplication::where('business_contract_id', $contractId)
-                        ->where('status', 'approved')
+                        ->where('status', ContractApplication::STATUS_APPROVED)
                         ->count();
 
                     $completedSlots = ContractApplication::where('business_contract_id', $contractId)
-                        ->where('status', 'completed')
+                        ->where('status', ContractApplication::STATUS_COMPLETED)
                         ->count();
 
                     if (($filledSlots + $completedSlots) >= $totalSlots) {
@@ -237,18 +330,18 @@ class ContractController extends Controller
                     }
 
                     $application->update([
-                        'status' => 'approved',
+                        'status' => ContractApplication::STATUS_APPROVED,
                         'decided_by' => $userId,
                         'reviewed_at' => now(),
                     ]);
 
                     if (($filledSlots + $completedSlots + 1) >= $totalSlots) {
-                        $lockedContract->update(['status' => 'filled']);
+                        $lockedContract->update(['status' => BusinessContract::STATUS_FILLED]);
 
                         ContractApplication::where('business_contract_id', $contractId)
-                            ->where('status', 'pending')
+                            ->where('status', ContractApplication::STATUS_PENDING)
                             ->update([
-                                'status' => 'ignored',
+                                'status' => ContractApplication::STATUS_IGNORED,
                                 'decided_by' => $userId,
                                 'reviewed_at' => now(),
                             ]);
@@ -261,7 +354,7 @@ class ContractController extends Controller
             }
         } else {
             $application->update([
-                'status' => 'denied',
+                'status' => ContractApplication::STATUS_DENIED,
                 'decided_by' => $userId,
                 'reviewed_at' => now(),
             ]);
@@ -284,14 +377,14 @@ class ContractController extends Controller
 
                 $totalSlots = (int) $lockedContract->slots;
                 $approvedApps = ContractApplication::where('business_contract_id', $lockedContract->id)
-                    ->whereIn('status', ['approved', 'completed'])
+                    ->whereIn('status', ContractApplication::slotConsumingStatuses())
                     ->count();
 
                 $unusedSlots = $totalSlots - $approvedApps;
 
                 if ($unusedSlots > 0) {
                     $unitBudget = (float) $lockedContract->budget;
-                    $feeRate = 0.10;
+                    $feeRate = self::PLATFORM_FEE_RATE;
                     $refundPerSlot = $unitBudget + ($unitBudget * $feeRate);
                     $totalRefund = $unusedSlots * $refundPerSlot;
 
@@ -309,12 +402,12 @@ class ContractController extends Controller
                     ]);
                 }
 
-                $lockedContract->update(['status' => 'closed']);
+                $lockedContract->update(['status' => BusinessContract::STATUS_CLOSED]);
 
                 ContractApplication::where('business_contract_id', $lockedContract->id)
-                    ->where('status', 'pending')
+                    ->where('status', ContractApplication::STATUS_PENDING)
                     ->update([
-                        'status' => 'ignored',
+                        'status' => ContractApplication::STATUS_IGNORED,
                         'decided_by' => (int) $lockedUser->id,
                         'reviewed_at' => now(),
                     ]);
@@ -324,5 +417,46 @@ class ContractController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to close contract: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validateContractData(Request $request): array
+    {
+        return $request->validate([
+            'title' => ['required', 'string', 'max:140'],
+            'platform' => ['nullable', 'string', 'max:80'],
+            'description' => ['required', 'string', 'max:5000'],
+            'budget' => ['required', 'numeric', 'min:0.5'],
+            'slots' => ['required', 'integer', 'min:1', 'max:20'],
+            'deadline_at' => ['nullable', 'date', 'after_or_equal:today'],
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array{0: float, 1: int, 2: float, 3: float, 4: float}
+     */
+    private function calculateFundingTotals(array $data): array
+    {
+        $unitBudget = round((float) $data['budget'], 2);
+        $slots = (int) $data['slots'];
+        $totalBudget = round($unitBudget * $slots, 2);
+        $totalFee = round($totalBudget * self::PLATFORM_FEE_RATE, 2);
+        $totalCharge = round($totalBudget + $totalFee, 2);
+
+        return [$unitBudget, $slots, $totalBudget, $totalFee, $totalCharge];
+    }
+
+    private function resolveFundedAmount(BusinessContract $contract): float
+    {
+        $storedFundedAmount = round((float) $contract->funded_amount, 2);
+
+        if ($storedFundedAmount > 0) {
+            return $storedFundedAmount;
+        }
+
+        return round(((float) $contract->budget * (int) $contract->slots) * (1 + self::PLATFORM_FEE_RATE), 2);
     }
 }

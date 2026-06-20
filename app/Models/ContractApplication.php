@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ContractApplication extends Model
 {
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_APPROVED = 'approved';
+    public const STATUS_COMPLETED = 'completed';
+    public const STATUS_DENIED = 'denied';
+    public const STATUS_IGNORED = 'ignored';
+
     protected $fillable = [
         'business_contract_id',
         'marketer_id',
@@ -59,6 +65,19 @@ class ContractApplication extends Model
     public function review(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(MarketerReview::class, 'contract_application_id');
+    }
+
+    /**
+     * Statuses that consume a funded contract slot.
+     *
+     * @return array<int, string>
+     */
+    public static function slotConsumingStatuses(): array
+    {
+        return [
+            self::STATUS_APPROVED,
+            self::STATUS_COMPLETED,
+        ];
     }
 }
 

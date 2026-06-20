@@ -29,7 +29,7 @@ class ContractProofController extends Controller
             abort(403);
         }
 
-        if ($appStatus !== 'approved') {
+        if ($appStatus !== ContractApplication::STATUS_APPROVED) {
             return back()->with('error', 'You can only submit proof for approved contracts.');
         }
 
@@ -52,7 +52,7 @@ class ContractProofController extends Controller
             ]
         );
 
-        return back()->with('success', 'Proof submitted. Pending admin review before withdrawal is unlocked.');
+        return back()->with('success', 'Proof submitted. Pending contract review before payout is unlocked.');
     }
 
     /**
@@ -68,7 +68,7 @@ class ContractProofController extends Controller
         $user = Auth::user();
         $userId = (int) $user->getAuthIdentifier();
 
-        $application = $proof->application;
+        $application = $proof->contractApplication;
         $contract = $application->contract;
         $contractOwnerId = (int) $contract->user_id;
 
@@ -126,7 +126,7 @@ class ContractProofController extends Controller
                         'reviewed_at' => now(),
                     ]);
 
-                    $application->update(['status' => 'completed']);
+                    $application->update(['status' => ContractApplication::STATUS_COMPLETED]);
                 });
             } catch (\RuntimeException $e) {
                 return back()->with('error', $e->getMessage());

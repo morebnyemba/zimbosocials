@@ -88,21 +88,16 @@ export default function Services({ services, categories }: Props) {
                 </div>
 
                 {/* Category Navigation */}
-                <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide no-scrollbar">
-                    {categories.map((cat) => {
-                        const meta = categoryMeta[cat] || { label: cat, icon: FaRocket, color: 'text-emerald-600', bg: 'bg-emerald-50' };
-                        const isActive = active === cat;
-                        return (
-                            <button
-                                key={cat}
-                                onClick={() => setActive(cat)}
-                                className={`flex items-center gap-3 px-8 py-4 rounded-[2rem] text-sm font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 ${isActive ? 'bg-zinc-900 border-zinc-900 text-white shadow-xl shadow-zinc-900/20' : 'bg-white border-zinc-100 text-zinc-500 hover:border-emerald-200 hover:text-emerald-600'}`}
-                            >
-                                <meta.icon className={isActive ? 'text-emerald-400' : 'opacity-30'} />
-                                {meta.label}
-                            </button>
-                        );
-                    })}
+                <div>
+                    <select
+                        value={active}
+                        onChange={(e) => setActive(e.target.value)}
+                        className="w-full md:w-64 bg-white border-2 border-zinc-100 rounded-xl px-4 py-3 font-bold text-zinc-900 focus:outline-none focus:border-emerald-500 transition-all shadow-sm cursor-pointer"
+                    >
+                        {categories.map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                    </select>
                 </div>
 
                 {/* Services Grid */}

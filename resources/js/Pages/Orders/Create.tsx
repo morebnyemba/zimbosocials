@@ -43,18 +43,19 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                     </p>
 
                     <form onSubmit={submit} className="space-y-5">
-                        {/* Category tabs */}
+                        {/* Category select */}
                         <div>
                             <label className="mb-1.5 block text-sm font-medium text-slate-700">Category</label>
-                            <div className="flex flex-wrap gap-2">
+                            <select
+                                value={category}
+                                onChange={(e) => { setCategory(e.target.value); setData('service_id', '') }}
+                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                            >
+                                <option value="">— Select Category —</option>
                                 {categories.map((cat) => (
-                                    <button
-                                        key={cat} type="button"
-                                        onClick={() => { setCategory(cat); setData('service_id', '') }}
-                                        className={`rounded-full px-3 py-1 text-sm font-medium transition ${cat === category ? 'bg-emerald-600 text-white' : 'border border-slate-300 text-slate-600 hover:bg-slate-50'}`}
-                                    >{cat}</button>
+                                    <option key={cat} value={cat}>{cat}</option>
                                 ))}
-                            </div>
+                            </select>
                         </div>
 
                         {/* Service select */}

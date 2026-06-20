@@ -48,6 +48,8 @@ class Transaction extends Model
         return match ($this->type) {
             'deposit'      => 'Dhipoziti',
             'order_charge' => 'Odha',
+            'contract_payout' => 'Kontrakiti Kubhadhara',
+            'contract_earning' => 'Mari yeKontrakiti',
             'refund'       => 'Dzosera',
             'adjustment'   => 'Kugadzirisa',
             'bonus'        => 'Bhonerasi',

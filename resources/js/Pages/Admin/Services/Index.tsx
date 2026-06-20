@@ -89,18 +89,23 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                     </div>
                 </div>
 
-                {/* Category Tabs */}
-                <div className="flex gap-2 flex-wrap">
-                    <button onClick={() => filterCategory('')} className={`px-4 py-1.5 text-sm font-medium rounded-full border transition-all ${!filters.category ? 'bg-brand-green/10 text-brand-green border-brand-green/30' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 shadow-sm'}`}>All</button>
-                    {categories.map(c => (
-                        <button key={c} onClick={() => filterCategory(c)} className={`px-4 py-1.5 text-sm font-medium rounded-full border transition-all ${filters.category === c ? 'bg-brand-green/10 text-brand-green border-brand-green/30' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 shadow-sm'}`}>{c}</button>
-                    ))}
-                </div>
+                {/* Filters */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <select
+                        value={filters.category || ''}
+                        onChange={e => filterCategory(e.target.value)}
+                        className="w-full sm:w-64 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition-all focus:border-brand-green focus:ring-1 focus:ring-brand-green/20"
+                    >
+                        <option value="">All Categories</option>
+                        {categories.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                        ))}
+                    </select>
 
-                {/* Search */}
-                <div className="flex gap-3">
-                    <input type="text" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && applySearch()} placeholder="Search services..." className="flex-1 rounded-xl bg-white border border-gray-200 text-gray-900 text-sm px-4 py-2.5 focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 outline-none transition-all placeholder:text-gray-400 shadow-sm" />
-                    <button onClick={applySearch} className="px-5 py-2.5 rounded-xl bg-brand-green text-white font-medium text-sm hover:bg-brand-green/90 transition-colors shadow-sm">Search</button>
+                    <div className="flex flex-1 gap-3">
+                        <input type="text" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && applySearch()} placeholder="Search services..." className="flex-1 rounded-xl bg-white border border-gray-200 text-gray-900 text-sm px-4 py-2.5 focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 outline-none transition-all placeholder:text-gray-400 shadow-sm" />
+                        <button onClick={applySearch} className="px-5 py-2.5 rounded-xl bg-brand-green text-white font-medium text-sm hover:bg-brand-green/90 transition-colors shadow-sm">Search</button>
+                    </div>
                 </div>
 
                 {/* Table */}

@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BusinessContract extends Model
 {
+    public const STATUS_OPEN = 'open';
+    public const STATUS_FILLED = 'filled';
+    public const STATUS_CLOSED = 'closed';
+
     protected $fillable = [
         'user_id',
         'title',
@@ -40,8 +45,8 @@ class BusinessContract extends Model
         return $this->hasMany(ContractApplication::class, 'business_contract_id');
     }
 
-    public function scopeOpen($query)
+    public function scopeOpen(Builder $query): Builder
     {
-        return $query->where('status', 'open');
+        return $query->where('status', self::STATUS_OPEN);
     }
 }
