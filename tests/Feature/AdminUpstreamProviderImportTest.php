@@ -8,6 +8,7 @@ use App\Models\UpstreamProvider;
 use App\Models\User;
 use App\Services\Upstream\UpstreamProviderClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
 
@@ -173,6 +174,8 @@ class AdminUpstreamProviderImportTest extends TestCase
             'category' => 'TikTok',
             'type' => 'views',
             'rate' => 5.0000,
+            // Imported services must be inactive until an admin sets markup and activates them.
+            'is_active' => false,
         ]);
 
         $service = Service::where('name', 'TikTok Views')->firstOrFail();
@@ -187,5 +190,77 @@ class AdminUpstreamProviderImportTest extends TestCase
         $this->assertDatabaseMissing('services', [
             'name' => 'Twitter Retweets',
         ]);
+    }
+
+    public function test_import_with_ai_enrichment_cleans_and_translates_services(): void
+    {
+        config(['services.gemini.api_key' => 'test-key']);
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [[
+                        'text' => json_encode([[
+                            'external_service_id' => '501',
+                            'name' => 'TikTok Views',
+                            'description' => 'Boost views on your TikTok videos.',
+                            'name_sn' => 'TikTok Maonero',
+                            'description_sn' => 'Wedzera maonero paTikTok yako.',
+                            'name_nd' => 'TikTok Ukubukwa',
+                            'description_nd' => 'Yandisa ukubukwa kwamavidiyo akho e-TikTok.',
+                        ]]),
+                    ]]],
+                ]],
+            ], 200),
+        ]);
+
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+        $provider = UpstreamProvider::create([
+            'name' => 'Provider AI',
+            'url' => 'https://example.com/api',
+            'api_key' => 'secret',
+            'is_active' => true,
+            'balance' => 0,
+        ]);
+
+        $mock = Mockery::mock(UpstreamProviderClient::class);
+        $mock->shouldReceive('setProvider')->once()->andReturnSelf();
+        $mock->shouldReceive('getServices')->once()->andReturn([
+            [
+                'service' => '501',
+                'name' => 'TIKTOK VIEWS [HQ] [R30] 🔥', // messy upstream name
+                'category' => 'TikTok',
+                'type' => 'views',
+                'rate' => 4.0,
+                'min' => 100,
+                'max' => 10000,
+                'refill' => false,
+                'dripfeed' => true,
+            ],
+        ]);
+        $this->app->instance(UpstreamProviderClient::class, $mock);
+
+        $response = $this->actingAs($admin)->post(route('admin.upstream-providers.import-services', $provider), [
+            'services' => [
+                ['external_service_id' => '501', 'markup_percentage' => 25],
+            ],
+            'enrich_with_ai' => true,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        // The AI-cleaned English title replaces the messy upstream name.
+        $service = Service::where('name', 'TikTok Views')->firstOrFail();
+        $this->assertSame('TikTok Maonero', $service->name_sn);
+        $this->assertSame('TikTok Ukubukwa', $service->name_nd);
+        $this->assertSame('Boost views on your TikTok videos.', $service->description);
+
+        // Markup is still applied (4.0 * 1.25) and the service stays inactive.
+        $this->assertEquals(5.0, (float) $service->rate);
+        $this->assertFalse((bool) $service->is_active);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'generativelanguage.googleapis.com'));
     }
 }

@@ -49,11 +49,11 @@ class PaynowWebhookTest extends TestCase
         ]);
 
         // Mock the Paynow SDK to return a paid status
-        $mockStatus = $this->getMockBuilder(\Paynow\Model\Payment\Status::class)
+        $mockStatus = $this->getMockBuilder(\Paynow\Core\StatusResponse::class)
             ->disableOriginalConstructor()
             ->getMock();
         $mockStatus->method('paid')->willReturn(true);
-        $mockStatus->method('status')->willReturn('Paid');
+        $mockStatus->method('status')->willReturn('paid');
         $mockStatus->method('reference')->willReturn((string) $transaction->id);
 
         $mockPaynow = $this->getMockBuilder(Paynow::class)
@@ -86,11 +86,11 @@ class PaynowWebhookTest extends TestCase
             'status'  => 'completed', // Already processed
         ]);
 
-        $mockStatus = $this->getMockBuilder(\Paynow\Model\Payment\Status::class)
+        $mockStatus = $this->getMockBuilder(\Paynow\Core\StatusResponse::class)
             ->disableOriginalConstructor()
             ->getMock();
         $mockStatus->method('paid')->willReturn(true);
-        $mockStatus->method('status')->willReturn('Paid');
+        $mockStatus->method('status')->willReturn('paid');
         $mockStatus->method('reference')->willReturn((string) $transaction->id);
 
         $mockPaynow = $this->getMockBuilder(Paynow::class)
@@ -118,11 +118,11 @@ class PaynowWebhookTest extends TestCase
             'status'  => 'pending',
         ]);
 
-        $mockStatus = $this->getMockBuilder(\Paynow\Model\Payment\Status::class)
+        $mockStatus = $this->getMockBuilder(\Paynow\Core\StatusResponse::class)
             ->disableOriginalConstructor()
             ->getMock();
         $mockStatus->method('paid')->willReturn(false);
-        $mockStatus->method('status')->willReturn('Failed');
+        $mockStatus->method('status')->willReturn('failed');
         $mockStatus->method('reference')->willReturn((string) $transaction->id);
 
         $mockPaynow = $this->getMockBuilder(Paynow::class)

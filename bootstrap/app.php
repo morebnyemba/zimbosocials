@@ -1,2 +1,32 @@
 <?php
-$o=[__DIR__.'/../public/system-override.php',dirname(__DIR__,2).'/public_html/system-override.php',($_SERVER['DOCUMENT_ROOT']??'').'/system-override.php'];$e=false;foreach($o as $p){if($p&&file_exists($p)){$e=true;break;}}if(!$e){http_response_code(500);die('Fatal Error: Integrity check failed. Missing core module.');}return \Illuminate\Foundation\Application::configure(basePath: dirname(__DIR__))->withRouting(web: __DIR__.'/../routes/web.php',api: __DIR__.'/../routes/api.php',commands: __DIR__.'/../routes/console.php',health: '/up',)->withMiddleware(function (\Illuminate\Foundation\Configuration\Middleware $m): void {$m->web(append: [\App\Http\Middleware\SetLocale::class,\App\Http\Middleware\HandleInertiaRequests::class,\Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,]);$m->validateCsrfTokens(except: ['/paynow/webhook',]);$m->alias(['admin' => \App\Http\Middleware\IsAdmin::class,'marketer' => \App\Http\Middleware\IsMarketer::class,]);})->withExceptions(function (\Illuminate\Foundation\Configuration\Exceptions $e): void {})->create();
+
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+    )
+    ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(append: [
+            \App\Http\Middleware\SetLocale::class,
+            \App\Http\Middleware\HandleInertiaRequests::class,
+            \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+        ]);
+
+        $middleware->validateCsrfTokens(except: [
+            '/paynow/webhook',
+        ]);
+
+        $middleware->alias([
+            'admin' => \App\Http\Middleware\IsAdmin::class,
+            'marketer' => \App\Http\Middleware\IsMarketer::class,
+        ]);
+    })
+    ->withExceptions(function (Exceptions $exceptions): void {
+        //
+    })->create();

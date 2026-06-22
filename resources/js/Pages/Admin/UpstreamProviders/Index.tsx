@@ -37,7 +37,7 @@ interface ImportSelection {
     markup_percentage: string;
 }
 
-export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ providers: UpstreamProvider[] }>) {
+export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEnabled }: PageProps<{ providers: UpstreamProvider[]; aiEnrichmentEnabled?: boolean }>) {
     const [editingProvider, setEditingProvider] = useState<UpstreamProvider | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
@@ -49,6 +49,7 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
     const [importSearch, setImportSearch] = useState('');
     const [bulkMarkup, setBulkMarkup] = useState('');
     const [importError, setImportError] = useState('');
+    const [enrichWithAi, setEnrichWithAi] = useState(false);
 
     const { data, setData, post, put, delete: destroy, processing, errors, reset } = useForm({
         name: '',
@@ -112,6 +113,7 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
         setImportSearch('');
         setBulkMarkup('');
         setImportError('');
+        setEnrichWithAi(false);
     };
 
     const openImportModal = async (provider: UpstreamProvider) => {
@@ -249,7 +251,7 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
         setImportingServices(true);
         setImportError('');
 
-        router.post(route('admin.upstream-providers.import-services', importProvider.id), { services }, {
+        router.post(route('admin.upstream-providers.import-services', importProvider.id), { services, enrich_with_ai: enrichWithAi }, {
             preserveScroll: true,
             onSuccess: () => closeImportModal(),
             onError: (formErrors) => {
@@ -463,6 +465,15 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
                         </button>
                     </div>
 
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                        <span>
+                            Imported services are added <strong>inactive</strong>. The markup you set here is applied to
+                            the selling price — review it and activate each service from the <strong>Services</strong> page
+                            before it goes live to customers.
+                        </span>
+                    </div>
+
                     {loadingImportServices ? (
                         <div className="flex items-center justify-center gap-3 rounded-xl border border-dashed border-gray-300 px-6 py-14 text-sm text-gray-500">
                             <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -606,23 +617,39 @@ export default function UpstreamProvidersIndex({ auth, providers }: PageProps<{ 
                                 </table>
                             </div>
 
-                            <div className="flex items-center justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={closeImportModal}
-                                    className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={submitImport}
-                                    disabled={importingServices || loadingImportServices}
-                                    className="inline-flex items-center gap-2 rounded-xl bg-brand-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-green/90 disabled:opacity-50"
-                                >
-                                    {importingServices && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                                    Import Selected Services
-                                </button>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                {aiEnrichmentEnabled ? (
+                                    <label className="inline-flex items-start gap-2 text-sm text-gray-700">
+                                        <input
+                                            type="checkbox"
+                                            checked={enrichWithAi}
+                                            onChange={e => setEnrichWithAi(e.target.checked)}
+                                            className="mt-0.5 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                                        />
+                                        <span>
+                                            Enhance &amp; translate with AI
+                                            <span className="block text-xs text-gray-500">Cleans names and adds Shona &amp; Ndebele translations on import.</span>
+                                        </span>
+                                    </label>
+                                ) : <span />}
+                                <div className="flex items-center justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={closeImportModal}
+                                        className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={submitImport}
+                                        disabled={importingServices || loadingImportServices}
+                                        className="inline-flex items-center gap-2 rounded-xl bg-brand-green px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-green/90 disabled:opacity-50"
+                                    >
+                                        {importingServices && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                                        Import Selected Services
+                                    </button>
+                                </div>
                             </div>
                         </>
                     )}

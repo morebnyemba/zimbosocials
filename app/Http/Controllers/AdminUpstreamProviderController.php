@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 
 use App\Models\Service;
 use App\Models\ServiceUpstream;
+use App\Services\AI\ServiceEnricher;
 use App\Services\Upstream\UpstreamProviderClient;
 
 class AdminUpstreamProviderController extends Controller
@@ -18,7 +19,10 @@ class AdminUpstreamProviderController extends Controller
     public function index(): Response
     {
         $providers = UpstreamProvider::all();
-        return Inertia::render('Admin/UpstreamProviders/Index', ['providers' => $providers]);
+        return Inertia::render('Admin/UpstreamProviders/Index', [
+            'providers' => $providers,
+            'aiEnrichmentEnabled' => filled(config('services.gemini.api_key')),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -111,13 +115,16 @@ class AdminUpstreamProviderController extends Controller
         ]);
     }
 
-    public function importServices(Request $request, UpstreamProvider $upstreamProvider, UpstreamProviderClient $client): RedirectResponse
+    public function importServices(Request $request, UpstreamProvider $upstreamProvider, UpstreamProviderClient $client, ServiceEnricher $enricher): RedirectResponse
     {
-        $selectedServices = collect($request->validate([
+        $validated = $request->validate([
             'services' => ['required', 'array', 'min:1'],
             'services.*.external_service_id' => ['required', 'string'],
             'services.*.markup_percentage' => ['required', 'numeric', 'min:0', 'max:1000'],
-        ])['services'])
+            'enrich_with_ai' => ['nullable', 'boolean'],
+        ]);
+
+        $selectedServices = collect($validated['services'])
             ->keyBy(fn (array $service): string => (string) $service['external_service_id']);
 
         $providerServices = $this->fetchProviderServices($upstreamProvider, $client);
@@ -134,6 +141,11 @@ class AdminUpstreamProviderController extends Controller
             return back()->with('error', 'None of the selected services were found on the provider.');
         }
 
+        // Optional AI cleanup + Shona/Ndebele translation, keyed by external_service_id.
+        $enrichment = $request->boolean('enrich_with_ai')
+            ? $enricher->enrich($requestedServices->all())
+            : [];
+
         $imported = 0;
         $skipped = 0;
 
@@ -148,7 +160,7 @@ class AdminUpstreamProviderController extends Controller
             }
 
             $markupPercentage = (float) $selectedServices[(string) $s['service']]['markup_percentage'];
-            $service = $this->findOrCreateService($upstreamProvider, $s, $markupPercentage);
+            $service = $this->findOrCreateService($upstreamProvider, $s, $markupPercentage, $enrichment[(string) $s['service']] ?? null);
 
             ServiceUpstream::create([
                 'service_id' => $service->id,
@@ -162,7 +174,7 @@ class AdminUpstreamProviderController extends Controller
             $imported++;
         }
 
-        $message = "Successfully imported {$imported} new services.";
+        $message = "Imported {$imported} new services as inactive. Review the markup and activate them from the Services page.";
 
         if ($skipped > 0) {
             $message .= " Skipped {$skipped} already linked services.";
@@ -203,10 +215,12 @@ class AdminUpstreamProviderController extends Controller
 
     /**
      * @param array<string, mixed> $providerService
+     * @param array<string, string>|null $enriched Optional AI-cleaned name/description + sn/nd translations.
      */
-    private function findOrCreateService(UpstreamProvider $upstreamProvider, array $providerService, float $markupPercentage): Service
+    private function findOrCreateService(UpstreamProvider $upstreamProvider, array $providerService, float $markupPercentage, ?array $enriched = null): Service
     {
-        $serviceName = (string) $providerService['name'];
+        // Prefer the AI-cleaned English name when available; fall back to the raw upstream name.
+        $serviceName = $enriched['name'] ?? (string) $providerService['name'];
         $service = Service::where('name', $serviceName)->first();
 
         if (
@@ -225,18 +239,24 @@ class AdminUpstreamProviderController extends Controller
         }
 
         $externalRate = (float) ($providerService['rate'] ?? 0);
+        $rawDescription = (string) ($providerService['desc'] ?? '');
+        $description = $enriched['description'] ?? $rawDescription;
 
         return Service::create([
             'name' => $serviceName,
-            'name_sn' => $serviceName,
-            'description' => $providerService['desc'] ?? '',
-            'description_sn' => $providerService['desc'] ?? '',
+            'name_sn' => $enriched['name_sn'] ?? $serviceName,
+            'name_nd' => $enriched['name_nd'] ?? $serviceName,
+            'description' => $description,
+            'description_sn' => $enriched['description_sn'] ?? $description,
+            'description_nd' => $enriched['description_nd'] ?? $description,
             'category' => $providerService['category'] ?? 'Default',
             'type' => $providerService['type'] ?? 'Default',
             'rate' => round($externalRate * (1 + ($markupPercentage / 100)), 4),
             'min_qty' => (int) ($providerService['min'] ?? 0),
             'max_qty' => (int) ($providerService['max'] ?? 0),
-            'is_active' => true,
+            // Imported services are created inactive. An admin reviews the markup/rate
+            // and explicitly activates them from the Services page before they go live.
+            'is_active' => false,
             'is_dripfeed' => (bool) ($providerService['dripfeed'] ?? false),
             'is_refill' => (bool) ($providerService['refill'] ?? false),
         ]);

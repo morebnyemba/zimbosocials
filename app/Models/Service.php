@@ -13,7 +13,7 @@ class Service extends Model
     use HasFactory;
 
     protected $fillable = [
-        'name', 'name_sn', 'description', 'description_sn',
+        'name', 'name_sn', 'name_nd', 'description', 'description_sn', 'description_nd',
         'category', 'type', 'upstream_service_id', 'rate', 'min_qty', 'max_qty',
         'is_active', 'is_dripfeed', 'is_refill', 'refill_days',
         'avg_time_minutes', 'display_order',
@@ -50,10 +50,14 @@ class Service extends Model
         return round(($quantity / 1000) * $this->rate, 4);
     }
 
-    /** Localised name helper */
+    /** Localised name helper (falls back to the English name when a translation is missing) */
     public function getLocalName(string $locale = 'sn'): string
     {
-        return $locale === 'sn' ? $this->name_sn : $this->name;
+        return match ($locale) {
+            'sn' => $this->name_sn ?: $this->name,
+            'nd' => $this->name_nd ?: $this->name,
+            default => $this->name,
+        };
     }
 
     /**

@@ -24,9 +24,17 @@ class MarketingController extends Controller
             ->orderBy('category')
             ->pluck('category');
 
+        // Real, self-updating headline numbers so the homepage never advertises
+        // figures that drift away from the actual catalog.
+        $stats = [
+            'services'   => Service::active()->count(),
+            'categories' => $categories->count(),
+        ];
+
         return Inertia::render('Marketing/Home', [
             'activityServices' => $activityServices,
             'categories' => $categories,
+            'stats' => $stats,
         ]);
     }
 

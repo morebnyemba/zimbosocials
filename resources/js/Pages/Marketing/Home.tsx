@@ -46,9 +46,15 @@ type Service = {
   category: string
 }
 
+type HomeStats = {
+  services: number
+  categories: number
+}
+
 type Props = {
   activityServices: Service[]
   categories: string[]
+  stats?: HomeStats
 }
 
 type LiveActivity = {
@@ -191,6 +197,8 @@ const fallbackServices: Service[] = [
   { id: 5, name: "Telegram Members", name_sn: "Telegram Members", category: "telegram" },
 ]
 
+const fallbackCategories = ["instagram", "tiktok", "youtube", "facebook", "twitter", "telegram", "whatsapp"]
+
 type WeightedItem<T> = {
   item: T
   weight: number
@@ -332,6 +340,15 @@ function createInitialLiveActivities(pool: Service[], count: number): LiveActivi
 export default function Home() {
   const { props } = usePage<PageProps<Props>>()
   const servicePool = props.activityServices.length > 0 ? props.activityServices : fallbackServices
+  const displayCategories = props.categories.length > 0 ? props.categories : fallbackCategories
+  const stats = props.stats ?? { services: 0, categories: 0 }
+  const servicesValue = stats.services > 0 ? `${stats.services.toLocaleString()}+` : "500+"
+  const platformsValue = String(stats.categories > 0 ? stats.categories : displayCategories.length)
+  const heroMetrics = [
+    { label: "Services Available", value: servicesValue },
+    { label: "Average Setup Time", value: "< 2 mins" },
+    { label: "Platforms Supported", value: platformsValue },
+  ]
   const [liveActivities, setLiveActivities] = useState<LiveActivity[]>(() => (
     createInitialLiveActivities(servicePool, activityWindowSize)
   ))
@@ -361,6 +378,12 @@ export default function Home() {
 
   useEffect(() => {
     setLiveActivities(createInitialLiveActivities(servicePool, activityWindowSize))
+
+    // Respect users who prefer reduced motion: render a static stream, no rotation.
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    if (prefersReducedMotion) {
+      return
+    }
 
     const intervalId = window.setInterval(() => {
       setLiveActivities((current) => [
@@ -519,11 +542,7 @@ export default function Home() {
         viewport={sectionViewport}
       >
         <motion.div className="mb-8 grid gap-4 sm:grid-cols-3" variants={sectionVariants}>
-          {[
-            { label: "Services Catalog", value: "500+" },
-            { label: "Average Setup Time", value: "< 2 mins" },
-            { label: "Active Marketers", value: "10k+" },
-          ].map((metric) => (
+          {heroMetrics.map((metric) => (
             <motion.div key={metric.label} variants={itemVariants} whileHover={{ y: -8 }}>
             <Card className="group overflow-hidden border-zinc-950 transition-transform duration-300 hover:shadow-xl">
               <div className="h-1 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600" />
@@ -547,7 +566,7 @@ export default function Home() {
         </div>
 
         <motion.div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" variants={sectionVariants}>
-          {props.categories.map((category, index) => (
+          {displayCategories.map((category, index) => (
             <motion.div key={category} variants={itemVariants} whileHover={{ y: -10, scale: 1.02 }}>
             <Link
               key={category}
@@ -624,18 +643,19 @@ export default function Home() {
               <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
               Live Broadcasting
             </div>
-            <h2 className="text-2xl font-bold text-zinc-950">Real-time buyer activity that stays lightweight.</h2>
+            <h2 className="text-2xl font-bold text-zinc-950">See what Zimbabwe is ordering right now.</h2>
             <p className="mt-1 max-w-2xl text-sm text-zinc-700">
-              Instead of loading a growing services block, the homepage now keeps a fixed layout and rotates recent purchase-style activity using Zimbabwean names and a small service pool.
+              A live look at the orders flowing through Zimbo Socials. Join thousands of Zimbabweans
+              growing their socials every single day.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:w-auto">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700">Layout</p>
-              <p className="mt-1 text-lg font-extrabold text-zinc-950">Fixed</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700">Services</p>
+              <p className="mt-1 text-lg font-extrabold text-zinc-950">{servicesValue}</p>
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">Broadcast</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">Orders</p>
               <p className="mt-1 text-lg font-extrabold text-zinc-950">Live</p>
             </div>
           </div>
@@ -703,17 +723,17 @@ export default function Home() {
           <motion.div variants={itemVariants} whileHover={{ y: -6 }}>
             <Card className="border-zinc-950 bg-zinc-950 text-white shadow-2xl">
               <CardHeader>
-                <CardTitle className="text-2xl">Why this works better</CardTitle>
+                <CardTitle className="text-2xl">Why creators choose us</CardTitle>
                 <CardDescription className="text-zinc-300">
-                  The homepage stays visually consistent even if your catalog grows far beyond 1,000 services.
+                  Thousands of Zimbabweans rely on Zimbo Socials to grow their reach with confidence.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {[
-                  "We only send a small random sample of services to the homepage instead of growing the whole layout.",
-                  "The activity feed rotates automatically, so visitors feel motion and demand without seeing a long service wall.",
-                  "Shona buyer names make the stream feel more local and familiar for your audience.",
-                  "Your full catalog still lives on the dedicated services page where depth belongs.",
+                  "Orders start within minutes, so your campaigns gain momentum fast.",
+                  "Pay securely in USD or local mobile money — no card required.",
+                  "Track every order in real time from your dashboard.",
+                  "Friendly Zimbabwe-based support whenever you need a hand.",
                 ].map((point) => (
                   <div key={point} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90">
                     <p className="inline-flex items-start gap-2">

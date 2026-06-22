@@ -102,7 +102,7 @@ class AuthController extends Controller
     public function showLogin(): Response
     {
         return Inertia::render('Auth/Login', [
-            'canResetPassword' => false,
+            'canResetPassword' => true,
         ]);
     }
 
@@ -135,6 +135,6 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login');
+        return redirect('/');
     }
 }

@@ -478,7 +478,7 @@ class PaynowController extends Controller
 
             if ($status->paid()) {
                 $this->depositService->credit($transaction, 'paynow_webhook');
-            } elseif ($status->status() === 'Cancelled' || $status->status() === 'Failed') {
+            } elseif (in_array(strtolower((string) $status->status()), ['cancelled', 'failed'], true)) {
                 $this->depositService->reject($transaction, 'paynow_webhook');
             }
 

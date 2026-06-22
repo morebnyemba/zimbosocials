@@ -15,8 +15,10 @@ class ServiceFactory extends Factory
     public function definition(): array
     {
         $rate = $this->faker->randomFloat(4, 0.1, 5.0);
+        $name = $this->faker->words(3, true);
         return [
-            'name'          => $this->faker->words(3, true),
+            'name'          => $name,
+            'name_sn'       => $name,
             'category'      => $this->faker->randomElement(['Instagram', 'TikTok', 'YouTube', 'Facebook', 'Twitter']),
             'description'   => $this->faker->sentence(),
             'rate'          => $rate,

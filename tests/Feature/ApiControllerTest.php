@@ -45,7 +45,7 @@ class ApiControllerTest extends TestCase
         $response = $this->withToken($user->api_key)->getJson('/api/v1/services');
 
         $response->assertOk()
-            ->assertJsonFragment(['service_id' => $service->id]);
+            ->assertJsonFragment(['service' => $service->id]);
     }
 
     public function test_services_list_requires_bearer_token(): void
