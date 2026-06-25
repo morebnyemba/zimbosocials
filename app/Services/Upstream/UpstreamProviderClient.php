@@ -18,6 +18,7 @@ class UpstreamProviderClient
     public function setProvider(UpstreamProvider $provider): self
     {
         $this->provider = $provider;
+
         return $this;
     }
 
@@ -48,10 +49,10 @@ class UpstreamProviderClient
             $response = Http::timeout((int) config('upstream.timeout', 20))
                 ->asForm()
                 ->post($url, [
-                    'key'      => $key,
-                    'action'   => 'add',
-                    'service'  => $providerServiceId,
-                    'link'     => $order->link,
+                    'key' => $key,
+                    'action' => 'add',
+                    'service' => $providerServiceId,
+                    'link' => $order->link,
                     'quantity' => $order->quantity,
                 ]);
 
@@ -60,7 +61,7 @@ class UpstreamProviderClient
             if (! $response->ok()) {
                 return [
                     'ok' => false,
-                    'message' => 'HTTP ' . $response->status(),
+                    'message' => 'HTTP '.$response->status(),
                     'raw' => $body,
                     'external_order_id' => null,
                 ];
@@ -108,7 +109,7 @@ class UpstreamProviderClient
             $response = Http::timeout((int) config('upstream.timeout', 20))
                 ->asForm()
                 ->post($url, [
-                    'key'    => $key,
+                    'key' => $key,
                     'action' => 'status',
                     'orders' => implode(',', $orderIds),
                 ]);
@@ -136,7 +137,7 @@ class UpstreamProviderClient
             $response = Http::timeout((int) config('upstream.timeout', 20))
                 ->asForm()
                 ->post($url, [
-                    'key'    => $key,
+                    'key' => $key,
                     'action' => 'services',
                 ]);
 
@@ -163,7 +164,7 @@ class UpstreamProviderClient
             $response = Http::timeout((int) config('upstream.timeout', 20))
                 ->asForm()
                 ->post($url, [
-                    'key'    => $key,
+                    'key' => $key,
                     'action' => 'balance',
                 ]);
 

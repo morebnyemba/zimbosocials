@@ -10,7 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class BusinessContract extends Model
 {
     public const STATUS_OPEN = 'open';
+
     public const STATUS_FILLED = 'filled';
+
     public const STATUS_CLOSED = 'closed';
 
     protected $fillable = [

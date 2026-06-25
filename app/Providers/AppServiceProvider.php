@@ -3,11 +3,14 @@
 namespace App\Providers;
 
 use App\Models\BusinessContract;
+use App\Models\Setting;
 use App\Policies\BusinessContractPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
@@ -26,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        \Illuminate\Support\Facades\Schema::defaultStringLength(191);
+        Schema::defaultStringLength(191);
         Vite::prefetch(concurrency: 3);
         $this->registerRateLimiters();
         $this->registerPolicies();
@@ -44,7 +47,7 @@ class AppServiceProvider extends ServiceProvider
             $key = (string) ($request->user()?->id ?? $request->ip());
 
             return [
-                Limit::perMinute(12)->by('paynow:' . $key),
+                Limit::perMinute(12)->by('paynow:'.$key),
             ];
         });
 
@@ -52,7 +55,7 @@ class AppServiceProvider extends ServiceProvider
             $key = (string) ($request->user()?->id ?? $request->ip());
 
             return [
-                Limit::perMinute(10)->by('proof:' . $key),
+                Limit::perMinute(10)->by('proof:'.$key),
             ];
         });
 
@@ -60,7 +63,7 @@ class AppServiceProvider extends ServiceProvider
             $key = (string) ($request->user()?->id ?? $request->ip());
 
             return [
-                Limit::perMinute(10)->by('manual-deposit:' . $key),
+                Limit::perMinute(10)->by('manual-deposit:'.$key),
             ];
         });
 
@@ -68,7 +71,7 @@ class AppServiceProvider extends ServiceProvider
             $key = (string) ($request->user()?->id ?? $request->ip());
 
             return [
-                Limit::perMinute(3)->by('withdraw:' . $key),
+                Limit::perMinute(3)->by('withdraw:'.$key),
             ];
         });
 
@@ -76,7 +79,15 @@ class AppServiceProvider extends ServiceProvider
             $apiKey = $request->bearerToken() ?? $request->ip();
 
             return [
-                Limit::perMinute(60)->by('api:' . $apiKey),
+                Limit::perMinute(60)->by('api:'.$apiKey),
+            ];
+        });
+
+        RateLimiter::for('ai-drafts', function (Request $request) {
+            $key = (string) ($request->user()?->id ?? $request->ip());
+
+            return [
+                Limit::perMinute(10)->by('ai:'.$key),
             ];
         });
     }
@@ -85,11 +96,12 @@ class AppServiceProvider extends ServiceProvider
     {
         try {
             // Cache settings as raw arrays for 5 minutes (Eloquent collections don't serialize reliably)
-            $settingsArray = \Illuminate\Support\Facades\Cache::remember('app:boot_settings', 300, function () {
-                if (!\Illuminate\Support\Facades\Schema::hasTable('settings')) {
+            $settingsArray = Cache::remember('app:boot_settings', 300, function () {
+                if (! Schema::hasTable('settings')) {
                     return [];
                 }
-                return \App\Models\Setting::all(['key', 'value', 'group'])->toArray();
+
+                return Setting::all(['key', 'value', 'group'])->toArray();
             });
 
             if (empty($settingsArray)) {
@@ -97,13 +109,13 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $mailKeyMap = [
-                'host'         => 'mail.mailers.smtp.host',
-                'port'         => 'mail.mailers.smtp.port',
-                'username'     => 'mail.mailers.smtp.username',
-                'password'     => 'mail.mailers.smtp.password',
-                'encryption'   => 'mail.mailers.smtp.encryption',
+                'host' => 'mail.mailers.smtp.host',
+                'port' => 'mail.mailers.smtp.port',
+                'username' => 'mail.mailers.smtp.username',
+                'password' => 'mail.mailers.smtp.password',
+                'encryption' => 'mail.mailers.smtp.encryption',
                 'from_address' => 'mail.from.address',
-                'from_name'    => 'mail.from.name',
+                'from_name' => 'mail.from.name',
             ];
 
             foreach ($settingsArray as $setting) {

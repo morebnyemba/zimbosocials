@@ -2,23 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Service;
+use App\Models\ServiceUpstream;
 use App\Models\UpstreamProvider;
+use App\Services\AI\ServiceEnricher;
+use App\Services\Upstream\UpstreamProviderClient;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Http\RedirectResponse;
-
-use App\Models\Service;
-use App\Models\ServiceUpstream;
-use App\Services\AI\ServiceEnricher;
-use App\Services\Upstream\UpstreamProviderClient;
 
 class AdminUpstreamProviderController extends Controller
 {
     public function index(): Response
     {
         $providers = UpstreamProvider::all();
+
         return Inertia::render('Admin/UpstreamProviders/Index', [
             'providers' => $providers,
             'aiEnrichmentEnabled' => filled(config('services.gemini.api_key')),
@@ -56,6 +56,7 @@ class AdminUpstreamProviderController extends Controller
     public function destroy(UpstreamProvider $upstreamProvider): RedirectResponse
     {
         $upstreamProvider->delete();
+
         return back()->with('success', 'Upstream Provider deleted successfully.');
     }
 
@@ -66,6 +67,7 @@ class AdminUpstreamProviderController extends Controller
 
         if ($balance !== null) {
             $upstreamProvider->update(['balance' => $balance]);
+
             return back()->with('success', "Balance synced successfully. Current Balance: {$balance}");
         }
 
@@ -156,6 +158,7 @@ class AdminUpstreamProviderController extends Controller
 
             if ($existingPivot) {
                 $skipped++;
+
                 continue;
             }
 
@@ -198,11 +201,11 @@ class AdminUpstreamProviderController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $providerService
+     * @param  array<string, mixed>  $providerService
      */
     private function isImportableProviderService(array $providerService): bool
     {
-        if (!isset($providerService['service'])) {
+        if (! isset($providerService['service'])) {
             return false;
         }
 
@@ -210,12 +213,12 @@ class AdminUpstreamProviderController extends Controller
             return false;
         }
 
-        return !preg_match('/^[-=\s]+$/', (string) ($providerService['name'] ?? ''));
+        return ! preg_match('/^[-=\s]+$/', (string) ($providerService['name'] ?? ''));
     }
 
     /**
-     * @param array<string, mixed> $providerService
-     * @param array<string, string>|null $enriched Optional AI-cleaned name/description + sn/nd translations.
+     * @param  array<string, mixed>  $providerService
+     * @param  array<string, string>|null  $enriched  Optional AI-cleaned name/description + sn/nd translations.
      */
     private function findOrCreateService(UpstreamProvider $upstreamProvider, array $providerService, float $markupPercentage, ?array $enriched = null): Service
     {
@@ -230,7 +233,7 @@ class AdminUpstreamProviderController extends Controller
                 ->exists()
         ) {
             // Duplicate upstream names are common, so append the external ID for a stable unique fallback.
-            $serviceName .= ' [' . $providerService['service'] . ']';
+            $serviceName .= ' ['.$providerService['service'].']';
             $service = Service::where('name', $serviceName)->first();
         }
 

@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Controllers/MarketingController.php
 
 namespace App\Http\Controllers;
@@ -27,7 +28,7 @@ class MarketingController extends Controller
         // Real, self-updating headline numbers so the homepage never advertises
         // figures that drift away from the actual catalog.
         $stats = [
-            'services'   => Service::active()->count(),
+            'services' => Service::active()->count(),
             'categories' => $categories->count(),
         ];
 

@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 class Notification extends Model
 {
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [
@@ -19,7 +20,7 @@ class Notification extends Model
     protected function casts(): array
     {
         return [
-            'data'    => 'array',
+            'data' => 'array',
             'read_at' => 'datetime',
         ];
     }
@@ -54,7 +55,7 @@ class Notification extends Model
 
     public function markAsRead(): void
     {
-        if (!$this->isRead()) {
+        if (! $this->isRead()) {
             $this->update(['read_at' => now()]);
         }
     }
@@ -65,10 +66,10 @@ class Notification extends Model
     {
         return static::create([
             'user_id' => $userId,
-            'type'    => $type,
-            'title'   => $title,
-            'body'    => $body,
-            'data'    => $data,
+            'type' => $type,
+            'title' => $title,
+            'body' => $body,
+            'data' => $data,
         ]);
     }
 

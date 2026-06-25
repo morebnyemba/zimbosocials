@@ -33,10 +33,10 @@ class WriteAuditLog implements ShouldQueue
     public function handle(): void
     {
         AuditLog::create([
-            'user_id'    => $this->userId,
-            'action'     => $this->action,
+            'user_id' => $this->userId,
+            'action' => $this->action,
             'model_type' => $this->modelType,
-            'model_id'   => $this->modelId,
+            'model_id' => $this->modelId,
             'old_values' => $this->oldValues,
             'new_values' => $this->newValues,
             'ip_address' => $this->ipAddress,

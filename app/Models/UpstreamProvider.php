@@ -20,7 +20,7 @@ class UpstreamProvider extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
-        'balance'   => 'decimal:4',
+        'balance' => 'decimal:4',
     ];
 
     public function serviceUpstreams(): HasMany

@@ -22,7 +22,8 @@ import {
     LogOut,
     ChevronRight,
     Search,
-    Bell
+    Bell,
+    PenTool
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -54,6 +55,7 @@ export default function AdminLayout({
         { href: route('admin.upstream-providers.index'), name: 'admin.upstream-providers.index', label: 'API Providers', icon: Plug },
         { href: route('admin.whatsapp.templates'), name: 'admin.whatsapp.templates', label: 'WhatsApp', icon: MessageSquare },
         { href: route('admin.campaigns.index'), name: 'admin.campaigns.*', label: 'Campaigns', icon: Megaphone },
+        { href: route('admin.seo.index'), name: 'admin.seo.index', label: 'AI SEO', icon: PenTool },
         { href: route('admin.settings.index'), name: 'admin.settings.index', label: 'System Settings', icon: Settings },
     ];
 

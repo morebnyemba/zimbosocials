@@ -48,7 +48,7 @@ class BusinessContractPolicy
             return false;
         }
 
-        if (!in_array($user->role, ['marketer', 'reseller'], true)) {
+        if (! in_array($user->role, ['marketer', 'reseller'], true)) {
             return false;
         }
 

@@ -18,10 +18,10 @@ class ApiControllerTest extends TestCase
     private function apiUser(array $attrs = []): User
     {
         return User::factory()->create(array_merge([
-            'role'      => 'reseller',
+            'role' => 'reseller',
             'is_active' => true,
-            'api_key'   => 'test-api-key-' . Str::random(8),
-            'balance'   => 50,
+            'api_key' => 'test-api-key-'.Str::random(8),
+            'balance' => 50,
         ], $attrs));
     }
 
@@ -29,9 +29,9 @@ class ApiControllerTest extends TestCase
     {
         return Service::factory()->create(array_merge([
             'is_active' => true,
-            'rate'      => 1.0,   // $1 per 1000 → 100 qty = $0.10
-            'min_qty'   => 100,
-            'max_qty'   => 100000,
+            'rate' => 1.0,   // $1 per 1000 → 100 qty = $0.10
+            'min_qty' => 100,
+            'max_qty' => 100000,
         ], $attrs));
     }
 
@@ -39,7 +39,7 @@ class ApiControllerTest extends TestCase
 
     public function test_services_list_returns_active_services(): void
     {
-        $user    = $this->apiUser();
+        $user = $this->apiUser();
         $service = $this->activeService();
 
         $response = $this->withToken($user->api_key)->getJson('/api/v1/services');
@@ -58,7 +58,7 @@ class ApiControllerTest extends TestCase
     {
         $user = $this->apiUser();
 
-        $this->getJson('/api/v1/services?key=' . $user->api_key)
+        $this->getJson('/api/v1/services?key='.$user->api_key)
             ->assertUnauthorized();
     }
 
@@ -78,12 +78,12 @@ class ApiControllerTest extends TestCase
 
     public function test_place_order_succeeds_and_deducts_balance(): void
     {
-        $user    = $this->apiUser(['balance' => 10.0]);
+        $user = $this->apiUser(['balance' => 10.0]);
         $service = $this->activeService(['rate' => 1.0]);
 
         $response = $this->withToken($user->api_key)->postJson('/api/v1/order', [
-            'service'  => $service->id,
-            'link'     => 'https://example.com/profile',
+            'service' => $service->id,
+            'link' => 'https://example.com/profile',
             'quantity' => 1000,
         ]);
 
@@ -91,9 +91,9 @@ class ApiControllerTest extends TestCase
             ->assertJsonStructure(['order', 'upstream_pushed']);
 
         $this->assertDatabaseHas('orders', [
-            'user_id'    => $user->id,
+            'user_id' => $user->id,
             'service_id' => $service->id,
-            'status'     => 'pending',
+            'status' => 'pending',
         ]);
 
         // Balance should be deducted
@@ -102,25 +102,25 @@ class ApiControllerTest extends TestCase
 
     public function test_place_order_returns_402_when_insufficient_balance(): void
     {
-        $user    = $this->apiUser(['balance' => 0.001]);
+        $user = $this->apiUser(['balance' => 0.001]);
         $service = $this->activeService(['rate' => 5.0]);
 
         $this->withToken($user->api_key)->postJson('/api/v1/order', [
-            'service'  => $service->id,
-            'link'     => 'https://example.com/profile',
+            'service' => $service->id,
+            'link' => 'https://example.com/profile',
             'quantity' => 1000,
         ])->assertStatus(402)
-          ->assertJsonFragment(['error' => 'Insufficient balance.']);
+            ->assertJsonFragment(['error' => 'Insufficient balance.']);
     }
 
     public function test_place_order_returns_422_for_invalid_quantity(): void
     {
-        $user    = $this->apiUser(['balance' => 100]);
+        $user = $this->apiUser(['balance' => 100]);
         $service = $this->activeService(['min_qty' => 100, 'max_qty' => 5000]);
 
         $this->withToken($user->api_key)->postJson('/api/v1/order', [
-            'service'  => $service->id,
-            'link'     => 'https://example.com/profile',
+            'service' => $service->id,
+            'link' => 'https://example.com/profile',
             'quantity' => 9999999,
         ])->assertStatus(422);
     }
@@ -130,8 +130,8 @@ class ApiControllerTest extends TestCase
         $service = $this->activeService();
 
         $this->postJson('/api/v1/order', [
-            'service'  => $service->id,
-            'link'     => 'https://example.com/profile',
+            'service' => $service->id,
+            'link' => 'https://example.com/profile',
             'quantity' => 500,
         ])->assertUnauthorized();
     }
@@ -140,11 +140,11 @@ class ApiControllerTest extends TestCase
 
     public function test_order_status_returns_order_details(): void
     {
-        $user  = $this->apiUser();
+        $user = $this->apiUser();
         $order = Order::factory()->create(['user_id' => $user->id]);
 
         $this->withToken($user->api_key)
-            ->getJson('/api/v1/status?order=' . $order->id)
+            ->getJson('/api/v1/status?order='.$order->id)
             ->assertOk()
             ->assertJsonFragment(['order' => $order->id]);
     }
@@ -152,11 +152,11 @@ class ApiControllerTest extends TestCase
     public function test_order_status_returns_404_for_other_users_order(): void
     {
         $user1 = $this->apiUser();
-        $user2 = $this->apiUser(['api_key' => 'other-key-' . Str::random(8)]);
+        $user2 = $this->apiUser(['api_key' => 'other-key-'.Str::random(8)]);
         $order = Order::factory()->create(['user_id' => $user2->id]);
 
         $this->withToken($user1->api_key)
-            ->getJson('/api/v1/status?order=' . $order->id)
+            ->getJson('/api/v1/status?order='.$order->id)
             ->assertNotFound();
     }
 
@@ -164,13 +164,13 @@ class ApiControllerTest extends TestCase
 
     public function test_cancel_order_refunds_balance(): void
     {
-        $user    = $this->apiUser(['balance' => 5.0]);
+        $user = $this->apiUser(['balance' => 5.0]);
         $service = $this->activeService(['rate' => 1.0]);
-        $order   = Order::factory()->create([
-            'user_id'    => $user->id,
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
             'service_id' => $service->id,
-            'charge'     => 1.0,
-            'status'     => 'pending',
+            'charge' => 1.0,
+            'status' => 'pending',
         ]);
 
         $this->withToken($user->api_key)

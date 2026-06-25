@@ -68,7 +68,7 @@ class ReferralController extends Controller
         return Inertia::render('Referrals/Index', [
             'summary' => $summary,
             'referralCode' => $user->getAttribute('referral_code'),
-            'referralLink' => url('/register?ref=' . $user->getAttribute('referral_code')),
+            'referralLink' => url('/register?ref='.$user->getAttribute('referral_code')),
             'referrals' => $referrals,
             'rewardHistory' => $rewardTransactions,
         ]);

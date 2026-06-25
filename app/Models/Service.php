@@ -1,12 +1,13 @@
 <?php
+
 // app/Models/Service.php
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Builder;
 
 class Service extends Model
 {
@@ -22,10 +23,10 @@ class Service extends Model
     protected function casts(): array
     {
         return [
-            'rate'       => 'decimal:4',
-            'is_active'  => 'boolean',
-            'is_dripfeed'=> 'boolean',
-            'is_refill'  => 'boolean',
+            'rate' => 'decimal:4',
+            'is_active' => 'boolean',
+            'is_dripfeed' => 'boolean',
+            'is_refill' => 'boolean',
         ];
     }
 

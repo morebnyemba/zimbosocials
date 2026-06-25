@@ -9,6 +9,9 @@ use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\AI\AnalyticsSummarizer;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -46,21 +49,21 @@ class AdminController extends Controller
                 ->first();
 
             return [
-                'users'               => (int) ($userCounts->total            ?? 0),
-                'active_users'        => (int) ($userCounts->active           ?? 0),
-                'marketers'           => (int) ($userCounts->marketers        ?? 0),
-                'admins'              => (int) ($userCounts->admins           ?? 0),
-                'pending_marketers'   => (int) ($userCounts->pending_marketers ?? 0),
-                'services'            => Service::active()->count(),
-                'orders'              => (int) ($orderStats->total            ?? 0),
-                'active_orders'       => (int) ($orderStats->active           ?? 0),
-                'open_tickets'        => Ticket::whereIn('status', ['open', 'pending'])->count(),
-                'revenue'             => (float) ($orderStats->revenue        ?? 0),
-                'today_revenue'       => (float) ($orderStats->today_revenue  ?? 0),
-                'month_revenue'       => (float) ($orderStats->month_revenue  ?? 0),
-                'pending_deposits'    => (int) ($txPending->pending_deposits    ?? 0),
+                'users' => (int) ($userCounts->total ?? 0),
+                'active_users' => (int) ($userCounts->active ?? 0),
+                'marketers' => (int) ($userCounts->marketers ?? 0),
+                'admins' => (int) ($userCounts->admins ?? 0),
+                'pending_marketers' => (int) ($userCounts->pending_marketers ?? 0),
+                'services' => Service::active()->count(),
+                'orders' => (int) ($orderStats->total ?? 0),
+                'active_orders' => (int) ($orderStats->active ?? 0),
+                'open_tickets' => Ticket::whereIn('status', ['open', 'pending'])->count(),
+                'revenue' => (float) ($orderStats->revenue ?? 0),
+                'today_revenue' => (float) ($orderStats->today_revenue ?? 0),
+                'month_revenue' => (float) ($orderStats->month_revenue ?? 0),
+                'pending_deposits' => (int) ($txPending->pending_deposits ?? 0),
                 'pending_withdrawals' => (int) ($txPending->pending_withdrawals ?? 0),
-                'total_contracts'     => BusinessContract::count(),
+                'total_contracts' => BusinessContract::count(),
             ];
         });
 
@@ -100,5 +103,38 @@ class AdminController extends Controller
             'stats', 'recent_orders', 'pending_proofs',
             'daily_revenue', 'orders_by_status', 'new_users_weekly', 'recent_users'
         ));
+    }
+
+    public function aiSummary(Request $request, AnalyticsSummarizer $summarizer): JsonResponse
+    {
+        $days = (int) $request->query('days', 7);
+        $days = in_array($days, [7, 14, 30, 90], true) ? $days : 7;
+
+        $cacheKey = "admin:ai_summary:{$days}";
+
+        $summary = Cache::remember($cacheKey, 3600, function () use ($summarizer, $days) {
+            $stats = Cache::get('admin:dashboard_stats') ?? [];
+
+            $dailyRevenue = Order::selectRaw('DATE(created_at) as date, SUM(charge) as total, COUNT(*) as count')
+                ->where('created_at', '>=', now()->subDays($days))
+                ->groupBy('date')
+                ->orderBy('date')
+                ->get()
+                ->toArray();
+
+            $ordersByStatus = Order::selectRaw('status, COUNT(*) as count')
+                ->where('created_at', '>=', now()->subDays($days))
+                ->groupBy('status')
+                ->pluck('count', 'status')
+                ->toArray();
+
+            return $summarizer->summarize($stats, $dailyRevenue, $ordersByStatus, $days);
+        });
+
+        if ($summary === null) {
+            return response()->json(['summary' => null, 'message' => 'AI summarizer is not available.'], 503);
+        }
+
+        return response()->json(['summary' => $summary, 'days' => $days]);
     }
 }

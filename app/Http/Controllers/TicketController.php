@@ -1,12 +1,13 @@
 <?php
+
 // app/Http/Controllers/TicketController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\Ticket;
 use App\Models\TicketReply;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -30,10 +31,10 @@ class TicketController extends Controller
         ]);
 
         Ticket::create([
-            'user_id'  => Auth::id(),
-            'subject'  => $data['subject'],
-            'message'  => $data['message'],
-            'status'   => 'open',
+            'user_id' => Auth::id(),
+            'subject' => $data['subject'],
+            'message' => $data['message'],
+            'status' => 'open',
             'priority' => 'medium',
         ]);
 
@@ -58,13 +59,13 @@ class TicketController extends Controller
 
         TicketReply::create([
             'ticket_id' => $ticket->id,
-            'user_id'   => Auth::id(),
-            'message'   => $data['message'],
-            'is_admin'  => Auth::user()->isAdmin(),
+            'user_id' => Auth::id(),
+            'message' => $data['message'],
+            'is_admin' => Auth::user()->isAdmin(),
         ]);
 
         $ticket->update([
-            'status'        => 'pending',
+            'status' => 'pending',
             'last_reply_at' => now(),
         ]);
 

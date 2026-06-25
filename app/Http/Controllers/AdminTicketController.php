@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AuditLog;
-use App\Services\NotificationService;
 use App\Models\Ticket;
 use App\Models\TicketReply;
+use App\Services\AI\SupportTicketAssistant;
+use App\Services\NotificationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,8 +23,8 @@ class AdminTicketController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('subject', 'like', "%{$search}%")
-                  ->orWhere('id', $search)
-                  ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$search}%"));
+                    ->orWhere('id', $search)
+                    ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$search}%"));
             });
         }
 
@@ -43,15 +44,15 @@ class AdminTicketController extends Controller
             ->pluck('cnt', 'status');
 
         $status_counts = [
-            'all'     => $rawCounts->sum(),
-            'open'    => (int) ($rawCounts['open']    ?? 0),
+            'all' => $rawCounts->sum(),
+            'open' => (int) ($rawCounts['open'] ?? 0),
             'pending' => (int) ($rawCounts['pending'] ?? 0),
-            'closed'  => (int) ($rawCounts['closed']  ?? 0),
+            'closed' => (int) ($rawCounts['closed'] ?? 0),
         ];
 
         return Inertia::render('Admin/Tickets/Index', [
-            'tickets'       => $tickets,
-            'filters'       => $request->only(['search', 'status', 'priority']),
+            'tickets' => $tickets,
+            'filters' => $request->only(['search', 'status', 'priority']),
             'status_counts' => $status_counts,
         ]);
     }
@@ -65,6 +66,25 @@ class AdminTicketController extends Controller
         ]);
     }
 
+    public function draftReply(Ticket $ticket, Request $request, SupportTicketAssistant $assistant): JsonResponse
+    {
+        if ($ticket->status === 'closed') {
+            return response()->json(['draft' => null, 'message' => 'Ticket is closed.'], 422);
+        }
+
+        $request->validate([
+            'tone' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $draft = $assistant->draftReply($ticket, $request->input('tone'));
+
+        if ($draft === null) {
+            return response()->json(['draft' => null, 'message' => 'AI assistant is not available.'], 503);
+        }
+
+        return response()->json(['draft' => $draft]);
+    }
+
     public function reply(Ticket $ticket, Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -73,14 +93,14 @@ class AdminTicketController extends Controller
 
         TicketReply::create([
             'ticket_id' => $ticket->id,
-            'user_id'   => Auth::id(),
-            'message'   => $data['message'],
-            'is_admin'  => true,
+            'user_id' => Auth::id(),
+            'message' => $data['message'],
+            'is_admin' => true,
         ]);
 
         $ticket->update([
-            'status'       => 'pending',
-            'last_reply_at'=> now(),
+            'status' => 'pending',
+            'last_reply_at' => now(),
         ]);
 
         NotificationService::notify($ticket->user_id, 'ticket_reply', 'Ticket Reply',

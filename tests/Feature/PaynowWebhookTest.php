@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
+use Paynow\Core\StatusResponse;
 use Paynow\Payments\Paynow;
 use Tests\TestCase;
 
@@ -19,37 +19,37 @@ class PaynowWebhookTest extends TestCase
      */
     private function buildPaynowPayload(string $reference, string $status, string $integrationKey): array
     {
-        $amount   = '10.00';
+        $amount = '10.00';
         $paynowRef = 'PNW-TEST-123';
-        $currency  = 'USD';
+        $currency = 'USD';
 
         $hashString = mb_strtolower(
-            $amount . $currency . $paynowRef . $reference . $status . $integrationKey
+            $amount.$currency.$paynowRef.$reference.$status.$integrationKey
         );
         $hash = hash('sha512', $hashString);
 
         return [
-            'reference'   => $reference,
+            'reference' => $reference,
             'paynowreference' => $paynowRef,
-            'amount'      => $amount,
-            'status'      => $status,
-            'currencycode'=> $currency,
-            'hash'        => $hash,
+            'amount' => $amount,
+            'status' => $status,
+            'currencycode' => $currency,
+            'hash' => $hash,
         ];
     }
 
     public function test_webhook_with_paid_status_credits_user_balance(): void
     {
-        $user        = User::factory()->create(['balance' => 0]);
+        $user = User::factory()->create(['balance' => 0]);
         $transaction = Transaction::factory()->create([
             'user_id' => $user->id,
-            'type'    => 'deposit',
-            'amount'  => 10.0,
-            'status'  => 'pending',
+            'type' => 'deposit',
+            'amount' => 10.0,
+            'status' => 'pending',
         ]);
 
         // Mock the Paynow SDK to return a paid status
-        $mockStatus = $this->getMockBuilder(\Paynow\Core\StatusResponse::class)
+        $mockStatus = $this->getMockBuilder(StatusResponse::class)
             ->disableOriginalConstructor()
             ->getMock();
         $mockStatus->method('paid')->willReturn(true);
@@ -69,7 +69,7 @@ class PaynowWebhookTest extends TestCase
             ->assertJson(['status' => 'ok']);
 
         $this->assertDatabaseHas('transactions', [
-            'id'     => $transaction->id,
+            'id' => $transaction->id,
             'status' => 'completed',
         ]);
 
@@ -78,15 +78,15 @@ class PaynowWebhookTest extends TestCase
 
     public function test_webhook_ignores_already_completed_transaction(): void
     {
-        $user        = User::factory()->create(['balance' => 10]);
+        $user = User::factory()->create(['balance' => 10]);
         $transaction = Transaction::factory()->create([
             'user_id' => $user->id,
-            'type'    => 'deposit',
-            'amount'  => 10.0,
-            'status'  => 'completed', // Already processed
+            'type' => 'deposit',
+            'amount' => 10.0,
+            'status' => 'completed', // Already processed
         ]);
 
-        $mockStatus = $this->getMockBuilder(\Paynow\Core\StatusResponse::class)
+        $mockStatus = $this->getMockBuilder(StatusResponse::class)
             ->disableOriginalConstructor()
             ->getMock();
         $mockStatus->method('paid')->willReturn(true);
@@ -110,15 +110,15 @@ class PaynowWebhookTest extends TestCase
 
     public function test_webhook_with_failed_status_marks_transaction_rejected(): void
     {
-        $user        = User::factory()->create(['balance' => 0]);
+        $user = User::factory()->create(['balance' => 0]);
         $transaction = Transaction::factory()->create([
             'user_id' => $user->id,
-            'type'    => 'deposit',
-            'amount'  => 10.0,
-            'status'  => 'pending',
+            'type' => 'deposit',
+            'amount' => 10.0,
+            'status' => 'pending',
         ]);
 
-        $mockStatus = $this->getMockBuilder(\Paynow\Core\StatusResponse::class)
+        $mockStatus = $this->getMockBuilder(StatusResponse::class)
             ->disableOriginalConstructor()
             ->getMock();
         $mockStatus->method('paid')->willReturn(false);
@@ -137,7 +137,7 @@ class PaynowWebhookTest extends TestCase
             ->assertJson(['status' => 'ok']);
 
         $this->assertDatabaseHas('transactions', [
-            'id'     => $transaction->id,
+            'id' => $transaction->id,
             'status' => 'rejected',
         ]);
 

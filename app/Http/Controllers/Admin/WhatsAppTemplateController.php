@@ -14,7 +14,7 @@ class WhatsAppTemplateController extends Controller
     public function index(WhatsAppService $whatsapp): Response
     {
         $remote = $whatsapp->listTemplates();
-        
+
         $templates = [];
         if ($remote['ok']) {
             $templates = $remote['templates'];
@@ -24,9 +24,9 @@ class WhatsAppTemplateController extends Controller
 
         return Inertia::render('Admin/WhatsApp/Templates', [
             'remoteTemplates' => $templates,
-            'localConfig'     => $localConfig,
-            'error'           => $remote['error'] ?? null,
-            'provider'        => config('services.whatsapp.provider'),
+            'localConfig' => $localConfig,
+            'error' => $remote['error'] ?? null,
+            'provider' => config('services.whatsapp.provider'),
         ]);
     }
 
@@ -34,7 +34,7 @@ class WhatsAppTemplateController extends Controller
     {
         // Run the sync command and capture output
         Artisan::call('whatsapp:sync-templates');
-        
+
         $output = Artisan::output();
 
         if (str_contains($output, 'Failed')) {

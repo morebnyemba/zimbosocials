@@ -41,16 +41,16 @@ return [
     ],
 
     'whatsapp' => [
-        'provider'        => env('WHATSAPP_PROVIDER', 'meta'),
-        'api_token'       => env('WHATSAPP_API_TOKEN'),
+        'provider' => env('WHATSAPP_PROVIDER', 'meta'),
+        'api_token' => env('WHATSAPP_API_TOKEN'),
         'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
-        'waba_id'         => env('WHATSAPP_WABA_ID'),              // WhatsApp Business Account ID (for templates)
-        'twilio_sid'      => env('TWILIO_SID'),
-        'twilio_from'     => env('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
+        'waba_id' => env('WHATSAPP_WABA_ID'),              // WhatsApp Business Account ID (for templates)
+        'twilio_sid' => env('TWILIO_SID'),
+        'twilio_from' => env('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
     ],
 
     'paynow' => [
-        'integration_id'  => env('PAYNOW_INTEGRATION_ID'),
+        'integration_id' => env('PAYNOW_INTEGRATION_ID'),
         'integration_key' => env('PAYNOW_INTEGRATION_KEY'),
     ],
 
@@ -63,10 +63,10 @@ return [
     // Google Gemini — optional. When the API key is set, admins can opt in to
     // AI cleanup + Shona/Ndebele translation when importing upstream services.
     'gemini' => [
-        'api_key'  => env('GEMINI_API_KEY'),
-        'model'    => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
-        'timeout'  => (int) env('GEMINI_TIMEOUT', 30),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 30),
     ],
 
 ];

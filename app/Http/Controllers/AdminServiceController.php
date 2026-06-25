@@ -1,11 +1,11 @@
 <?php
+
 // app/Http/Controllers/AdminServiceController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\Service;
-use App\Models\ServiceUpstream;
 use App\Models\UpstreamProvider;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,9 +23,9 @@ class AdminServiceController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('name_sn', 'like', "%{$search}%")
-                  ->orWhere('category', 'like', "%{$search}%")
-                  ->orWhere('id', $search);
+                    ->orWhere('name_sn', 'like', "%{$search}%")
+                    ->orWhere('category', 'like', "%{$search}%")
+                    ->orWhere('id', $search);
             });
         }
 
@@ -55,48 +55,48 @@ class AdminServiceController extends Controller
             ->pluck('cnt', 'is_active');
 
         $stats = [
-            'total'    => $rawCounts->sum(),
-            'active'   => (int) ($rawCounts[1] ?? $rawCounts['1'] ?? 0),
+            'total' => $rawCounts->sum(),
+            'active' => (int) ($rawCounts[1] ?? $rawCounts['1'] ?? 0),
             'inactive' => (int) ($rawCounts[0] ?? $rawCounts['0'] ?? 0),
         ];
 
         return Inertia::render('Admin/Services/Index', [
-            'services'   => $services,
+            'services' => $services,
             'categories' => $categories,
-            'stats'      => $stats,
-            'providers'  => UpstreamProvider::where('is_active', true)->get(),
-            'filters'    => $request->only(['search', 'category', 'active']),
+            'stats' => $stats,
+            'providers' => UpstreamProvider::where('is_active', true)->get(),
+            'filters' => $request->only(['search', 'category', 'active']),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'name'           => ['required', 'string', 'max:255'],
-            'name_sn'        => ['nullable', 'string', 'max:255'],
-            'description'    => ['nullable', 'string', 'max:2000'],
+            'name' => ['required', 'string', 'max:255'],
+            'name_sn' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:2000'],
             'description_sn' => ['nullable', 'string', 'max:2000'],
-            'category'       => ['required', 'string', 'max:100'],
-            'type'           => ['required', 'string', 'max:50'],
-            'rate'           => ['required', 'numeric', 'min:0'],
-            'min_qty'        => ['required', 'integer', 'min:1'],
-            'max_qty'        => ['required', 'integer', 'min:1'],
+            'category' => ['required', 'string', 'max:100'],
+            'type' => ['required', 'string', 'max:50'],
+            'rate' => ['required', 'numeric', 'min:0'],
+            'min_qty' => ['required', 'integer', 'min:1'],
+            'max_qty' => ['required', 'integer', 'min:1'],
             'upstream_service_id' => ['nullable', 'string', 'max:50'],
-            'is_active'      => ['nullable', 'boolean'],
-            'is_dripfeed'    => ['nullable', 'boolean'],
-            'is_refill'      => ['nullable', 'boolean'],
-            'refill_days'    => ['nullable', 'integer', 'min:0'],
+            'is_active' => ['nullable', 'boolean'],
+            'is_dripfeed' => ['nullable', 'boolean'],
+            'is_refill' => ['nullable', 'boolean'],
+            'refill_days' => ['nullable', 'integer', 'min:0'],
             'avg_time_minutes' => ['nullable', 'integer', 'min:0'],
-            'display_order'  => ['nullable', 'integer', 'min:0'],
-            'upstreams'      => ['nullable', 'array'],
+            'display_order' => ['nullable', 'integer', 'min:0'],
+            'upstreams' => ['nullable', 'array'],
             'upstreams.*.upstream_provider_id' => ['required', 'exists:upstream_providers,id'],
             'upstreams.*.external_service_id' => ['required', 'string', 'max:50'],
             'upstreams.*.priority' => ['required', 'integer', 'min:1'],
         ]);
 
-        $data['is_active']   = $request->boolean('is_active');
+        $data['is_active'] = $request->boolean('is_active');
         $data['is_dripfeed'] = $request->boolean('is_dripfeed');
-        $data['is_refill']   = $request->boolean('is_refill');
+        $data['is_refill'] = $request->boolean('is_refill');
 
         $service = DB::transaction(function () use ($data) {
             $service = Service::create($data);
@@ -123,34 +123,34 @@ class AdminServiceController extends Controller
     public function update(Request $request, Service $service): RedirectResponse
     {
         $data = $request->validate([
-            'name'           => ['required', 'string', 'max:255'],
-            'name_sn'        => ['nullable', 'string', 'max:255'],
-            'description'    => ['nullable', 'string', 'max:2000'],
+            'name' => ['required', 'string', 'max:255'],
+            'name_sn' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:2000'],
             'description_sn' => ['nullable', 'string', 'max:2000'],
-            'category'       => ['required', 'string', 'max:100'],
-            'type'           => ['required', 'string', 'max:50'],
-            'rate'           => ['required', 'numeric', 'min:0'],
-            'min_qty'        => ['required', 'integer', 'min:1'],
-            'max_qty'        => ['required', 'integer', 'min:1'],
+            'category' => ['required', 'string', 'max:100'],
+            'type' => ['required', 'string', 'max:50'],
+            'rate' => ['required', 'numeric', 'min:0'],
+            'min_qty' => ['required', 'integer', 'min:1'],
+            'max_qty' => ['required', 'integer', 'min:1'],
             'upstream_service_id' => ['nullable', 'string', 'max:50'],
-            'is_active'      => ['nullable', 'boolean'],
-            'is_dripfeed'    => ['nullable', 'boolean'],
-            'is_refill'      => ['nullable', 'boolean'],
-            'refill_days'    => ['nullable', 'integer', 'min:0'],
+            'is_active' => ['nullable', 'boolean'],
+            'is_dripfeed' => ['nullable', 'boolean'],
+            'is_refill' => ['nullable', 'boolean'],
+            'refill_days' => ['nullable', 'integer', 'min:0'],
             'avg_time_minutes' => ['nullable', 'integer', 'min:0'],
-            'display_order'  => ['nullable', 'integer', 'min:0'],
-            'upstreams'      => ['nullable', 'array'],
+            'display_order' => ['nullable', 'integer', 'min:0'],
+            'upstreams' => ['nullable', 'array'],
             'upstreams.*.upstream_provider_id' => ['required', 'exists:upstream_providers,id'],
             'upstreams.*.external_service_id' => ['required', 'string', 'max:50'],
             'upstreams.*.priority' => ['required', 'integer', 'min:1'],
         ]);
 
-        $data['is_active']   = $request->boolean('is_active');
+        $data['is_active'] = $request->boolean('is_active');
         $data['is_dripfeed'] = $request->boolean('is_dripfeed');
-        $data['is_refill']   = $request->boolean('is_refill');
+        $data['is_refill'] = $request->boolean('is_refill');
 
         $old = $service->toArray();
-        
+
         DB::transaction(function () use ($service, $data, $old) {
             $service->update($data);
 
@@ -182,7 +182,7 @@ class AdminServiceController extends Controller
     public function destroy(Service $service): RedirectResponse
     {
         $name = $service->name;
-        $old  = $service->toArray();
+        $old = $service->toArray();
 
         $service->update(['is_active' => false]);
 

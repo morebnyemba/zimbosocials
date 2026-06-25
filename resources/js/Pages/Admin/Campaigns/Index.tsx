@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
     Megaphone, Plus, X, ChevronDown, ChevronUp,
-    Clock, CheckCircle2, XCircle, Loader2, AlertTriangle
+    Clock, CheckCircle2, XCircle, Loader2, AlertTriangle, Sparkles
 } from 'lucide-react';
 
 type Campaign = {
@@ -163,9 +163,17 @@ type CampaignForm = {
     account_types: string[];
 };
 
+type AiCopyState = {
+    brief: string;
+    tone: string;
+    loading: boolean;
+    error: string | null;
+};
+
 export default function CampaignsIndex({ campaigns }: Props) {
     const [showForm, setShowForm] = useState(false);
     const [activeLocale, setActiveLocale] = useState<'en' | 'sn' | 'nd'>('en');
+    const [ai, setAi] = useState<AiCopyState>({ brief: '', tone: '', loading: false, error: null });
 
     const { data, setData, post, processing, errors, reset } = useForm<CampaignForm>({
         name: '',
@@ -190,9 +198,44 @@ export default function CampaignsIndex({ campaigns }: Props) {
         post(route('admin.campaigns.store'), {
             onSuccess: () => {
                 reset();
+                setAi({ brief: '', tone: '', loading: false, error: null });
                 setShowForm(false);
             },
         });
+    };
+
+    const generateCopy = async () => {
+        setAi(prev => ({ ...prev, loading: true, error: null }));
+        try {
+            const res = await fetch(route('admin.campaigns.generate-copy'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    brief: ai.brief,
+                    channels: data.channels,
+                    tone: ai.tone || undefined,
+                }),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                setAi(prev => ({ ...prev, loading: false, error: json.message ?? 'Failed to generate copy.' }));
+                return;
+            }
+            setData('name', json.campaign_name ?? '');
+            setData('subject_en', json.subject_en ?? '');
+            setData('body_en', json.body_en ?? '');
+            setData('subject_sn', json.subject_sn ?? '');
+            setData('body_sn', json.body_sn ?? '');
+            setData('subject_nd', json.subject_nd ?? '');
+            setData('body_nd', json.body_nd ?? '');
+            setAi(prev => ({ ...prev, loading: false, error: null }));
+        } catch (e) {
+            setAi(prev => ({ ...prev, loading: false, error: 'Failed to generate copy.' }));
+        }
     };
 
     return (
@@ -351,6 +394,40 @@ export default function CampaignsIndex({ campaigns }: Props) {
                                             ))}
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* AI Copy Generator */}
+                                <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4 space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-brand-green" />
+                                        <span className="text-xs font-bold uppercase tracking-widest text-brand-green">AI Copywriter</span>
+                                    </div>
+                                    <textarea
+                                        rows={2}
+                                        value={ai.brief}
+                                        onChange={e => setAi(prev => ({ ...prev, brief: e.target.value }))}
+                                        placeholder="e.g. Announce a 10% bonus on all deposits this weekend"
+                                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green resize-none"
+                                    />
+                                    <div className="flex items-center gap-3">
+                                        <input
+                                            type="text"
+                                            value={ai.tone}
+                                            onChange={e => setAi(prev => ({ ...prev, tone: e.target.value }))}
+                                            placeholder="Optional tone (e.g. playful, urgent)"
+                                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={generateCopy}
+                                            disabled={ai.loading || !ai.brief}
+                                            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-brand-green text-white hover:bg-brand-green/90 disabled:opacity-50 transition-colors"
+                                        >
+                                            {ai.loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                                            {ai.loading ? 'Generating…' : 'Generate'}
+                                        </button>
+                                    </div>
+                                    {ai.error && <p className="text-xs text-red-600">{ai.error}</p>}
                                 </div>
 
                                 {/* Content by Locale */}

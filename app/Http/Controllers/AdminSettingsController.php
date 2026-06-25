@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Service;
 use App\Models\Setting;
 use App\Models\UpstreamProvider;
+use App\Services\AI\SeoContentGenerator;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Artisan;
 
 class AdminSettingsController extends Controller
 {
@@ -45,5 +48,60 @@ class AdminSettingsController extends Controller
         // Artisan::call('config:clear');
 
         return back()->with('success', 'Application settings updated successfully.');
+    }
+
+    public function seoGenerator(): Response
+    {
+        $categories = Service::active()
+            ->select('category')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category');
+
+        return Inertia::render('Admin/SeoGenerator', [
+            'categories' => $categories,
+        ]);
+    }
+
+    public function generateSeo(Request $request, SeoContentGenerator $generator): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', 'string', 'in:category,faq'],
+            'category' => ['required_if:type,category', 'nullable', 'string', 'max:50'],
+            'angle' => ['nullable', 'string', 'max:200'],
+            'count' => ['nullable', 'integer', 'min:1', 'max:10'],
+        ]);
+
+        $type = $data['type'];
+
+        if ($type === 'category') {
+            $category = (string) ($data['category'] ?? '');
+            $services = Service::active()
+                ->where('category', $category)
+                ->select(['id', 'name', 'category'])
+                ->orderBy('display_order')
+                ->limit(30)
+                ->get()
+                ->toArray();
+
+            $result = $generator->generateCategoryDescription($category, $services, $data['angle'] ?? null);
+
+            return $result === null
+                ? response()->json(['message' => 'AI SEO generator is not available or no services found.'], 503)
+                : response()->json($result);
+        }
+
+        $services = Service::active()
+            ->select(['id', 'name', 'category'])
+            ->inRandomOrder()
+            ->limit(20)
+            ->get()
+            ->toArray();
+
+        $result = $generator->generateFaqPage($services, (int) ($data['count'] ?? 5));
+
+        return $result === null
+            ? response()->json(['message' => 'AI SEO generator is not available.'], 503)
+            : response()->json(['faqs' => $result]);
     }
 }

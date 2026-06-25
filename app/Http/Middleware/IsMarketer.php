@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Middleware/IsMarketer.php
 
 namespace App\Http\Middleware;

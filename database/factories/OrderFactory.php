@@ -17,19 +17,19 @@ class OrderFactory extends Factory
     public function definition(): array
     {
         $quantity = $this->faker->numberBetween(100, 5000);
-        $rate     = $this->faker->randomFloat(4, 0.1, 5.0);
-        $charge   = round(($quantity / 1000) * $rate, 4);
+        $rate = $this->faker->randomFloat(4, 0.1, 5.0);
+        $charge = round(($quantity / 1000) * $rate, 4);
 
         return [
-            'user_id'        => User::factory(),
-            'service_id'     => Service::factory(),
-            'link'           => $this->faker->url(),
-            'quantity'       => $quantity,
-            'charge'         => $charge,
-            'rate_at_order'  => $rate,
-            'status'         => 'pending',
-            'start_count'    => null,
-            'remains'        => null,
+            'user_id' => User::factory(),
+            'service_id' => Service::factory(),
+            'link' => $this->faker->url(),
+            'quantity' => $quantity,
+            'charge' => $charge,
+            'rate_at_order' => $rate,
+            'status' => 'pending',
+            'start_count' => null,
+            'remains' => null,
         ];
     }
 

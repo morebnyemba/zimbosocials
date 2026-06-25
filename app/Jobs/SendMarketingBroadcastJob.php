@@ -16,16 +16,15 @@ class SendMarketingBroadcastJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $backoff = 30;
 
-    public function __construct(public readonly int $campaignId)
-    {
-    }
+    public function __construct(public readonly int $campaignId) {}
 
     public function handle(): void
     {
         $campaign = MarketingCampaign::query()->find($this->campaignId);
-        if (!$campaign) {
+        if (! $campaign) {
             return;
         }
 
@@ -44,12 +43,12 @@ class SendMarketingBroadcastJob implements ShouldQueue
             $query = User::query()->where('is_active', true);
 
             $roles = $filters['roles'] ?? ['all'];
-            if (!in_array('all', $roles, true)) {
+            if (! in_array('all', $roles, true)) {
                 $query->whereIn('role', $roles);
             }
 
             $accountTypes = $filters['account_types'] ?? ['all'];
-            if (!in_array('all', $accountTypes, true)) {
+            if (! in_array('all', $accountTypes, true)) {
                 $query->whereIn('account_type', $accountTypes);
             }
 
@@ -77,7 +76,7 @@ class SendMarketingBroadcastJob implements ShouldQueue
 
                 $prefs = $user->notification_prefs ?? ['email' => true, 'whatsapp' => true];
 
-                if (in_array('email', $channels, true) && ($prefs['email'] ?? true) && !empty($user->email)) {
+                if (in_array('email', $channels, true) && ($prefs['email'] ?? true) && ! empty($user->email)) {
                     SendEmailNotification::dispatch(
                         (string) $user->email,
                         (string) $user->name,
@@ -90,7 +89,7 @@ class SendMarketingBroadcastJob implements ShouldQueue
                     $sentEmail++;
                 }
 
-                if (in_array('whatsapp', $channels, true) && ($prefs['whatsapp'] ?? true) && !empty($user->whatsapp_number)) {
+                if (in_array('whatsapp', $channels, true) && ($prefs['whatsapp'] ?? true) && ! empty($user->whatsapp_number)) {
                     SendWhatsAppNotification::dispatch(
                         (string) $user->whatsapp_number,
                         'marketing_broadcast',

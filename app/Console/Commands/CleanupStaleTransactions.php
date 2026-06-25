@@ -23,7 +23,7 @@ class CleanupStaleTransactions extends Command
 
     public function handle(): int
     {
-        $hours  = (int) $this->option('hours');
+        $hours = (int) $this->option('hours');
         $dryRun = (bool) $this->option('dry-run');
         $cutoff = now()->subHours($hours);
 
@@ -34,6 +34,7 @@ class CleanupStaleTransactions extends Command
 
         if ($count === 0) {
             $this->info('No stale pending transactions found.');
+
             return self::SUCCESS;
         }
 
@@ -45,12 +46,13 @@ class CleanupStaleTransactions extends Command
                     "  TX #{$tx->id} — {$tx->type} \${$tx->amount} ({$tx->method}) — {$tx->created_at}"
                 ));
             $this->warn('Dry run — no changes made.');
+
             return self::SUCCESS;
         }
 
         $updated = $query->update([
             'status' => 'expired',
-            'notes'  => "Auto-expired after {$hours}h by cleanup command",
+            'notes' => "Auto-expired after {$hours}h by cleanup command",
         ]);
 
         Log::info("CleanupStaleTransactions: expired {$updated} pending transaction(s) older than {$hours}h.");

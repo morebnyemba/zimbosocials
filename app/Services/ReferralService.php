@@ -89,7 +89,7 @@ class ReferralService
             $bonusTx = $referrer->creditBalance(
                 $reward,
                 'referral',
-                'REF-FIRST-DEPOSIT-' . $freshReferredUser->getKey(),
+                'REF-FIRST-DEPOSIT-'.$freshReferredUser->getKey(),
                 'bonus'
             );
 
@@ -151,7 +151,7 @@ class ReferralService
         }
 
         // Idempotency guard in case order handling is retried.
-        $reference = 'REF-ORDER-' . $order->getKey();
+        $reference = 'REF-ORDER-'.$order->getKey();
         $alreadyRewarded = Transaction::query()
             ->where('user_id', (int) $referrerId)
             ->where('type', 'bonus')
@@ -168,7 +168,7 @@ class ReferralService
             // Collect all order IDs belonging to the referred user, then count matching bonus TXs
             $referredOrderIds = Order::where('user_id', $referredUser->getKey())
                 ->pluck('id')
-                ->map(fn ($id) => 'REF-ORDER-' . $id)
+                ->map(fn ($id) => 'REF-ORDER-'.$id)
                 ->all();
 
             $awardedCount = Transaction::query()

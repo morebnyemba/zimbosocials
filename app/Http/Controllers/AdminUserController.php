@@ -1,13 +1,15 @@
 <?php
+
 // app/Http/Controllers/AdminUserController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\Order;
-use App\Services\NotificationService;
+use App\Models\Service;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,9 +28,9 @@ class AdminUserController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('company_name', 'like', "%{$search}%")
-                  ->orWhere('id', $search);
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('company_name', 'like', "%{$search}%")
+                    ->orWhere('id', $search);
             });
         }
 
@@ -43,8 +45,8 @@ class AdminUserController extends Controller
         }
 
         $sortField = $request->query('sort', 'created_at');
-        $sortDir   = $request->query('dir', 'desc');
-        $allowed   = ['id', 'name', 'email', 'balance', 'role', 'created_at', 'orders_count'];
+        $sortDir = $request->query('dir', 'desc');
+        $allowed = ['id', 'name', 'email', 'balance', 'role', 'created_at', 'orders_count'];
         if (in_array($sortField, $allowed, true)) {
             $query->orderBy($sortField, $sortDir === 'asc' ? 'asc' : 'desc');
         }
@@ -57,16 +59,16 @@ class AdminUserController extends Controller
             ->pluck('cnt', 'role');
 
         $role_counts = [
-            'all'      => $rawCounts->sum(),
-            'user'     => (int) ($rawCounts['user']     ?? 0),
+            'all' => $rawCounts->sum(),
+            'user' => (int) ($rawCounts['user'] ?? 0),
             'marketer' => (int) ($rawCounts['marketer'] ?? 0),
             'reseller' => (int) ($rawCounts['reseller'] ?? 0),
-            'admin'    => (int) ($rawCounts['admin']    ?? 0),
+            'admin' => (int) ($rawCounts['admin'] ?? 0),
         ];
 
         return Inertia::render('Admin/Users/Index', [
-            'users'       => $users,
-            'filters'     => $request->only(['search', 'role', 'status', 'sort', 'dir']),
+            'users' => $users,
+            'filters' => $request->only(['search', 'role', 'status', 'sort', 'dir']),
             'role_counts' => $role_counts,
         ]);
     }
@@ -97,10 +99,10 @@ class AdminUserController extends Controller
             ->first();
 
         $order_stats = [
-            'total'      => (int) ($orderRow->total      ?? 0),
-            'active'     => (int) ($orderRow->active     ?? 0),
-            'completed'  => (int) ($orderRow->completed  ?? 0),
-            'total_spent'=> (float) ($orderRow->total_spent ?? 0),
+            'total' => (int) ($orderRow->total ?? 0),
+            'active' => (int) ($orderRow->active ?? 0),
+            'completed' => (int) ($orderRow->completed ?? 0),
+            'total_spent' => (float) ($orderRow->total_spent ?? 0),
         ];
 
         // Consolidated: 1 aggregate query instead of 3
@@ -115,25 +117,25 @@ class AdminUserController extends Controller
         $financial_stats = [
             'deposited' => (float) ($finRow->deposited ?? 0),
             'withdrawn' => (float) ($finRow->withdrawn ?? 0),
-            'earnings'  => (float) ($finRow->earnings  ?? 0),
+            'earnings' => (float) ($finRow->earnings ?? 0),
         ];
 
-        $services = \App\Models\Service::where('is_active', true)->orderBy('category')->orderBy('name')->get();
+        $services = Service::where('is_active', true)->orderBy('category')->orderBy('name')->get();
 
         return Inertia::render('Admin/Users/Show', [
-            'targetUser'           => $user,
-            'recent_orders'        => $recent_orders,
-            'recent_transactions'  => $recent_transactions,
-            'order_stats'          => $order_stats,
-            'financial_stats'      => $financial_stats,
-            'services'             => $services,
+            'targetUser' => $user,
+            'recent_orders' => $recent_orders,
+            'recent_transactions' => $recent_transactions,
+            'order_stats' => $order_stats,
+            'financial_stats' => $financial_stats,
+            'services' => $services,
         ]);
     }
 
     public function toggleActive(User $user): RedirectResponse
     {
         $old = $user->is_active;
-        $user->update(['is_active' => !$old]);
+        $user->update(['is_active' => ! $old]);
 
         AuditLog::log(
             $old ? 'user.deactivated' : 'user.activated',
@@ -141,10 +143,11 @@ class AdminUserController extends Controller
             User::class,
             $user->id,
             ['is_active' => $old],
-            ['is_active' => !$old],
+            ['is_active' => ! $old],
         );
 
         $status = $user->is_active ? 'activated' : 'deactivated';
+
         return back()->with('success', "User {$user->name} has been {$status}.");
     }
 
@@ -176,7 +179,7 @@ class AdminUserController extends Controller
 
         AuditLog::log('user.created_manually', Auth::id(), User::class, $user->id);
 
-        return redirect()->route('admin.users.show', $user->id)->with('success', "User account created successfully.");
+        return redirect()->route('admin.users.show', $user->id)->with('success', 'User account created successfully.');
     }
 
     public function changeRole(User $user, Request $request): RedirectResponse
@@ -234,15 +237,15 @@ class AdminUserController extends Controller
             }
 
             Transaction::create([
-                'user_id'        => $lockedUser->id,
-                'type'           => 'adjustment',
-                'amount'         => $amount,
+                'user_id' => $lockedUser->id,
+                'type' => 'adjustment',
+                'amount' => $amount,
                 'balance_before' => $before,
-                'balance_after'  => $before + $amount,
-                'status'         => 'completed',
-                'notes'          => $data['reason'],
-                'processed_by'   => Auth::id(),
-                'processed_at'   => now(),
+                'balance_after' => $before + $amount,
+                'status' => 'completed',
+                'notes' => $data['reason'],
+                'processed_by' => Auth::id(),
+                'processed_at' => now(),
             ]);
 
             AuditLog::log(
@@ -265,13 +268,14 @@ class AdminUserController extends Controller
 
         $formatted = number_format(abs($amount), 2);
         $direction = $amount > 0 ? 'credited' : 'debited';
+
         return back()->with('success', "\${$formatted} {$direction} to {$user->name}'s account.");
     }
 
     public function impersonate(User $user): RedirectResponse
     {
         if ($user->id === Auth::id()) {
-            return back()->with('error', "You cannot impersonate yourself.");
+            return back()->with('error', 'You cannot impersonate yourself.');
         }
 
         AuditLog::log(
@@ -296,14 +300,15 @@ class AdminUserController extends Controller
     {
         $impersonatorId = session('impersonator_id');
 
-        if (!$impersonatorId) {
+        if (! $impersonatorId) {
             return redirect()->route('dashboard');
         }
 
         $admin = User::find($impersonatorId);
-        
-        if (!$admin || $admin->role !== 'admin') {
+
+        if (! $admin || $admin->role !== 'admin') {
             session()->forget('impersonator_id');
+
             return redirect()->route('login');
         }
 
@@ -318,25 +323,25 @@ class AdminUserController extends Controller
             $impersonatedId,
         );
 
-        return redirect()->route('admin.users.index')->with('success', "Returned to Admin Panel");
+        return redirect()->route('admin.users.index')->with('success', 'Returned to Admin Panel');
     }
 
     public function sendPasswordReset(User $user): RedirectResponse
     {
         // For simplicity in this environment, we'll just log it and show a success message
         // In production, this would trigger Password::sendResetLink()
-        
+
         AuditLog::log('user.password_reset_sent', Auth::id(), User::class, $user->id);
-        
+
         return back()->with('success', "Password reset instructions have been queued for {$user->email}.");
     }
 
     public function ban(User $user): RedirectResponse
     {
         $user->update(['is_active' => false]);
-        
+
         AuditLog::log('user.banned', Auth::id(), User::class, $user->id);
-        
+
         return back()->with('success', "User {$user->name} has been banned.");
     }
 
@@ -344,9 +349,9 @@ class AdminUserController extends Controller
     {
         $name = $user->name;
         $user->delete();
-        
+
         AuditLog::log('user.terminated', Auth::id(), User::class, $user->id);
-        
+
         return redirect()->route('admin.users.index')->with('success', "User account for {$name} has been terminated.");
     }
 }

@@ -8,11 +8,13 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\DepositService;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Paynow\Payments\Paynow;
 use Paynow\Util\Hash;
-use Illuminate\Support\Facades\Http;
 
 class PaynowController extends Controller
 {
@@ -21,11 +23,11 @@ class PaynowController extends Controller
      * Phone prefix lists are the leading digits of a normalised 10-digit Zimbabwean number.
      */
     private const MOBILE_PROVIDERS = [
-        'ecocash'  => ['label' => 'EcoCash',  'method' => 'ecocash',  'prefixes' => ['077', '078']],
+        'ecocash' => ['label' => 'EcoCash',  'method' => 'ecocash',  'prefixes' => ['077', '078']],
         'onemoney' => ['label' => 'OneMoney', 'method' => 'onemoney', 'prefixes' => ['071']],
         'telecash' => ['label' => 'TeleCash', 'method' => 'telecash', 'prefixes' => ['073']],
         'innbucks' => ['label' => 'InnBucks', 'method' => 'innbucks', 'prefixes' => []],     // any number can use InnBucks wallet
-        'omari'    => ['label' => "O'mari",   'method' => 'omari',    'prefixes' => ['077', '078']],
+        'omari' => ['label' => "O'mari",   'method' => 'omari',    'prefixes' => ['077', '078']],
     ];
 
     public function __construct(
@@ -63,7 +65,7 @@ class PaynowController extends Controller
 
         $request->validate([
             'amount' => 'required|numeric|min:1',
-            'method' => ['required', \Illuminate\Validation\Rule::in($gatewayMethods)],
+            'method' => ['required', Rule::in($gatewayMethods)],
         ]);
 
         // Reject mobile methods — they have a dedicated route
@@ -74,12 +76,12 @@ class PaynowController extends Controller
             ], 422);
         }
 
-        $user   = $request->user();
+        $user = $request->user();
         $amount = (float) $request->amount;
 
         $transaction = $this->createPendingTransaction($user, $amount, 'paynow');
 
-        $paynow  = $this->getPaynow();
+        $paynow = $this->getPaynow();
         $payment = $paynow->createPayment((string) $transaction->id, $user->email);
         $payment->add('Account Deposit', $amount);
 
@@ -88,9 +90,10 @@ class PaynowController extends Controller
 
             if ($response->success()) {
                 $transaction->update(['reference' => $response->pollUrl()]);
+
                 return response()->json([
-                    'success'        => true,
-                    'redirect_url'   => $response->redirectUrl(),
+                    'success' => true,
+                    'redirect_url' => $response->redirectUrl(),
                     'transaction_id' => $transaction->getKey(),
                 ]);
             }
@@ -98,8 +101,9 @@ class PaynowController extends Controller
             return response()->json(['success' => false, 'message' => 'Failed to initiate Paynow transaction.'], 400);
 
         } catch (\Exception $e) {
-            Log::error('Paynow Init Error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Payment gateway error: ' . $e->getMessage()], 500);
+            Log::error('Paynow Init Error: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'Payment gateway error: '.$e->getMessage()], 500);
         }
     }
 
@@ -117,7 +121,7 @@ class PaynowController extends Controller
 
         $request->validate([
             'amount' => 'required|numeric|min:1',
-            'phone'  => 'required|string',
+            'phone' => 'required|string',
         ]);
 
         // Normalize to a local 10-digit Zimbabwe number (0XXXXXXXXX)
@@ -142,6 +146,7 @@ class PaynowController extends Controller
 
             if (! $matchesProvider) {
                 $expected = implode(' or ', $config['prefixes']);
+
                 return response()->json([
                     'success' => false,
                     'message' => "{$config['label']} numbers must start with {$expected}.",
@@ -149,12 +154,12 @@ class PaynowController extends Controller
             }
         }
 
-        $user   = $request->user();
+        $user = $request->user();
         $amount = (float) $request->input('amount');
 
         $transaction = $this->createPendingTransaction($user, $amount, $provider);
 
-        $paynow  = $this->getPaynow();
+        $paynow = $this->getPaynow();
         $payment = $paynow->createPayment((string) $transaction->id, $user->email);
         $payment->add('Account Deposit', $amount);
 
@@ -168,27 +173,27 @@ class PaynowController extends Controller
                 $updateFields = ['reference' => $response->pollUrl()];
 
                 if ($provider === 'innbucks') {
-                    $authCode    = $data['authorizationcode'] ?? '';
+                    $authCode = $data['authorizationcode'] ?? '';
                     $authExpires = $data['authorizationexpires'] ?? '';
                     $updateFields['gateway_meta'] = [
-                        'authorizationcode'    => $authCode,
+                        'authorizationcode' => $authCode,
                         'authorizationexpires' => $authExpires,
                     ];
                     $transaction->update($updateFields);
 
-                    $qrUrl    = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=' . urlencode($authCode);
-                    $deepLink = 'com.innbucks.customer://purchase?paymentToken=' . $authCode;
+                    $qrUrl = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl='.urlencode($authCode);
+                    $deepLink = 'com.innbucks.customer://purchase?paymentToken='.$authCode;
 
                     return response()->json([
-                        'success'               => true,
-                        'flow'                  => 'innbucks_authcode',
-                        'authorization_code'    => $authCode,
+                        'success' => true,
+                        'flow' => 'innbucks_authcode',
+                        'authorization_code' => $authCode,
                         'authorization_expires' => $authExpires,
-                        'qr_url'                => $qrUrl,
-                        'deep_link'             => $deepLink,
-                        'instructions'          => $response->instructions(),
-                        'transaction_id'        => $transaction->getKey(),
-                        'provider'              => $provider,
+                        'qr_url' => $qrUrl,
+                        'deep_link' => $deepLink,
+                        'instructions' => $response->instructions(),
+                        'transaction_id' => $transaction->getKey(),
+                        'provider' => $provider,
                     ]);
                 }
 
@@ -202,33 +207,36 @@ class PaynowController extends Controller
                     $transaction->update($updateFields);
 
                     return response()->json([
-                        'success'        => true,
-                        'flow'           => 'omari_otp',
-                        'otp_reference'  => $otpReference,
+                        'success' => true,
+                        'flow' => 'omari_otp',
+                        'otp_reference' => $otpReference,
                         'transaction_id' => $transaction->getKey(),
-                        'provider'       => $provider,
-                        'message'        => "An OTP has been sent to {$phone}. Please enter it below to complete the payment.",
+                        'provider' => $provider,
+                        'message' => "An OTP has been sent to {$phone}. Please enter it below to complete the payment.",
                     ]);
                 }
 
                 // EcoCash / OneMoney / TeleCash — standard USSD PIN push
                 $transaction->update($updateFields);
+
                 return response()->json([
-                    'success'        => true,
-                    'flow'           => 'ussd_pin',
-                    'message'        => "Check your phone and enter your {$config['label']} PIN to complete the payment.",
-                    'instructions'   => $response->instructions(),
+                    'success' => true,
+                    'flow' => 'ussd_pin',
+                    'message' => "Check your phone and enter your {$config['label']} PIN to complete the payment.",
+                    'instructions' => $response->instructions(),
                     'transaction_id' => $transaction->getKey(),
-                    'provider'       => $provider,
+                    'provider' => $provider,
                 ]);
             }
 
             $transaction->update(['status' => 'rejected', 'notes' => 'Mobile init failed']);
+
             return response()->json(['success' => false, 'message' => 'Could not send the payment request. Please try again.'], 400);
 
         } catch (\Exception $e) {
-            Log::error("Paynow {$config['label']} Init Error: " . $e->getMessage());
-            $transaction->update(['status' => 'rejected', 'notes' => 'Exception: ' . $e->getMessage()]);
+            Log::error("Paynow {$config['label']} Init Error: ".$e->getMessage());
+            $transaction->update(['status' => 'rejected', 'notes' => 'Exception: '.$e->getMessage()]);
+
             return response()->json(['success' => false, 'message' => 'Payment gateway error. Please try again later.'], 500);
         }
     }
@@ -244,12 +252,12 @@ class PaynowController extends Controller
 
         // International with country code: 263XXXXXXXXX (12 digits)
         if (strlen($digits) === 12 && str_starts_with($digits, '263')) {
-            $digits = '0' . substr($digits, 3);
+            $digits = '0'.substr($digits, 3);
         }
 
         // Without leading zero: XXXXXXXXX (9 digits)
         if (strlen($digits) === 9) {
-            $digits = '0' . $digits;
+            $digits = '0'.$digits;
         }
 
         return (strlen($digits) === 10 && str_starts_with($digits, '0')) ? $digits : null;
@@ -259,7 +267,7 @@ class PaynowController extends Controller
      * Submit the OTP received by the customer for an O'mari express checkout transaction.
      * Route: POST /paynow/omari/otp/{transaction}
      */
-    public function submitOmariOtp(Request $request, Transaction $transaction): \Illuminate\Http\JsonResponse
+    public function submitOmariOtp(Request $request, Transaction $transaction): JsonResponse
     {
         if ($transaction->user_id !== (int) $request->user()->getAuthIdentifier()) {
             abort(403);
@@ -276,7 +284,7 @@ class PaynowController extends Controller
             'otp' => 'required|string|min:4|max:8',
         ]);
 
-        $meta         = (array) ($transaction->gateway_meta ?? []);
+        $meta = (array) ($transaction->gateway_meta ?? []);
         $remoteOtpUrl = $meta['remoteotpurl'] ?? null;
 
         if (empty($remoteOtpUrl)) {
@@ -286,29 +294,30 @@ class PaynowController extends Controller
             ], 422);
         }
 
-        $integrationId  = (string) config('services.paynow.integration_id');
+        $integrationId = (string) config('services.paynow.integration_id');
         $integrationKey = (string) config('services.paynow.integration_key');
-        $otp            = (string) $request->input('otp');
+        $otp = (string) $request->input('otp');
 
         // Hash per Paynow spec: SHA-512( id + otp + "Message" + integrationKey ) → uppercase
         $hash = Hash::make([
-            'id'     => $integrationId,
-            'otp'    => $otp,
+            'id' => $integrationId,
+            'otp' => $otp,
             'status' => 'Message',
         ], $integrationKey);
 
         try {
             $httpResponse = Http::asForm()->post($remoteOtpUrl, [
-                'id'     => $integrationId,
-                'otp'    => $otp,
+                'id' => $integrationId,
+                'otp' => $otp,
                 'status' => 'Message',
-                'hash'   => $hash,
+                'hash' => $hash,
             ]);
 
             parse_str($httpResponse->body(), $params);
 
             if (isset($params['status']) && strtolower($params['status']) === 'error') {
                 $error = $params['error'] ?? 'Invalid OTP';
+
                 return response()->json(['success' => false, 'message' => $error], 422);
             }
 
@@ -319,7 +328,8 @@ class PaynowController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error("Paynow O'mari OTP error: " . $e->getMessage());
+            Log::error("Paynow O'mari OTP error: ".$e->getMessage());
+
             return response()->json(['success' => false, 'message' => 'Could not submit OTP. Please try again.'], 500);
         }
     }
@@ -330,14 +340,14 @@ class PaynowController extends Controller
     private function createPendingTransaction(User $user, float $amount, string $method): Transaction
     {
         $transaction = Transaction::create([
-            'user_id'        => $user->id,
-            'type'           => 'deposit',
-            'amount'         => $amount,
+            'user_id' => $user->id,
+            'type' => 'deposit',
+            'amount' => $amount,
             'balance_before' => (float) $user->balance,
-            'balance_after'  => (float) $user->balance + $amount,
-            'method'         => $method,
-            'status'         => 'pending',
-            'notes'          => 'Initiated via Paynow (' . strtoupper($method) . ')',
+            'balance_after' => (float) $user->balance + $amount,
+            'method' => $method,
+            'status' => 'pending',
+            'notes' => 'Initiated via Paynow ('.strtoupper($method).')',
         ]);
 
         // Audit asynchronously — not critical to the request path
@@ -355,8 +365,8 @@ class PaynowController extends Controller
     public function returnUrl(Request $request)
     {
         // Paynow sends: ?reference={our_tx_id}&paynowreference=...&status=Paid|Cancelled|Failed&hash=...
-        $txId      = $request->query('reference');
-        $pnStatus  = (string) $request->query('status', '');
+        $txId = $request->query('reference');
+        $pnStatus = (string) $request->query('status', '');
 
         if (! $txId) {
             return redirect()->route('wallet.index')
@@ -373,7 +383,7 @@ class PaynowController extends Controller
         // Already resolved — no need to poll
         if ($transaction->status === 'completed') {
             return redirect()->route('wallet.index')
-                ->with('success', 'Your deposit of $' . number_format((float) $transaction->amount, 2) . ' has been confirmed!');
+                ->with('success', 'Your deposit of $'.number_format((float) $transaction->amount, 2).' has been confirmed!');
         }
 
         if ($transaction->status === 'rejected') {
@@ -385,14 +395,14 @@ class PaynowController extends Controller
         $pollUrl = $transaction->reference;
         if (! empty($pollUrl) && str_starts_with($pollUrl, 'http')) {
             try {
-                $paynow       = $this->getPaynow();
+                $paynow = $this->getPaynow();
                 $remoteStatus = $paynow->pollTransaction($pollUrl);
 
                 if ($remoteStatus && $remoteStatus->paid()) {
                     $this->depositService->credit($transaction, 'return_url_poll');
 
                     return redirect()->route('wallet.index')
-                        ->with('success', 'Your deposit of $' . number_format((float) $transaction->amount, 2) . ' has been confirmed!');
+                        ->with('success', 'Your deposit of $'.number_format((float) $transaction->amount, 2).' has been confirmed!');
                 }
 
                 if ($remoteStatus && in_array($remoteStatus->status(), ['Cancelled', 'Failed'], true)) {
@@ -402,7 +412,7 @@ class PaynowController extends Controller
                         ->with('error', 'Your payment was cancelled or failed. No funds were deducted.');
                 }
             } catch (\Exception $e) {
-                Log::warning('Paynow return URL poll error: ' . $e->getMessage());
+                Log::warning('Paynow return URL poll error: '.$e->getMessage());
             }
         }
 
@@ -421,7 +431,7 @@ class PaynowController extends Controller
      * The frontend polls this after initiating an express checkout until status
      * changes from 'pending' or a timeout is reached.
      */
-    public function pollStatus(Request $request, Transaction $transaction): \Illuminate\Http\JsonResponse
+    public function pollStatus(Request $request, Transaction $transaction): JsonResponse
     {
         // Ensure the transaction belongs to the authenticated user
         if ($transaction->user_id !== (int) $request->user()->getAuthIdentifier()) {
@@ -431,14 +441,14 @@ class PaynowController extends Controller
         // If already resolved, return immediately (no need to hit Paynow)
         if ($transaction->status !== 'pending') {
             return response()->json([
-                'status'   => $transaction->status,
+                'status' => $transaction->status,
                 'resolved' => true,
             ]);
         }
 
         // Only poll Paynow if we have a stored poll URL
         $pollUrl = $transaction->reference;
-        if (empty($pollUrl) || !str_starts_with($pollUrl, 'http')) {
+        if (empty($pollUrl) || ! str_starts_with($pollUrl, 'http')) {
             return response()->json(['status' => 'pending', 'resolved' => false]);
         }
 
@@ -449,15 +459,17 @@ class PaynowController extends Controller
             if ($remoteStatus && $remoteStatus->paid()) {
                 // Use DepositService — fixes the missing referral reward bug
                 $this->depositService->credit($transaction, 'client_poll');
+
                 return response()->json(['status' => 'completed', 'resolved' => true]);
             }
 
             if ($remoteStatus && in_array($remoteStatus->status(), ['Cancelled', 'Failed'], true)) {
                 $this->depositService->reject($transaction, 'client_poll');
+
                 return response()->json(['status' => 'rejected', 'resolved' => true]);
             }
         } catch (\Exception $e) {
-            Log::warning('Paynow poll error: ' . $e->getMessage());
+            Log::warning('Paynow poll error: '.$e->getMessage());
         }
 
         return response()->json(['status' => 'pending', 'resolved' => false]);
@@ -472,7 +484,7 @@ class PaynowController extends Controller
             $transactionId = $status->reference();
             $transaction = Transaction::find($transactionId);
 
-            if (!$transaction || $transaction->status !== 'pending') {
+            if (! $transaction || $transaction->status !== 'pending') {
                 return response()->json(['status' => 'ignored']);
             }
 

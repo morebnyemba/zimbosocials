@@ -1,17 +1,18 @@
 <?php
+
 // app/Http/Controllers/MarketerController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\BusinessContract;
 use App\Models\ContractApplication;
-use App\Models\ContractProofSubmission;
 use App\Models\MarketerReview;
 use App\Models\MarketerSocialLink;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\Transaction;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -41,13 +42,13 @@ class MarketerController extends Controller
             ->first();
 
         $stats = [
-            'total_orders'             => (int) ($orderRow->total_orders  ?? 0),
-            'active_orders'            => (int) ($orderRow->active_orders ?? 0),
-            'total_spend'              => (float) ($orderRow->total_spend ?? 0),
-            'balance'                  => $user->balance,
-            'services'                 => Service::active()->count(),
-            'contract_earnings'        => (float) ($finRow->contract_earnings ?? 0),
-            'withdrawn'                => (float) ($finRow->withdrawn ?? 0),
+            'total_orders' => (int) ($orderRow->total_orders ?? 0),
+            'active_orders' => (int) ($orderRow->active_orders ?? 0),
+            'total_spend' => (float) ($orderRow->total_spend ?? 0),
+            'balance' => $user->balance,
+            'services' => Service::active()->count(),
+            'contract_earnings' => (float) ($finRow->contract_earnings ?? 0),
+            'withdrawn' => (float) ($finRow->withdrawn ?? 0),
             'client_orders_this_month' => (int) ($orderRow->client_orders_this_month ?? 0),
         ];
 
@@ -90,12 +91,12 @@ class MarketerController extends Controller
         ];
 
         // Rating stats for this marketer
-        $ratingRow = \Illuminate\Support\Facades\DB::table('marketer_reviews')
+        $ratingRow = DB::table('marketer_reviews')
             ->where('marketer_id', $userId)
             ->selectRaw('ROUND(AVG(rating), 1) as avg_rating, COUNT(*) as review_count')
             ->first();
 
-        $stats['avg_rating']   = (float) ($ratingRow->avg_rating ?? 0);
+        $stats['avg_rating'] = (float) ($ratingRow->avg_rating ?? 0);
         $stats['review_count'] = (int) ($ratingRow->review_count ?? 0);
 
         // Recent reviews

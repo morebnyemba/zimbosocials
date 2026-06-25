@@ -1,32 +1,36 @@
 <?php
+
+use Illuminate\Contracts\Console\Kernel;
+
 /**
  * Zimbo Socials - cPanel Web Installer
- * 
+ *
  * Instructions:
  * 1. Upload your extracted Laravel files to `/home/username/my-app`.
  * 2. Upload the contents of the `public` folder (including this file) to `/home/username/public_html`.
  * 3. Visit `https://yourdomain.com/cpanel-installer.php` in your browser.
  */
-
 session_start();
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 // Default path assuming Laravel is one level above public_html in a folder named 'my-app'
-$defaultAppPath = realpath(__DIR__ . '/../my-app');
+$defaultAppPath = realpath(__DIR__.'/../my-app');
 $step = $_GET['step'] ?? 1;
 $error = '';
 $success = '';
 
 $existingEnv = [];
 $envExists = false;
-$envPath = $defaultAppPath . '/.env';
+$envPath = $defaultAppPath.'/.env';
 if (file_exists($envPath)) {
     $envExists = true;
     $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
+        if (strpos(trim($line), '#') === 0) {
+            continue;
+        }
         $parts = explode('=', $line, 2);
         if (count($parts) === 2) {
             $existingEnv[trim($parts[0])] = trim($parts[1], '"\'');
@@ -38,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['install'])) {
         $appPath = rtrim($_POST['app_path'], '/');
         $appUrl = rtrim($_POST['app_url'], '/');
-        
+
         $dbHost = $_POST['db_host'];
         $dbPort = $_POST['db_port'];
         $dbName = $_POST['db_name'];
@@ -52,30 +56,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             // 1. Verify Application Path
-            if (!file_exists($appPath . '/artisan')) {
+            if (! file_exists($appPath.'/artisan')) {
                 throw new Exception("Laravel application not found at: {$appPath}. Ensure you uploaded the files to the correct folder.");
             }
 
             // 2. Test Database Connection
             $pdo = new PDO("mysql:host=$dbHost;port=$dbPort;dbname=$dbName", $dbUser, $dbPass, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             ]);
 
             // 3. Write .env file
-            $envPath = $appPath . '/.env';
-            if (!file_exists($envPath)) {
-                if (file_exists($appPath . '/.env.example')) {
-                    copy($appPath . '/.env.example', $envPath);
+            $envPath = $appPath.'/.env';
+            if (! file_exists($envPath)) {
+                if (file_exists($appPath.'/.env.example')) {
+                    copy($appPath.'/.env.example', $envPath);
                 } else {
                     throw new Exception("Neither .env nor .env.example found in {$appPath}.");
                 }
             }
 
             $envContent = file_get_contents($envPath);
-            
+
             // Helper to replace env variables
-            $setEnv = function($key, $value) use (&$envContent) {
-                $value = preg_match('/\s/', $value) ? '"' . $value . '"' : $value;
+            $setEnv = function ($key, $value) use (&$envContent) {
+                $value = preg_match('/\s/', $value) ? '"'.$value.'"' : $value;
                 if (preg_match("/^{$key}=/m", $envContent)) {
                     $envContent = preg_replace("/^{$key}=.*/m", "{$key}={$value}", $envContent);
                 } else {
@@ -96,9 +100,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             file_put_contents($envPath, $envContent);
 
             // 4. Boot Laravel to run Artisan commands
-            require $appPath . '/vendor/autoload.php';
-            $app = require_once $appPath . '/bootstrap/app.php';
-            $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+            require $appPath.'/vendor/autoload.php';
+            $app = require_once $appPath.'/bootstrap/app.php';
+            $kernel = $app->make(Kernel::class);
 
             // Run key:generate
             $kernel->call('key:generate', ['--force' => true]);
@@ -107,19 +111,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $kernel->call('migrate', ['--force' => true]);
 
             // Create custom storage symlink for cPanel
-            $target = $appPath . '/storage/app/public';
-            $link = __DIR__ . '/storage';
-            if (!file_exists($link)) {
+            $target = $appPath.'/storage/app/public';
+            $link = __DIR__.'/storage';
+            if (! file_exists($link)) {
                 symlink($target, $link);
             }
 
             // 5. Create Admin User
             $hashedPassword = password_hash($adminPass, PASSWORD_BCRYPT);
-            
+
             // Check if admin exists
-            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+            $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?');
             $stmt->execute([$adminEmail]);
-            if (!$stmt->fetch()) {
+            if (! $stmt->fetch()) {
                 $insert = $pdo->prepare("
                     INSERT INTO users (name, email, password, role, whatsapp_number, email_verified_at, created_at, updated_at) 
                     VALUES (?, ?, ?, 'admin', ?, NOW(), NOW(), NOW())
@@ -136,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $kernel->call('view:cache');
 
             // Success!
-            $success = "Installation completed successfully!";
+            $success = 'Installation completed successfully!';
             $step = 2;
 
         } catch (Exception $e) {
@@ -147,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['cleanup'])) {
         // Self-destruct for security
         unlink(__FILE__);
-        header("Location: /");
+        header('Location: /');
         exit;
     }
 }
@@ -186,24 +190,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="container">
     <h1>🚀 Zimbo Socials Web Installer</h1>
     
-    <?php if ($error): ?>
+    <?php if ($error) { ?>
         <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+    <?php } ?>
 
-    <?php if ($step == 1): ?>
-        <?php if ($envExists): ?>
+    <?php if ($step == 1) { ?>
+        <?php if ($envExists) { ?>
             <div class="alert" style="background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1;">
                 ℹ️ <strong>Existing installation detected!</strong><br> The fields below have been pre-filled with your current configuration. Running the installer again will update your configuration, run any new database migrations, and update/create your admin account.
             </div>
-        <?php else: ?>
+        <?php } else { ?>
             <p style="color: #71717a; font-size: 14px;">Fill out the details below. This tool will automatically connect to your database, generate the environment file, run migrations, and create your admin account.</p>
-        <?php endif; ?>
+        <?php } ?>
         
         <form method="POST">
             <h2>System Paths</h2>
             <div class="form-group">
                 <label>App URL</label>
-                <input type="url" name="app_url" value="<?= htmlspecialchars($existingEnv['APP_URL'] ?? 'https://' . $_SERVER['HTTP_HOST']) ?>" required>
+                <input type="url" name="app_url" value="<?= htmlspecialchars($existingEnv['APP_URL'] ?? 'https://'.$_SERVER['HTTP_HOST']) ?>" required>
             </div>
             <div class="form-group">
                 <label>Laravel Core Path (Absolute path)</label>
@@ -260,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="submit" name="install" class="btn btn-success" style="margin-top: 20px;">Run Installation</button>
         </form>
 
-    <?php elseif ($step == 2): ?>
+    <?php } elseif ($step == 2) { ?>
         <div class="alert alert-success"><?= $success ?></div>
         
         <p>The application has been successfully connected to the database, migrations have run, the storage link is created, and the admin account is ready.</p>
@@ -271,7 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST">
             <button type="submit" name="cleanup" class="btn btn-danger">Delete Installer & Go to Website</button>
         </form>
-    <?php endif; ?>
+    <?php } ?>
 </div>
 
 </body>

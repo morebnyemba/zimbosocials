@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\InsufficientBalanceException;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\User;
@@ -28,9 +29,9 @@ class OrderService
         // --- Validate quantity range ---
         if ($quantity < $service->min_qty || $quantity > $service->max_qty) {
             return [
-                'ok'    => false,
+                'ok' => false,
                 'error' => "Quantity must be between {$service->min_qty} and {$service->max_qty}.",
-                'code'  => 422,
+                'code' => 422,
             ];
         }
 
@@ -44,7 +45,7 @@ class OrderService
                 $lockedUser = User::lockForUpdate()->findOrFail($user->id);
 
                 if ((float) $lockedUser->balance < $charge) {
-                    throw new \App\Exceptions\InsufficientBalanceException(
+                    throw new InsufficientBalanceException(
                         'Insufficient balance.',
                         (float) $lockedUser->balance,
                         $charge
@@ -52,13 +53,13 @@ class OrderService
                 }
 
                 $order = Order::create([
-                    'user_id'       => $lockedUser->id,
-                    'service_id'    => $service->id,
-                    'link'          => $link,
-                    'quantity'      => $quantity,
-                    'charge'        => $charge,
+                    'user_id' => $lockedUser->id,
+                    'service_id' => $service->id,
+                    'link' => $link,
+                    'quantity' => $quantity,
+                    'charge' => $charge,
                     'rate_at_order' => $service->rate,
-                    'status'        => 'pending',
+                    'status' => 'pending',
                 ]);
 
                 $deducted = $lockedUser->deductBalance(
@@ -73,13 +74,13 @@ class OrderService
 
                 return $order;
             });
-        } catch (\App\Exceptions\InsufficientBalanceException $e) {
+        } catch (InsufficientBalanceException $e) {
             return [
-                'ok'       => false,
-                'error'    => $e->getMessage(),
-                'balance'  => $e->balance,
+                'ok' => false,
+                'error' => $e->getMessage(),
+                'balance' => $e->balance,
                 'required' => $e->required,
-                'code'     => 402,
+                'code' => 402,
             ];
         }
 
@@ -87,8 +88,8 @@ class OrderService
         $dispatch = $dispatchService->dispatch($order);
 
         return [
-            'ok'       => true,
-            'order'    => $order,
+            'ok' => true,
+            'order' => $order,
             'dispatch' => $dispatch,
         ];
     }

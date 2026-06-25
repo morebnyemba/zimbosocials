@@ -16,28 +16,28 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('contract_applications', function (Blueprint $table) {
-            if (!$this->hasIndex('contract_applications', 'contract_applications_contract_status_index')) {
+            if (! $this->hasIndex('contract_applications', 'contract_applications_contract_status_index')) {
                 $table->index(['business_contract_id', 'status'], 'contract_applications_contract_status_index');
             }
-            if (!$this->hasIndex('contract_applications', 'contract_applications_marketer_status_index')) {
+            if (! $this->hasIndex('contract_applications', 'contract_applications_marketer_status_index')) {
                 $table->index(['marketer_id', 'status'], 'contract_applications_marketer_status_index');
             }
         });
 
         Schema::table('contract_proof_submissions', function (Blueprint $table) {
-            if (!$this->hasIndex('contract_proof_submissions', 'contract_proofs_marketer_status_index')) {
+            if (! $this->hasIndex('contract_proof_submissions', 'contract_proofs_marketer_status_index')) {
                 $table->index(['marketer_id', 'status'], 'contract_proofs_marketer_status_index');
             }
         });
 
         Schema::table('notifications', function (Blueprint $table) {
-            if (!$this->hasIndex('notifications', 'notifications_user_read_index')) {
+            if (! $this->hasIndex('notifications', 'notifications_user_read_index')) {
                 $table->index(['user_id', 'read_at'], 'notifications_user_read_index');
             }
         });
 
         Schema::table('audit_logs', function (Blueprint $table) {
-            if (!$this->hasIndex('audit_logs', 'audit_logs_model_index')) {
+            if (! $this->hasIndex('audit_logs', 'audit_logs_model_index')) {
                 $table->index(['model_type', 'model_id'], 'audit_logs_model_index');
             }
         });
@@ -52,9 +52,10 @@ return new class extends Migration
                     return true;
                 }
             }
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Fallback: assume it doesn't exist
         }
+
         return false;
     }
 

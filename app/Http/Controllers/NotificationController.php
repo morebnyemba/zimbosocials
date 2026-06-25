@@ -6,6 +6,7 @@ use App\Models\Notification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -24,10 +25,11 @@ class NotificationController extends Controller
 
     public function markAsRead(Notification $notification): RedirectResponse
     {
-        if ((int)$notification->user_id !== (int)Auth::id()) {
+        if ((int) $notification->user_id !== (int) Auth::id()) {
             abort(403);
         }
         $notification->markAsRead();
+
         return back();
     }
 
@@ -40,7 +42,7 @@ class NotificationController extends Controller
             ->update(['read_at' => now()]);
 
         // Bulk update bypasses Eloquent model events — manually bust cache
-        \Illuminate\Support\Facades\Cache::forget("user:{$userId}:unread_notifications");
+        Cache::forget("user:{$userId}:unread_notifications");
 
         return back()->with('success', 'All notifications marked as read.');
     }
@@ -48,7 +50,7 @@ class NotificationController extends Controller
     public function unreadCount(): JsonResponse
     {
         return response()->json([
-            'count' => Notification::unreadCountFor((int)Auth::id()),
+            'count' => Notification::unreadCountFor((int) Auth::id()),
         ]);
     }
 }

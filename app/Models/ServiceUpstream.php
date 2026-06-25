@@ -21,8 +21,8 @@ class ServiceUpstream extends Model
 
     protected $casts = [
         'external_rate' => 'decimal:4',
-        'priority'      => 'integer',
-        'is_active'     => 'boolean',
+        'priority' => 'integer',
+        'is_active' => 'boolean',
     ];
 
     public function service(): BelongsTo

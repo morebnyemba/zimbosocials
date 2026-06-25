@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 class SyncUpstreamOrders extends Command
 {
     protected $signature = 'upstream:sync-orders';
+
     protected $description = 'Syncs status of pending/processing orders from the upstream providers';
 
     public function handle(UpstreamProviderClient $client): int
@@ -27,6 +28,7 @@ class SyncUpstreamOrders extends Command
 
         if ($orders->isEmpty()) {
             $this->info('No active orders to sync.');
+
             return self::SUCCESS;
         }
 
@@ -35,9 +37,10 @@ class SyncUpstreamOrders extends Command
 
         foreach ($ordersByProvider as $providerId => $providerOrders) {
             $provider = UpstreamProvider::find($providerId);
-            
-            if (!$provider || !$provider->is_active) {
+
+            if (! $provider || ! $provider->is_active) {
                 $this->warn("Provider #{$providerId} is inactive or missing. Skipping its orders.");
+
                 continue;
             }
 
@@ -52,6 +55,7 @@ class SyncUpstreamOrders extends Command
 
                 if (empty($statuses)) {
                     $this->error("Failed to fetch status for chunk from provider #{$provider->id}.");
+
                     continue;
                 }
 
@@ -61,12 +65,12 @@ class SyncUpstreamOrders extends Command
                     }
 
                     $order = $orderMap->get($externalId);
-                    if (!$order) {
+                    if (! $order) {
                         continue;
                     }
 
                     $upstreamStatus = strtolower($data['status'] ?? '');
-                    
+
                     // Map upstream status to local status
                     $localStatus = match ($upstreamStatus) {
                         'pending', 'in progress', 'inprogress' => 'processing',
@@ -80,11 +84,11 @@ class SyncUpstreamOrders extends Command
                     if ($localStatus && $localStatus !== $order->status) {
                         $this->processOrderUpdate($order, $localStatus, $data);
                         $updatedCount++;
-                    } else if ($order->status === 'processing') {
+                    } elseif ($order->status === 'processing') {
                         // Update start_count and remains silently if no status change
                         $order->update([
                             'start_count' => $data['start_count'] ?? $order->start_count,
-                            'remains'     => $data['remains'] ?? $order->remains,
+                            'remains' => $data['remains'] ?? $order->remains,
                         ]);
                     }
                 }
@@ -92,6 +96,7 @@ class SyncUpstreamOrders extends Command
         }
 
         $this->info("Successfully synced orders. Updated: {$updatedCount}");
+
         return self::SUCCESS;
     }
 
@@ -103,7 +108,7 @@ class SyncUpstreamOrders extends Command
             $charge = (float) $order->charge;
             $remains = (int) ($upstreamData['remains'] ?? 0);
             $startCount = (int) ($upstreamData['start_count'] ?? $order->start_count);
-            
+
             $refundAmount = 0;
 
             if (in_array($newStatus, ['canceled', 'cancelled', 'refunded', 'failed'])) {
@@ -129,14 +134,14 @@ class SyncUpstreamOrders extends Command
                 $lockedUser->increment('balance', $refundAmount);
 
                 Transaction::create([
-                    'user_id'        => $lockedUser->id,
-                    'order_id'       => $order->id,
-                    'type'           => 'refund',
-                    'amount'         => $refundAmount,
+                    'user_id' => $lockedUser->id,
+                    'order_id' => $order->id,
+                    'type' => 'refund',
+                    'amount' => $refundAmount,
                     'balance_before' => $balanceBefore,
-                    'balance_after'  => $balanceBefore + $refundAmount,
-                    'status'         => 'completed',
-                    'notes'          => "Auto-refund for order #{$order->id} ({$newStatus})",
+                    'balance_after' => $balanceBefore + $refundAmount,
+                    'status' => 'completed',
+                    'notes' => "Auto-refund for order #{$order->id} ({$newStatus})",
                 ]);
 
                 NotificationService::notify(

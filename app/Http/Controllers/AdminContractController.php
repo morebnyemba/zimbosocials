@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\BusinessContract;
-use App\Models\ContractApplication;
+use App\Models\ContractProofSubmission;
+use App\Models\MarketerReview;
+use App\Services\AI\ContentModerator;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
-use App\Models\AuditLog;
 
 class AdminContractController extends Controller
 {
@@ -21,8 +24,8 @@ class AdminContractController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhereHas('business', fn($bq) => $bq->where('name', 'like', "%{$search}%")->orWhere('company_name', 'like', "%{$search}%"));
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('business', fn ($bq) => $bq->where('name', 'like', "%{$search}%")->orWhere('company_name', 'like', "%{$search}%"));
             });
         }
 
@@ -38,15 +41,15 @@ class AdminContractController extends Controller
             ->pluck('cnt', 'status');
 
         $status_counts = [
-            'all'    => $rawCounts->sum(),
-            'open'   => (int) ($rawCounts['open']   ?? 0),
+            'all' => $rawCounts->sum(),
+            'open' => (int) ($rawCounts['open'] ?? 0),
             'filled' => (int) ($rawCounts['filled'] ?? 0),
             'closed' => (int) ($rawCounts['closed'] ?? 0),
         ];
 
         return Inertia::render('Admin/Contracts/Index', [
-            'contracts'     => $contracts,
-            'filters'       => $request->only(['search', 'status']),
+            'contracts' => $contracts,
+            'filters' => $request->only(['search', 'status']),
             'status_counts' => $status_counts,
         ]);
     }
@@ -72,5 +75,27 @@ class AdminContractController extends Controller
         );
 
         return redirect()->route('admin.contracts.index')->with('success', 'Contract deleted successfully.');
+    }
+
+    public function moderateProof(ContractProofSubmission $proof, ContentModerator $moderator): JsonResponse
+    {
+        $result = $moderator->reviewProof($proof);
+
+        if ($result === null) {
+            return response()->json(['message' => 'AI moderator is not available or content looks clean.'], 503);
+        }
+
+        return response()->json($result);
+    }
+
+    public function moderateReview(MarketerReview $review, ContentModerator $moderator): JsonResponse
+    {
+        $result = $moderator->reviewReview($review);
+
+        if ($result === null) {
+            return response()->json(['message' => 'AI moderator is not available or content looks clean.'], 503);
+        }
+
+        return response()->json($result);
     }
 }

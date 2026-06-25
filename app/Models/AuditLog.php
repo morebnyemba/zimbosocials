@@ -37,10 +37,10 @@ class AuditLog extends Model
         ?array $newValues = null,
     ): self {
         return static::create([
-            'user_id'    => $userId,
-            'action'     => $action,
+            'user_id' => $userId,
+            'action' => $action,
             'model_type' => $modelType,
-            'model_id'   => $modelId,
+            'model_id' => $modelId,
             'old_values' => $oldValues,
             'new_values' => $newValues,
             'ip_address' => request()?->ip(),

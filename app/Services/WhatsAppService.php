@@ -17,20 +17,25 @@ use Illuminate\Support\Facades\Log;
 class WhatsAppService
 {
     private string $provider;
+
     private string $apiToken;
+
     private string $phoneNumberId;   // Meta Cloud API
+
     private string $wabAccountId;    // WhatsApp Business Account ID (for templates)
+
     private string $twilioSid;       // Twilio
+
     private string $twilioFrom;      // Twilio "whatsapp:+1234..."
 
     public function __construct()
     {
-        $this->provider      = config('services.whatsapp.provider', 'meta');
-        $this->apiToken      = config('services.whatsapp.api_token', '');
+        $this->provider = config('services.whatsapp.provider', 'meta');
+        $this->apiToken = config('services.whatsapp.api_token', '');
         $this->phoneNumberId = config('services.whatsapp.phone_number_id', '');
-        $this->wabAccountId  = config('services.whatsapp.waba_id', '');
-        $this->twilioSid     = config('services.whatsapp.twilio_sid', '');
-        $this->twilioFrom    = config('services.whatsapp.twilio_from', '');
+        $this->wabAccountId = config('services.whatsapp.waba_id', '');
+        $this->twilioSid = config('services.whatsapp.twilio_sid', '');
+        $this->twilioFrom = config('services.whatsapp.twilio_from', '');
     }
 
     // ─── Text Messages ───────────────────────────────────────────────────────
@@ -42,12 +47,13 @@ class WhatsAppService
     {
         if (empty($this->apiToken)) {
             Log::warning('WhatsApp: API token not configured, skipping send.');
+
             return ['ok' => false, 'message_id' => null, 'error' => 'API token not configured'];
         }
 
         return match ($this->provider) {
             'twilio' => $this->sendViaTwilio($to, $message),
-            default  => $this->sendViaMeta($to, $message),
+            default => $this->sendViaMeta($to, $message),
         };
     }
 
@@ -59,11 +65,11 @@ class WhatsAppService
      * Meta requires pre-approved templates for business-initiated conversations.
      * Templates can contain variable parameters: {{1}}, {{2}}, etc.
      *
-     * @param  string  $to          E.164 format without +
-     * @param  string  $templateName   The template name registered in Meta
-     * @param  string  $language       Language code (e.g., 'en_US', 'en')
-     * @param  array   $bodyParams     Ordered array of body variable values ['John', '$10.00']
-     * @param  array   $headerParams   Optional header variable values
+     * @param  string  $to  E.164 format without +
+     * @param  string  $templateName  The template name registered in Meta
+     * @param  string  $language  Language code (e.g., 'en_US', 'en')
+     * @param  array  $bodyParams  Ordered array of body variable values ['John', '$10.00']
+     * @param  array  $headerParams  Optional header variable values
      */
     public function sendTemplate(
         string $to,
@@ -96,16 +102,16 @@ class WhatsAppService
     ): array {
         $components = [];
 
-        if (!empty($headerParams)) {
+        if (! empty($headerParams)) {
             $components[] = [
-                'type'       => 'header',
+                'type' => 'header',
                 'parameters' => array_map(fn ($v) => ['type' => 'text', 'text' => (string) $v], $headerParams),
             ];
         }
 
-        if (!empty($bodyParams)) {
+        if (! empty($bodyParams)) {
             $components[] = [
-                'type'       => 'body',
+                'type' => 'body',
                 'parameters' => array_map(fn ($v) => ['type' => 'text', 'text' => (string) $v], $bodyParams),
             ];
         }
@@ -113,15 +119,15 @@ class WhatsAppService
         try {
             $payload = [
                 'messaging_product' => 'whatsapp',
-                'to'                => $to,
-                'type'              => 'template',
-                'template'          => [
-                    'name'       => $templateName,
-                    'language'   => ['code' => $language],
+                'to' => $to,
+                'type' => 'template',
+                'template' => [
+                    'name' => $templateName,
+                    'language' => ['code' => $language],
                 ],
             ];
 
-            if (!empty($components)) {
+            if (! empty($components)) {
                 $payload['template']['components'] = $components;
             }
 
@@ -132,14 +138,17 @@ class WhatsAppService
             if ($response->successful()) {
                 $msgId = $response->json('messages.0.id');
                 Log::info("WhatsApp [Template]: Sent '{$templateName}' to {$to}", ['message_id' => $msgId]);
+
                 return ['ok' => true, 'message_id' => $msgId, 'error' => null];
             }
 
             $err = $response->json('error.message', $response->body());
             Log::error("WhatsApp [Template]: Failed '{$templateName}' to {$to}", ['error' => $err]);
+
             return ['ok' => false, 'message_id' => null, 'error' => $err];
         } catch (\Throwable $e) {
             Log::error("WhatsApp [Template]: Exception — {$e->getMessage()}");
+
             return ['ok' => false, 'message_id' => null, 'error' => $e->getMessage()];
         }
     }
@@ -162,11 +171,13 @@ class WhatsAppService
 
             if ($response->successful()) {
                 Log::info("WhatsApp Template Created: {$templateDef['name']}", $response->json());
+
                 return ['ok' => true, 'data' => $response->json()];
             }
 
             $err = $response->json('error.message', $response->body());
             Log::error("WhatsApp Template Create Failed: {$templateDef['name']}", ['error' => $err]);
+
             return ['ok' => false, 'error' => $err];
         } catch (\Throwable $e) {
             return ['ok' => false, 'error' => $e->getMessage()];
@@ -230,22 +241,25 @@ class WhatsAppService
                 ->timeout(15)
                 ->post("https://graph.facebook.com/v21.0/{$this->phoneNumberId}/messages", [
                     'messaging_product' => 'whatsapp',
-                    'to'                => $to,
-                    'type'              => 'text',
-                    'text'              => ['body' => $message],
+                    'to' => $to,
+                    'type' => 'text',
+                    'text' => ['body' => $message],
                 ]);
 
             if ($response->successful()) {
                 $msgId = $response->json('messages.0.id');
                 Log::info("WhatsApp [Meta]: Sent to {$to}", ['message_id' => $msgId]);
+
                 return ['ok' => true, 'message_id' => $msgId, 'error' => null];
             }
 
             $err = $response->json('error.message', $response->body());
             Log::error("WhatsApp [Meta]: Failed to {$to}", ['error' => $err]);
+
             return ['ok' => false, 'message_id' => null, 'error' => $err];
         } catch (\Throwable $e) {
             Log::error("WhatsApp [Meta]: Exception — {$e->getMessage()}");
+
             return ['ok' => false, 'message_id' => null, 'error' => $e->getMessage()];
         }
     }
@@ -258,21 +272,24 @@ class WhatsAppService
                 ->asForm()
                 ->post("https://api.twilio.com/2010-04-01/Accounts/{$this->twilioSid}/Messages.json", [
                     'From' => $this->twilioFrom,
-                    'To'   => "whatsapp:+{$to}",
+                    'To' => "whatsapp:+{$to}",
                     'Body' => $message,
                 ]);
 
             if ($response->successful()) {
                 $msgId = $response->json('sid');
                 Log::info("WhatsApp [Twilio]: Sent to {$to}", ['sid' => $msgId]);
+
                 return ['ok' => true, 'message_id' => $msgId, 'error' => null];
             }
 
             $err = $response->json('message', $response->body());
             Log::error("WhatsApp [Twilio]: Failed to {$to}", ['error' => $err]);
+
             return ['ok' => false, 'message_id' => null, 'error' => $err];
         } catch (\Throwable $e) {
             Log::error("WhatsApp [Twilio]: Exception — {$e->getMessage()}");
+
             return ['ok' => false, 'message_id' => null, 'error' => $e->getMessage()];
         }
     }
@@ -285,13 +302,13 @@ class WhatsAppService
         $templates = config('whatsapp-templates.templates', []);
         $tpl = $templates[$templateName] ?? null;
 
-        if (!$tpl) {
-            return "Notification: " . implode(', ', $params);
+        if (! $tpl) {
+            return 'Notification: '.implode(', ', $params);
         }
 
         $body = $tpl['body'];
         foreach ($params as $i => $val) {
-            $body = str_replace('{{' . ($i + 1) . '}}', $val, $body);
+            $body = str_replace('{{'.($i + 1).'}}', $val, $body);
         }
 
         return $body;

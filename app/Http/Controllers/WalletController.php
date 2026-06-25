@@ -1,17 +1,19 @@
 <?php
+
 // app/Http/Controllers/WalletController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
-use App\Models\ManualPaymentDetail;
-use App\Models\Transaction;
 use App\Models\ContractApplication;
 use App\Models\ContractProofSubmission;
+use App\Models\ManualPaymentDetail;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\DepositService;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -45,10 +47,10 @@ class WalletController extends Controller
             ->first();
 
         $totals = [
-            'deposited'         => (float) ($totalsRow->deposited         ?? 0),
+            'deposited' => (float) ($totalsRow->deposited ?? 0),
             'contract_earnings' => (float) ($totalsRow->contract_earnings ?? 0),
-            'withdrawn'         => (float) ($totalsRow->withdrawn         ?? 0),
-            'spent'             => (float) ($totalsRow->spent             ?? 0),
+            'withdrawn' => (float) ($totalsRow->withdrawn ?? 0),
+            'spent' => (float) ($totalsRow->spent ?? 0),
         ];
 
         $manualPaymentDetails = ManualPaymentDetail::active()
@@ -68,28 +70,28 @@ class WalletController extends Controller
 
         if (empty($availableMethods)) {
             $availableMethods = [
-                'paynow'   => 'Paynow (Online / Card)',
-                'ecocash'  => 'EcoCash Express',
+                'paynow' => 'Paynow (Online / Card)',
+                'ecocash' => 'EcoCash Express',
                 'onemoney' => 'OneMoney Express',
-                'crypto'   => 'Crypto (Manual)',
+                'crypto' => 'Crypto (Manual)',
             ];
             $gatewayMethods = ['paynow', 'ecocash', 'onemoney'];
         }
 
         return Inertia::render('Wallet/Index', [
-            'transactions'        => $transactions,
-            'totals'              => $totals,
-            'manualPaymentDetails'=> $manualPaymentDetails,
-            'availableMethods'    => $availableMethods,
-            'gatewayMethods'      => $gatewayMethods,
-            'pendingProofs'       => $this->getPendingProofCount($userId),
+            'transactions' => $transactions,
+            'totals' => $totals,
+            'manualPaymentDetails' => $manualPaymentDetails,
+            'availableMethods' => $availableMethods,
+            'gatewayMethods' => $gatewayMethods,
+            'pendingProofs' => $this->getPendingProofCount($userId),
         ]);
     }
 
     private function getPendingProofCount(int $userId): int
     {
         $role = (string) (Auth::user()?->getAttribute('role') ?? '');
-        if (!in_array($role, ['marketer', 'reseller'], true)) {
+        if (! in_array($role, ['marketer', 'reseller'], true)) {
             return 0;
         }
 
@@ -137,14 +139,14 @@ class WalletController extends Controller
         $userId = (int) $user->getAuthIdentifier();
 
         $transaction = Transaction::create([
-            'user_id'        => $userId,
-            'type'           => 'deposit',
-            'amount'         => $data['amount'],
+            'user_id' => $userId,
+            'type' => 'deposit',
+            'amount' => $data['amount'],
             'balance_before' => $user->balance,
-            'balance_after'  => $user->balance, // not credited yet — awaiting proof
-            'method'         => $data['method'],
-            'status'         => 'pending',
-            'notes'          => 'Awaiting proof of payment submission',
+            'balance_after' => $user->balance, // not credited yet — awaiting proof
+            'method' => $data['method'],
+            'status' => 'pending',
+            'notes' => 'Awaiting proof of payment submission',
         ]);
 
         AuditLog::dispatchLog(
@@ -197,14 +199,14 @@ class WalletController extends Controller
         if ($request->hasFile('proof_file')) {
             $file = $request->file('proof_file');
             $storedPath = $file->store(
-                'proofs/' . $userId,
+                'proofs/'.$userId,
                 'public'
             );
 
             $oldProofUrl = $transaction->proof_url;
 
             $transaction->update([
-                'proof_url' => '/storage/' . $storedPath,
+                'proof_url' => '/storage/'.$storedPath,
                 'notes' => 'Proof of payment submitted. Awaiting admin approval.',
             ]);
 
@@ -237,13 +239,13 @@ class WalletController extends Controller
         $user = Auth::user();
         $role = (string) $user->getAttribute('role');
 
-        if (!in_array($role, ['marketer', 'reseller'], true)) {
+        if (! in_array($role, ['marketer', 'reseller'], true)) {
             return back()->with('error', 'Only marketer accounts can request withdrawals.');
         }
 
         $data = $request->validate([
-            'amount'    => ['required', 'numeric', 'min:1'],
-            'method'    => ['required', 'string', 'max:60'],
+            'amount' => ['required', 'numeric', 'min:1'],
+            'method' => ['required', 'string', 'max:60'],
             'reference' => ['nullable', 'string', 'max:120'],
         ]);
 
@@ -283,15 +285,15 @@ class WalletController extends Controller
                 $lockedUser->decrement('balance', $amount);
 
                 Transaction::create([
-                    'user_id'        => $userId,
-                    'type'           => 'withdrawal',
-                    'amount'         => -$amount,
+                    'user_id' => $userId,
+                    'type' => 'withdrawal',
+                    'amount' => -$amount,
                     'balance_before' => $balanceBefore,
-                    'balance_after'  => $balanceBefore - $amount,
-                    'method'         => $data['method'],
-                    'reference'      => $data['reference'] ?? null,
-                    'status'         => 'pending',
-                    'notes'          => 'Marketer withdrawal request',
+                    'balance_after' => $balanceBefore - $amount,
+                    'method' => $data['method'],
+                    'reference' => $data['reference'] ?? null,
+                    'status' => 'pending',
+                    'notes' => 'Marketer withdrawal request',
                 ]);
             });
 
@@ -305,7 +307,7 @@ class WalletController extends Controller
      * Webhook called by payment gateway after successful payment.
      * Uses DepositService for atomic crediting with proper locking.
      */
-    public function handleWebhook(Request $request): \Illuminate\Http\JsonResponse
+    public function handleWebhook(Request $request): JsonResponse
     {
         // TODO: Verify webhook signature for your payment provider
         $reference = $request->input('reference');

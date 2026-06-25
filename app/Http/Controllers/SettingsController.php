@@ -1,10 +1,11 @@
 <?php
+
 // app/Http/Controllers/SettingsController.php
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
@@ -20,18 +21,18 @@ class SettingsController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $user    = Auth::user();
+        $user = Auth::user();
         $section = $request->input('section');
 
         if ($section === 'profile') {
             $data = $request->validate([
-                'name'     => ['required', 'string', 'max:100'],
-                'phone'    => ['nullable', 'string', 'max:20'],
+                'name' => ['required', 'string', 'max:100'],
+                'phone' => ['nullable', 'string', 'max:20'],
                 'whatsapp_number' => ['nullable', 'string', 'max:20'],
-                'company_name'    => ['nullable', 'string', 'max:100'],
-                'bio'             => ['nullable', 'string', 'max:500'],
+                'company_name' => ['nullable', 'string', 'max:100'],
+                'bio' => ['nullable', 'string', 'max:500'],
                 'currency' => ['required', 'in:USD,ZWL'],
-                'locale'   => ['required', 'in:sn,en'],
+                'locale' => ['required', 'in:sn,en'],
             ]);
 
             $user->update($data);
@@ -42,7 +43,7 @@ class SettingsController extends Controller
 
         if ($section === 'notifications') {
             $prefs = $request->validate([
-                'email'    => ['required', 'boolean'],
+                'email' => ['required', 'boolean'],
                 'whatsapp' => ['required', 'boolean'],
             ]);
 
@@ -54,18 +55,18 @@ class SettingsController extends Controller
         if ($section === 'password') {
             $data = $request->validate([
                 'current_password' => ['required'],
-                'password'         => ['required', 'confirmed', Password::min(8)],
+                'password' => ['required', 'confirmed', Password::min(8)],
             ]);
 
             if (! Hash::check($data['current_password'], $user->password)) {
-                return back()->withErrors(['current_password' => app()->getLocale()==='sn'
+                return back()->withErrors(['current_password' => app()->getLocale() === 'sn'
                     ? 'Pasiwedhi yekare haina kukwana.'
                     : 'The current password is incorrect.']);
             }
 
             $user->update(['password' => Hash::make($data['password'])]);
 
-            return back()->with('success', app()->getLocale()==='sn'
+            return back()->with('success', app()->getLocale() === 'sn'
                 ? 'Pasiwedhi yachinjwa!'
                 : 'Password changed successfully!');
         }
@@ -77,7 +78,7 @@ class SettingsController extends Controller
     {
         Auth::user()->generateApiKey();
 
-        return back()->with('success', app()->getLocale()==='sn'
+        return back()->with('success', app()->getLocale() === 'sn'
             ? 'Kiyi itsva yeAPI yagadzirwa!'
             : 'New API key generated!');
     }

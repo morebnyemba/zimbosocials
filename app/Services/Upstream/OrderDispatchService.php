@@ -7,9 +7,7 @@ use App\Models\ServiceUpstream;
 
 class OrderDispatchService
 {
-    public function __construct(private readonly UpstreamProviderClient $client)
-    {
-    }
+    public function __construct(private readonly UpstreamProviderClient $client) {}
 
     public function dispatch(Order $order): array
     {
@@ -38,8 +36,8 @@ class OrderDispatchService
         /** @var ServiceUpstream $upstream */
         foreach ($upstreams as $upstream) {
             $provider = $upstream->provider;
-            
-            if (!$provider || !$provider->is_active) {
+
+            if (! $provider || ! $provider->is_active) {
                 continue;
             }
 

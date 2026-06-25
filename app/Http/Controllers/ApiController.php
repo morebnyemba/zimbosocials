@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Controllers/ApiController.php
 // REST API for resellers — authenticate via: Authorization: Bearer YOUR_API_KEY
 
@@ -11,6 +12,7 @@ use App\Services\OrderService;
 use App\Services\Upstream\OrderDispatchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ApiController extends Controller
 {
@@ -19,7 +21,10 @@ class ApiController extends Controller
     private function resolveUser(Request $request): ?User
     {
         $key = $request->bearerToken();
-        if (! $key) return null;
+        if (! $key) {
+            return null;
+        }
+
         return User::where('api_key', $key)->where('is_active', true)->first();
     }
 
@@ -35,23 +40,25 @@ class ApiController extends Controller
     public function services(Request $request): JsonResponse
     {
         $user = $this->resolveUser($request);
-        if (! $user) return $this->unauthorized();
+        if (! $user) {
+            return $this->unauthorized();
+        }
 
         $services = Service::active()
             ->orderBy('category')
             ->orderBy('display_order')
             ->get()
-            ->map(fn($s) => [
-                'service'  => $s->id,
-                'name'     => $s->name,
-                'name_sn'  => $s->name_sn,
+            ->map(fn ($s) => [
+                'service' => $s->id,
+                'name' => $s->name,
+                'name_sn' => $s->name_sn,
                 'category' => $s->category,
-                'type'     => $s->type,
-                'rate'     => (float) $s->rate,
-                'min'      => $s->min_qty,
-                'max'      => $s->max_qty,
+                'type' => $s->type,
+                'rate' => (float) $s->rate,
+                'min' => $s->min_qty,
+                'max' => $s->max_qty,
                 'dripfeed' => $s->is_dripfeed,
-                'refill'   => $s->is_refill,
+                'refill' => $s->is_refill,
             ]);
 
         return response()->json($services);
@@ -62,11 +69,13 @@ class ApiController extends Controller
     public function placeOrder(Request $request, OrderService $orderService, OrderDispatchService $dispatchService): JsonResponse
     {
         $user = $this->resolveUser($request);
-        if (! $user) return $this->unauthorized();
+        if (! $user) {
+            return $this->unauthorized();
+        }
 
         $data = $request->validate([
-            'service'  => ['required', 'exists:services,id'],
-            'link'     => ['required', 'url'],
+            'service' => ['required', 'exists:services,id'],
+            'link' => ['required', 'url'],
             'quantity' => ['required', 'integer', 'min:1'],
         ]);
 
@@ -83,19 +92,24 @@ class ApiController extends Controller
 
         if (! $result['ok']) {
             $payload = ['error' => $result['error']];
-            if (isset($result['balance']))  $payload['balance']  = $result['balance'];
-            if (isset($result['required'])) $payload['required'] = $result['required'];
+            if (isset($result['balance'])) {
+                $payload['balance'] = $result['balance'];
+            }
+            if (isset($result['required'])) {
+                $payload['required'] = $result['required'];
+            }
+
             return response()->json($payload, $result['code'] ?? 422);
         }
 
-        $order    = $result['order'];
+        $order = $result['order'];
         $dispatch = $result['dispatch'];
 
         return response()->json([
-            'order'              => $order->id,
-            'external_order_id'  => $order->external_order_id,
-            'upstream_pushed'    => (bool) $dispatch['ok'],
-            'upstream_message'   => $dispatch['message'],
+            'order' => $order->id,
+            'external_order_id' => $order->external_order_id,
+            'upstream_pushed' => (bool) $dispatch['ok'],
+            'upstream_message' => $dispatch['message'],
         ]);
     }
 
@@ -104,7 +118,9 @@ class ApiController extends Controller
     public function orderStatus(Request $request): JsonResponse
     {
         $user = $this->resolveUser($request);
-        if (! $user) return $this->unauthorized();
+        if (! $user) {
+            return $this->unauthorized();
+        }
 
         $orderId = $request->input('order');
         if (! $orderId) {
@@ -117,12 +133,12 @@ class ApiController extends Controller
         }
 
         return response()->json([
-            'order'       => $order->id,
-            'charge'      => (float) $order->charge,
+            'order' => $order->id,
+            'charge' => (float) $order->charge,
             'start_count' => $order->start_count,
-            'status'      => $order->status,
-            'remains'     => $order->remains,
-            'currency'    => 'USD',
+            'status' => $order->status,
+            'remains' => $order->remains,
+            'currency' => 'USD',
         ]);
     }
 
@@ -131,10 +147,12 @@ class ApiController extends Controller
     public function balance(Request $request): JsonResponse
     {
         $user = $this->resolveUser($request);
-        if (! $user) return $this->unauthorized();
+        if (! $user) {
+            return $this->unauthorized();
+        }
 
         return response()->json([
-            'balance'  => (float) $user->balance,
+            'balance' => (float) $user->balance,
             'currency' => 'USD',
         ]);
     }
@@ -144,7 +162,9 @@ class ApiController extends Controller
     public function refill(Request $request): JsonResponse
     {
         $user = $this->resolveUser($request);
-        if (! $user) return $this->unauthorized();
+        if (! $user) {
+            return $this->unauthorized();
+        }
 
         $data = $request->validate(['order' => ['required', 'integer']]);
         $order = Order::forUser($user->id)->find($data['order']);
@@ -166,7 +186,9 @@ class ApiController extends Controller
     public function cancel(Request $request): JsonResponse
     {
         $user = $this->resolveUser($request);
-        if (! $user) return $this->unauthorized();
+        if (! $user) {
+            return $this->unauthorized();
+        }
 
         $data = $request->validate(['order' => ['required', 'integer']]);
         $order = Order::forUser($user->id)->find($data['order']);
@@ -175,7 +197,7 @@ class ApiController extends Controller
             return response()->json(['error' => 'Order cannot be cancelled.'], 422);
         }
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($order, $user): void {
+        DB::transaction(function () use ($order, $user): void {
             $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
 
             if (! $lockedOrder->canCancel()) {

@@ -1,46 +1,52 @@
 <?php
+
 // routes/web.php
 
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\Auth\PasswordResetLinkController;
-use App\Http\Controllers\Auth\NewPasswordController;
-use App\Http\Controllers\Auth\ConfirmablePasswordController;
-use App\Http\Controllers\Auth\PasswordController;
-use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Admin\WhatsAppTemplateController;
+use App\Http\Controllers\AdminCampaignController;
+use App\Http\Controllers\AdminContractController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminMarketerController;
 use App\Http\Controllers\AdminOrderController;
 use App\Http\Controllers\AdminPaymentDetailController;
 use App\Http\Controllers\AdminServiceController;
-use App\Http\Controllers\AdminUpstreamProviderController;
-use App\Http\Controllers\Admin\WhatsAppTemplateController;
+use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AdminTicketController;
 use App\Http\Controllers\AdminTransactionController;
-use App\Http\Controllers\AdminMarketerController;
-use App\Http\Controllers\AdminContractController;
-use App\Http\Controllers\AdminCampaignController;
+use App\Http\Controllers\AdminUpstreamProviderController;
 use App\Http\Controllers\AdminUserController;
-use App\Http\Controllers\AdminSettingsController;
+use App\Http\Controllers\Auth\ConfirmablePasswordController;
+use App\Http\Controllers\Auth\EmailVerificationNotificationController;
+use App\Http\Controllers\Auth\EmailVerificationPromptController;
+use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\ContractProofController;
 use App\Http\Controllers\ContractReviewController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\MarketerController;
 use App\Http\Controllers\MarketerSocialLinkController;
+use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaynowController;
 use App\Http\Controllers\PortfolioController;
-use App\Http\Controllers\ServiceController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReferralController;
-use App\Http\Controllers\WalletController;
-use App\Http\Controllers\TicketController;
+use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\TicketController;
+use App\Http\Controllers\WalletController;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/locale', function (\Illuminate\Http\Request $req) {
+Route::post('/locale', function (Request $req) {
     $locale = $req->input('locale', 'sn');
-    if (!in_array($locale, ['sn', 'en', 'nd'])) {
+    if (! in_array($locale, ['sn', 'en', 'nd'])) {
         $locale = 'sn';
     }
     session(['locale' => $locale]);
@@ -57,11 +63,11 @@ Route::get('/contact', [MarketingController::class, 'contact'])->name('marketing
 
 // Static marketing pages — 5-minute public cache
 Route::middleware('cache.headers:public;max_age=300;etag')->group(function () {
-    Route::get('/our-services',      [MarketingController::class, 'services'])->name('marketing.services');
-    Route::get('/about',             [MarketingController::class, 'about'])->name('marketing.about');
-    Route::get('/help-center',       [MarketingController::class, 'help'])->name('marketing.help');
-    Route::get('/privacy-policy',    [MarketingController::class, 'privacy'])->name('marketing.privacy');
-    Route::get('/terms-of-service',  [MarketingController::class, 'terms'])->name('marketing.terms');
+    Route::get('/our-services', [MarketingController::class, 'services'])->name('marketing.services');
+    Route::get('/about', [MarketingController::class, 'about'])->name('marketing.about');
+    Route::get('/help-center', [MarketingController::class, 'help'])->name('marketing.help');
+    Route::get('/privacy-policy', [MarketingController::class, 'privacy'])->name('marketing.privacy');
+    Route::get('/terms-of-service', [MarketingController::class, 'terms'])->name('marketing.terms');
 });
 
 // Public marketer portfolio
@@ -70,11 +76,11 @@ Route::get('/marketers/{user}', [PortfolioController::class, 'show'])->name('por
 // ─── Guest routes ─────────────────────────────────────────────────────────────
 
 Route::middleware('guest')->group(function () {
-    Route::get('/home',      [MarketingController::class, 'home'])->name('home');
-    Route::get('/login',    [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login',   [AuthController::class, 'login'])->middleware('throttle:5,1');
+    Route::get('/home', [MarketingController::class, 'home'])->name('home');
+    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
-    Route::post('/register',[AuthController::class, 'register'])->middleware('throttle:10,1');
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
 
     // Password reset
     Route::get('/forgot-password', [PasswordResetLinkController::class, 'create'])->name('password.request');
@@ -87,18 +93,17 @@ Route::middleware('guest')->group(function () {
 
 // ─── Authenticated routes ─────────────────────────────────────────────────────
 
-
 // Paynow Webhook (No Auth)
 Route::post('/paynow/webhook', [PaynowController::class, 'webhook'])->name('paynow.update');
 
 Route::middleware('auth')->group(function () {
     // Email Verification
-    Route::get('verify-email', \App\Http\Controllers\Auth\EmailVerificationPromptController::class)
+    Route::get('verify-email', EmailVerificationPromptController::class)
         ->name('verification.notice');
-    Route::get('verify-email/{id}/{hash}', \App\Http\Controllers\Auth\VerifyEmailController::class)
+    Route::get('verify-email/{id}/{hash}', VerifyEmailController::class)
         ->middleware(['signed', 'throttle:6,1'])
         ->name('verification.verify');
-    Route::post('email/verification-notification', [\App\Http\Controllers\Auth\EmailVerificationNotificationController::class, 'store'])
+    Route::post('email/verification-notification', [EmailVerificationNotificationController::class, 'store'])
         ->middleware('throttle:6,1')
         ->name('verification.send');
 
@@ -118,6 +123,8 @@ Route::middleware('auth')->group(function () {
     // ─── Admin panel ──────────────────────────────────────────────────────────
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [AdminController::class, 'index'])->name('dashboard');
+        Route::get('/analytics/summary', [AdminController::class, 'aiSummary'])
+            ->middleware('throttle:ai-drafts')->name('analytics.summary');
 
         // Payment details
         Route::get('/payment-details', [AdminPaymentDetailController::class, 'index'])->name('payment-details.index');
@@ -141,6 +148,9 @@ Route::middleware('auth')->group(function () {
         // App Settings
         Route::get('/settings', [AdminSettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings', [AdminSettingsController::class, 'update'])->name('settings.update');
+        Route::get('/seo', [AdminSettingsController::class, 'seoGenerator'])->name('seo.index');
+        Route::post('/seo/generate', [AdminSettingsController::class, 'generateSeo'])
+            ->middleware('throttle:ai-drafts')->name('seo.generate');
 
         // Service management
         Route::get('/services', [AdminServiceController::class, 'index'])->name('services.index');
@@ -169,6 +179,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/tickets/{ticket}', [AdminTicketController::class, 'show'])->name('tickets.show');
         Route::post('/tickets/{ticket}/reply', [AdminTicketController::class, 'reply'])->name('tickets.reply');
         Route::post('/tickets/{ticket}/close', [AdminTicketController::class, 'close'])->name('tickets.close');
+        Route::post('/tickets/{ticket}/draft-reply', [AdminTicketController::class, 'draftReply'])
+            ->middleware('throttle:ai-drafts')->name('tickets.draft-reply');
 
         // WhatsApp Management
         Route::get('/whatsapp/templates', [WhatsAppTemplateController::class, 'index'])->name('whatsapp.templates');
@@ -178,6 +190,8 @@ Route::middleware('auth')->group(function () {
         // Marketing Campaigns (email/whatsapp/in-app)
         Route::get('/campaigns', [AdminCampaignController::class, 'index'])->name('campaigns.index');
         Route::post('/campaigns', [AdminCampaignController::class, 'store'])->name('campaigns.store');
+        Route::post('/campaigns/generate-copy', [AdminCampaignController::class, 'generateCopy'])
+            ->middleware('throttle:ai-drafts')->name('campaigns.generate-copy');
 
         // Marketer management
         Route::get('/marketers', [AdminMarketerController::class, 'index'])->name('marketers.index');
@@ -190,11 +204,17 @@ Route::middleware('auth')->group(function () {
         Route::post('/marketers/{user}/resend-email', [AdminMarketerController::class, 'resendEmailVerification'])->name('marketers.resend-email');
         Route::post('/marketers/{user}/verify-email', [AdminMarketerController::class, 'manualVerifyEmail'])->name('marketers.verify-email');
         Route::post('/marketers/{user}/resend-phone', [AdminMarketerController::class, 'resendPhoneVerification'])->name('marketers.resend-phone');
+        Route::post('/moderation/portfolios/{portfolio}', [AdminMarketerController::class, 'moderatePortfolio'])
+            ->middleware('throttle:ai-drafts')->name('moderation.portfolio');
 
         // Contract management
         Route::get('/contracts', [AdminContractController::class, 'index'])->name('contracts.index');
         Route::get('/contracts/{contract}', [AdminContractController::class, 'show'])->name('contracts.show');
         Route::delete('/contracts/{contract}', [AdminContractController::class, 'destroy'])->name('contracts.destroy');
+        Route::post('/moderation/proofs/{proof}', [AdminContractController::class, 'moderateProof'])
+            ->middleware('throttle:ai-drafts')->name('moderation.proof');
+        Route::post('/moderation/reviews/{review}', [AdminContractController::class, 'moderateReview'])
+            ->middleware('throttle:ai-drafts')->name('moderation.review');
 
         // Upstream Providers
         Route::get('/upstream-providers', [AdminUpstreamProviderController::class, 'index'])->name('upstream-providers.index');
@@ -212,20 +232,20 @@ Route::middleware('auth')->group(function () {
     });
 
     // Orders
-    Route::get('/orders',           [OrderController::class, 'index'])->name('orders.index');
-    Route::get('/orders/new',       [OrderController::class, 'create'])->name('orders.create');
-    Route::post('/orders',          [OrderController::class, 'store'])->name('orders.store');
-    Route::get('/orders/{order}',   [OrderController::class, 'show'])->name('orders.show');
+    Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::get('/orders/new', [OrderController::class, 'create'])->name('orders.create');
+    Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+    Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
 
     // Services (read-only list)
     Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
 
     // Wallet
-    Route::get('/wallet',              [WalletController::class, 'index'])->name('wallet.index');
-    Route::post('/wallet/add-funds',   [WalletController::class, 'manualDeposit'])->middleware('throttle:wallet-manual-deposit')->name('wallet.add');
+    Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
+    Route::post('/wallet/add-funds', [WalletController::class, 'manualDeposit'])->middleware('throttle:wallet-manual-deposit')->name('wallet.add');
     Route::post('/wallet/submit-proof', [WalletController::class, 'submitProof'])->middleware('throttle:wallet-proof-submit')->name('wallet.submit-proof');
-    Route::post('/wallet/withdraw',    [WalletController::class, 'withdraw'])->middleware('throttle:wallet-withdraw')->name('wallet.withdraw');
+    Route::post('/wallet/withdraw', [WalletController::class, 'withdraw'])->middleware('throttle:wallet-withdraw')->name('wallet.withdraw');
 
     // Referrals
     Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');
@@ -245,15 +265,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/paynow/poll/{transaction}', [PaynowController::class, 'pollStatus'])->middleware('throttle:30,1')->name('paynow.poll');
 
     // Tickets
-    Route::get('/tickets',              [TicketController::class, 'index'])->name('tickets.index');
-    Route::post('/tickets',             [TicketController::class, 'store'])->name('tickets.store');
-    Route::get('/tickets/{ticket}',     [TicketController::class, 'show'])->name('tickets.show');
+    Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
+    Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
+    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
     Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])->name('tickets.reply');
 
     // Settings
-    Route::get('/settings',        [SettingsController::class, 'index'])->name('settings.index');
-    Route::post('/settings',       [SettingsController::class, 'update'])->name('settings.update');
-    Route::post('/settings/api-key',[SettingsController::class, 'regenerateApiKey'])->name('settings.api-key');
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::post('/settings/api-key', [SettingsController::class, 'regenerateApiKey'])->name('settings.api-key');
 
     // Developer API Docs
     Route::get('/developer/api', function () {
@@ -298,5 +318,5 @@ Route::middleware('auth')->group(function () {
 // ─── Payment webhooks (no CSRF) ───────────────────────────────────────────────
 
 Route::post('/webhooks/payment', [WalletController::class, 'handleWebhook'])
-    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->withoutMiddleware([VerifyCsrfToken::class])
     ->name('webhooks.payment');

@@ -35,18 +35,18 @@ class ContractProofController extends Controller
 
         $data = $request->validate([
             'proof_url' => ['required', 'url', 'max:1000'],
-            'notes'     => ['nullable', 'string', 'max:1000'],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
         ContractProofSubmission::updateOrCreate(
             [
                 'contract_application_id' => (int) $application->getKey(),
-                'marketer_id'             => $userId,
+                'marketer_id' => $userId,
             ],
             [
-                'proof_url'   => $data['proof_url'],
-                'notes'       => $data['notes'] ?? null,
-                'status'      => 'pending',
+                'proof_url' => $data['proof_url'],
+                'notes' => $data['notes'] ?? null,
+                'status' => 'pending',
                 'reviewed_by' => null,
                 'reviewed_at' => null,
             ]
@@ -73,7 +73,7 @@ class ContractProofController extends Controller
         $contractOwnerId = (int) $contract->user_id;
 
         // Only Admin or Contract Owner can review
-        if (!$user->isAdmin() && $contractOwnerId !== $userId) {
+        if (! $user->isAdmin() && $contractOwnerId !== $userId) {
             abort(403);
         }
 
@@ -107,7 +107,7 @@ class ContractProofController extends Controller
                             'balance_before' => $marketerBefore,
                             'balance_after' => $marketerBefore + $budget,
                             'status' => 'completed',
-                            'notes' => 'Released escrow for contract #' . $contract->id . ' proof approval.',
+                            'notes' => 'Released escrow for contract #'.$contract->id.' proof approval.',
                         ]);
 
                         // Notify marketer of payout
@@ -121,7 +121,7 @@ class ContractProofController extends Controller
                     }
 
                     $lockedProof->update([
-                        'status'      => 'approved',
+                        'status' => 'approved',
                         'reviewed_by' => $userId,
                         'reviewed_at' => now(),
                     ]);
@@ -131,17 +131,18 @@ class ContractProofController extends Controller
             } catch (\RuntimeException $e) {
                 return back()->with('error', $e->getMessage());
             } catch (\Exception $e) {
-                return back()->with('error', 'Failed to process payout: ' . $e->getMessage());
+                return back()->with('error', 'Failed to process payout: '.$e->getMessage());
             }
         } else {
             $proof->update([
-                'status'      => $decision,
+                'status' => $decision,
                 'reviewed_by' => $userId,
                 'reviewed_at' => now(),
             ]);
         }
 
         $outcome = $decision === 'approved' ? 'approved — funds released to marketer' : 'rejected';
+
         return back()->with('success', "Proof {$outcome}.");
     }
 }

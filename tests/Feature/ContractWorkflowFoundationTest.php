@@ -61,7 +61,7 @@ class ContractWorkflowFoundationTest extends TestCase
 
         $this->assertNotNull($adjustment);
         $this->assertSame(-22.0, (float) $adjustment->amount);
-        $this->assertStringContainsString('Escrow increase for contract #' . $contract->id, (string) $adjustment->notes);
+        $this->assertStringContainsString('Escrow increase for contract #'.$contract->id, (string) $adjustment->notes);
     }
 
     public function test_business_owner_cannot_change_budget_or_slots_after_marketer_is_hired(): void

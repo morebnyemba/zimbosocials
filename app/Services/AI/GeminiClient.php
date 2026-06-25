@@ -19,18 +19,45 @@ class GeminiClient
     }
 
     /**
-     * Send a prompt and decode the model's JSON reply.
+     * Send a prompt and return the model's raw text reply (or null on failure).
+     */
+    public function generateText(string $prompt, float $temperature = 0.7): ?string
+    {
+        return $this->send($prompt, ['temperature' => $temperature]);
+    }
+
+    /**
+     * Send a prompt and decode the model's JSON reply (or null on failure).
      *
      * @return array<mixed>|null
      */
-    public function generateJson(string $prompt): ?array
+    public function generateJson(string $prompt, float $temperature = 0.2): ?array
+    {
+        $text = $this->send($prompt, [
+            'responseMimeType' => 'application/json',
+            'temperature' => $temperature,
+        ]);
+
+        if (! is_string($text)) {
+            return null;
+        }
+
+        $decoded = json_decode($text, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $generationConfig
+     */
+    private function send(string $prompt, array $generationConfig): ?string
     {
         if (! $this->isConfigured()) {
             return null;
         }
 
-        $model    = config('services.gemini.model', 'gemini-2.5-flash');
-        $baseUrl  = rtrim((string) config('services.gemini.base_url'), '/');
+        $model = config('services.gemini.model', 'gemini-2.5-flash');
+        $baseUrl = rtrim((string) config('services.gemini.base_url'), '/');
         $endpoint = "{$baseUrl}/models/{$model}:generateContent";
 
         try {
@@ -39,19 +66,16 @@ class GeminiClient
                 ->asJson()
                 ->post($endpoint, [
                     'contents' => [[
-                        'role'  => 'user',
+                        'role' => 'user',
                         'parts' => [['text' => $prompt]],
                     ]],
-                    'generationConfig' => [
-                        'responseMimeType' => 'application/json',
-                        'temperature'      => 0.2,
-                    ],
+                    'generationConfig' => $generationConfig,
                 ]);
 
             if ($response->failed()) {
                 Log::warning('Gemini request failed', [
                     'status' => $response->status(),
-                    'body'   => mb_substr($response->body(), 0, 500),
+                    'body' => mb_substr($response->body(), 0, 500),
                 ]);
 
                 return null;
@@ -65,9 +89,7 @@ class GeminiClient
                 return null;
             }
 
-            $decoded = json_decode($text, true);
-
-            return is_array($decoded) ? $decoded : null;
+            return $text;
         } catch (\Throwable $e) {
             Log::warning('Gemini request threw an exception', ['message' => $e->getMessage()]);
 

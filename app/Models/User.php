@@ -1,4 +1,5 @@
 <?php
+
 // app/Models/User.php
 
 namespace App\Models;
@@ -6,14 +7,13 @@ namespace App\Models;
 use App\Notifications\LocalizedResetPasswordNotification;
 use App\Notifications\LocalizedVerifyEmailNotification;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
-use Illuminate\Database\Eloquent\Builder;
-use App\Models\MarketerReview;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -56,12 +56,12 @@ class User extends Authenticatable implements MustVerifyEmail
     protected function casts(): array
     {
         return [
-            'email_verified_at'  => 'datetime',
-            'password'           => 'hashed',
-            'balance'            => 'decimal:4',
-            'is_active'          => 'boolean',
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'balance' => 'decimal:4',
+            'is_active' => 'boolean',
             'notification_prefs' => 'array',
-            'last_login_at'      => 'datetime',
+            'last_login_at' => 'datetime',
             'referred_bonus_awarded_at' => 'datetime',
         ];
     }
@@ -200,8 +200,9 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function generateApiKey(): string
     {
-        $key = 'zvk_live_' . Str::random(32);
+        $key = 'zvk_live_'.Str::random(32);
         $this->update(['api_key' => $key]);
+
         return $key;
     }
 
@@ -212,13 +213,13 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function sendEmailVerificationNotification(): void
     {
-        $this->notify(new LocalizedVerifyEmailNotification());
+        $this->notify(new LocalizedVerifyEmailNotification);
     }
 
     public static function generateReferralCode(): string
     {
         do {
-            $code = 'ZIM' . strtoupper(Str::random(8));
+            $code = 'ZIM'.strtoupper(Str::random(8));
         } while (static::where('referral_code', $code)->exists());
 
         return $code;
@@ -238,14 +239,14 @@ class User extends Authenticatable implements MustVerifyEmail
         $this->decrement('balance', $amount);
 
         Transaction::create([
-            'user_id'        => $this->id,
-            'order_id'       => $order?->id,
-            'type'           => 'order_charge',
-            'amount'         => -$amount,
+            'user_id' => $this->id,
+            'order_id' => $order?->id,
+            'type' => 'order_charge',
+            'amount' => -$amount,
             'balance_before' => $before,
-            'balance_after'  => $before - $amount,
-            'status'         => 'completed',
-            'notes'          => $notes,
+            'balance_after' => $before - $amount,
+            'status' => 'completed',
+            'notes' => $notes,
         ]);
 
         return true;
@@ -260,19 +261,19 @@ class User extends Authenticatable implements MustVerifyEmail
         $this->increment('balance', $amount);
 
         return Transaction::create([
-            'user_id'        => $this->id,
-            'type'           => $type,
-            'amount'         => $amount,
+            'user_id' => $this->id,
+            'type' => $type,
+            'amount' => $amount,
             'balance_before' => $before,
-            'balance_after'  => $before + $amount,
-            'method'         => $method,
-            'reference'      => $reference,
-            'status'         => 'completed',
+            'balance_after' => $before + $amount,
+            'method' => $method,
+            'reference' => $reference,
+            'status' => 'completed',
         ]);
     }
 
     public function getFormattedBalanceAttribute(): string
     {
-        return '$' . number_format($this->balance, 2);
+        return '$'.number_format($this->balance, 2);
     }
 }

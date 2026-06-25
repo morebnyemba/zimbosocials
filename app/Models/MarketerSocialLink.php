@@ -19,7 +19,7 @@ class MarketerSocialLink extends Model
     protected function casts(): array
     {
         return [
-            'verified'       => 'boolean',
+            'verified' => 'boolean',
             'follower_count' => 'integer',
         ];
     }

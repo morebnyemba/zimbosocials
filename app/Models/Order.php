@@ -1,13 +1,14 @@
 <?php
+
 // app/Models/Order.php
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Builder;
 
 class Order extends Model
 {
@@ -24,12 +25,12 @@ class Order extends Model
     protected function casts(): array
     {
         return [
-            'charge'        => 'decimal:4',
+            'charge' => 'decimal:4',
             'rate_at_order' => 'decimal:4',
             'pushed_to_upstream' => 'boolean',
-            'pushed_at'     => 'datetime',
-            'started_at'    => 'datetime',
-            'completed_at'  => 'datetime',
+            'pushed_at' => 'datetime',
+            'started_at' => 'datetime',
+            'completed_at' => 'datetime',
         ];
     }
 
@@ -90,28 +91,28 @@ class Order extends Model
     public function getStatusLabelSn(): string
     {
         return match ($this->status) {
-            'pending'     => 'Yakamirira',
-            'processing'  => 'Inobatwa',
+            'pending' => 'Yakamirira',
+            'processing' => 'Inobatwa',
             'in_progress' => 'Iri Kufamba',
-            'completed'   => 'Yakwana',
-            'partial'     => 'Yakasikirwa',
-            'cancelled'   => 'Yakanzurwa',
-            'refunded'    => 'Yadzoswa',
-            default       => $this->status,
+            'completed' => 'Yakwana',
+            'partial' => 'Yakasikirwa',
+            'cancelled' => 'Yakanzurwa',
+            'refunded' => 'Yadzoswa',
+            default => $this->status,
         };
     }
 
     public function getStatusLabelEn(): string
     {
         return match ($this->status) {
-            'pending'     => 'Pending',
-            'processing'  => 'Processing',
+            'pending' => 'Pending',
+            'processing' => 'Processing',
             'in_progress' => 'In Progress',
-            'completed'   => 'Completed',
-            'partial'     => 'Partial',
-            'cancelled'   => 'Cancelled',
-            'refunded'    => 'Refunded',
-            default       => ucfirst($this->status),
+            'completed' => 'Completed',
+            'partial' => 'Partial',
+            'cancelled' => 'Cancelled',
+            'refunded' => 'Refunded',
+            default => ucfirst($this->status),
         };
     }
 }

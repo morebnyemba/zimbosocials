@@ -11,9 +11,7 @@ namespace App\Services\AI;
  */
 class ServiceEnricher
 {
-    public function __construct(private readonly GeminiClient $client)
-    {
-    }
+    public function __construct(private readonly GeminiClient $client) {}
 
     public function isAvailable(): bool
     {
@@ -21,7 +19,7 @@ class ServiceEnricher
     }
 
     /**
-     * @param array<int, array<string, mixed>> $services Raw provider services (need 'service' + 'name', optional 'category').
+     * @param  array<int, array<string, mixed>>  $services  Raw provider services (need 'service' + 'name', optional 'category').
      * @return array<string, array<string, string>> Enriched fields keyed by external_service_id (empty fields omitted).
      */
     public function enrich(array $services): array
@@ -33,8 +31,8 @@ class ServiceEnricher
         $input = collect($services)
             ->map(fn (array $s): array => [
                 'external_service_id' => (string) ($s['service'] ?? ''),
-                'name'                => (string) ($s['name'] ?? ''),
-                'category'            => (string) ($s['category'] ?? ''),
+                'name' => (string) ($s['name'] ?? ''),
+                'category' => (string) ($s['category'] ?? ''),
             ])
             ->filter(fn (array $s): bool => $s['external_service_id'] !== '' && $s['name'] !== '')
             ->values();
@@ -61,7 +59,7 @@ class ServiceEnricher
                 continue;
             }
 
-            $id   = (string) ($row['external_service_id'] ?? '');
+            $id = (string) ($row['external_service_id'] ?? '');
             $name = $this->clean($row['name'] ?? '', 255);
 
             if ($id === '' || $name === '') {
@@ -89,7 +87,7 @@ class ServiceEnricher
     }
 
     /**
-     * @param array<int, array<string, string>> $services
+     * @param  array<int, array<string, string>>  $services
      */
     private function buildPrompt(array $services): string
     {

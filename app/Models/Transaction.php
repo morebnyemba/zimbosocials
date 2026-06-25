@@ -1,4 +1,5 @@
 <?php
+
 // app/Models/Transaction.php
 
 namespace App\Models;
@@ -21,10 +22,10 @@ class Transaction extends Model
     protected function casts(): array
     {
         return [
-            'amount'         => 'decimal:4',
+            'amount' => 'decimal:4',
             'balance_before' => 'decimal:4',
-            'balance_after'  => 'decimal:4',
-            'gateway_meta'   => 'array',
+            'balance_after' => 'decimal:4',
+            'gateway_meta' => 'array',
         ];
     }
 
@@ -46,14 +47,14 @@ class Transaction extends Model
     public function getTypeLabelSn(): string
     {
         return match ($this->type) {
-            'deposit'      => 'Dhipoziti',
+            'deposit' => 'Dhipoziti',
             'order_charge' => 'Odha',
             'contract_payout' => 'Kontrakiti Kubhadhara',
             'contract_earning' => 'Mari yeKontrakiti',
-            'refund'       => 'Dzosera',
-            'adjustment'   => 'Kugadzirisa',
-            'bonus'        => 'Bhonerasi',
-            default        => $this->type,
+            'refund' => 'Dzosera',
+            'adjustment' => 'Kugadzirisa',
+            'bonus' => 'Bhonerasi',
+            default => $this->type,
         };
     }
 }

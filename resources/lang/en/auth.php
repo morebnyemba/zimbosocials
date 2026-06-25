@@ -1,8 +1,8 @@
 <?php
 
 return [
-    'failed'         => 'These credentials do not match our records.',
-    'password'       => 'The provided password is incorrect.',
-    'throttle'       => 'Too many login attempts. Please try again in :seconds seconds.',
+    'failed' => 'These credentials do not match our records.',
+    'password' => 'The provided password is incorrect.',
+    'throttle' => 'Too many login attempts. Please try again in :seconds seconds.',
     'admin_required' => 'Unauthorized. Admin access required.',
 ];

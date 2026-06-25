@@ -15,7 +15,8 @@ class DispatchOrderUpstream implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries   = 5;
+    public int $tries = 5;
+
     public array $backoff = [10, 30, 120, 300, 600]; // progressive backoff
 
     public function __construct(
@@ -26,7 +27,7 @@ class DispatchOrderUpstream implements ShouldQueue
     {
         $order = Order::find($this->orderId);
 
-        if (!$order || $order->pushed_to_upstream) {
+        if (! $order || $order->pushed_to_upstream) {
             return; // Already handled or order deleted
         }
 
@@ -37,7 +38,7 @@ class DispatchOrderUpstream implements ShouldQueue
                 $order->user_id,
                 'order_status_changed',
                 "Order #{$order->id} Processing",
-                "Your order has been submitted and is now processing.",
+                'Your order has been submitted and is now processing.',
                 ['order_id' => $order->id, 'status' => 'processing']
             );
         }
@@ -54,7 +55,7 @@ class DispatchOrderUpstream implements ShouldQueue
                 $order->user_id,
                 'order_status_changed',
                 "Order #{$order->id} — Attention Needed",
-                "Your order encountered an issue during processing. Our team has been notified.",
+                'Your order encountered an issue during processing. Our team has been notified.',
                 ['order_id' => $order->id, 'error' => $e->getMessage()]
             );
         }

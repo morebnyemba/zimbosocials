@@ -27,29 +27,29 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => [
                 'user' => $user ? [
-                    'id'           => $user->id,
-                    'name'         => $user->name,
-                    'email'        => $user->email,
-                    'balance'      => $user->balance,
-                    'role'         => $user->role,
-                    'api_key'      => $user->api_key,
-                    'locale'       => $user->locale,
-                    'currency'     => $user->currency,
-                    'phone'              => $user->phone,
-                    'whatsapp_number'    => $user->whatsapp_number,
-                    'company_name'       => $user->company_name,
-                    'marketer_status'    => $user->marketer_status,
-                    'bio'                => $user->bio,
-                    'profile_image_url'  => $user->profile_image_url,
-                    'account_type'       => $user->account_type,
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'balance' => $user->balance,
+                    'role' => $user->role,
+                    'api_key' => $user->api_key,
+                    'locale' => $user->locale,
+                    'currency' => $user->currency,
+                    'phone' => $user->phone,
+                    'whatsapp_number' => $user->whatsapp_number,
+                    'company_name' => $user->company_name,
+                    'marketer_status' => $user->marketer_status,
+                    'bio' => $user->bio,
+                    'profile_image_url' => $user->profile_image_url,
+                    'account_type' => $user->account_type,
                     'notification_prefs' => $user->notification_prefs ?? ['email' => true, 'whatsapp' => true],
                 ] : null,
                 'is_impersonating' => $request->session()->has('impersonator_id'),
             ],
             'flash' => [
                 'success' => $request->session()->get('success'),
-                'error'   => $request->session()->get('error'),
-                'info'    => $request->session()->get('info'),
+                'error' => $request->session()->get('error'),
+                'info' => $request->session()->get('info'),
             ],
             // Cached for 30 seconds to avoid a COUNT query on every page load
             'notifications_count' => $user
@@ -59,8 +59,8 @@ class HandleInertiaRequests extends Middleware
                     fn () => Notification::unreadCountFor($user->id)
                 )
                 : 0,
-                'locale'       => app()->getLocale(),
-                'translations' => fn () => __('messages'),
+            'locale' => app()->getLocale(),
+            'translations' => fn () => __('messages'),
         ];
     }
 }

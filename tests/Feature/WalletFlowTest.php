@@ -97,7 +97,7 @@ class WalletFlowTest extends TestCase
             'notes' => 'Awaiting proof',
         ]);
 
-        $tmpPng = tempnam(sys_get_temp_dir(), 'proof_') . '.png';
+        $tmpPng = tempnam(sys_get_temp_dir(), 'proof_').'.png';
         file_put_contents(
             $tmpPng,
             base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5X2wAAAABJRU5ErkJggg==')
@@ -121,7 +121,7 @@ class WalletFlowTest extends TestCase
         $transaction->refresh();
 
         $this->assertNotNull($transaction->getAttribute('proof_url'));
-        $this->assertStringContainsString('/storage/proofs/' . $user->id . '/', (string) $transaction->getAttribute('proof_url'));
+        $this->assertStringContainsString('/storage/proofs/'.$user->id.'/', (string) $transaction->getAttribute('proof_url'));
         $this->assertSame('pending', (string) $transaction->getAttribute('status'));
 
         @unlink($tmpPng);

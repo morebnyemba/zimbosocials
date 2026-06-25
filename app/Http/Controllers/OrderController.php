@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Controllers/OrderController.php
 
 namespace App\Http\Controllers;
@@ -9,8 +10,8 @@ use App\Models\User;
 use App\Services\OrderService;
 use App\Services\ReferralService;
 use App\Services\Upstream\OrderDispatchService;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -23,16 +24,16 @@ class OrderController extends Controller
      */
     public function create(Request $request): Response
     {
-        $services   = Service::active()->orderBy('category')->orderBy('display_order')->get();
+        $services = Service::active()->orderBy('category')->orderBy('display_order')->get();
         $categories = $services->pluck('category')->unique()->values();
-        $selected   = $request->query('service_id')
+        $selected = $request->query('service_id')
             ? Service::find($request->query('service_id'))
             : null;
 
         return Inertia::render('Orders/Create', [
-            'services'   => $services,
+            'services' => $services,
             'categories' => $categories,
-            'selected'   => $selected,
+            'selected' => $selected,
         ]);
     }
 
@@ -43,12 +44,12 @@ class OrderController extends Controller
     {
         $data = $request->validate([
             'service_id' => ['required', 'exists:services,id'],
-            'link'       => ['required', 'url', 'max:500'],
-            'quantity'   => ['required', 'integer', 'min:1'],
+            'link' => ['required', 'url', 'max:500'],
+            'quantity' => ['required', 'integer', 'min:1'],
         ]);
 
         $service = Service::findOrFail($data['service_id']);
-        $user    = Auth::user();
+        $user = Auth::user();
 
         // Hard guard: users with empty balance cannot place orders.
         if ((float) $user->balance <= 0) {
@@ -66,6 +67,7 @@ class OrderController extends Controller
 
         if (! $result['ok']) {
             $field = ($result['code'] ?? 0) === 402 ? 'balance' : 'quantity';
+
             return back()->withErrors([$field => $result['error']])->withInput();
         }
 
@@ -100,14 +102,14 @@ class OrderController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('link', 'like', "%{$search}%")
-                  ->orWhere('id', $search);
+                    ->orWhere('id', $search);
             });
         }
 
         $orders = $query->paginate(20)->withQueryString();
 
         return Inertia::render('Orders/Index', [
-            'orders'  => $orders,
+            'orders' => $orders,
             'filters' => $request->only(['status', 'search']),
         ]);
     }

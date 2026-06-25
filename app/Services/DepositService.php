@@ -25,8 +25,8 @@ class DepositService
      * Atomically credit a pending deposit transaction.
      *
      * @param  Transaction  $transaction  The pending deposit transaction.
-     * @param  string       $source       Descriptive tag for the audit trail (e.g. 'webhook', 'poll', 'admin').
-     * @return bool  True if credited, false if already resolved or not found.
+     * @param  string  $source  Descriptive tag for the audit trail (e.g. 'webhook', 'poll', 'admin').
+     * @return bool True if credited, false if already resolved or not found.
      */
     public function credit(Transaction $transaction, string $source = 'system'): bool
     {
@@ -39,21 +39,22 @@ class DepositService
         DB::transaction(function () use ($transaction, $source, &$credited): void {
             $locked = Transaction::lockForUpdate()->find($transaction->getKey());
 
-            if (!$locked || $locked->status !== 'pending') {
+            if (! $locked || $locked->status !== 'pending') {
                 return;
             }
 
             $oldStatus = (string) $locked->getAttribute('status');
-            $amount    = (float) $locked->amount;
+            $amount = (float) $locked->amount;
 
             $locked->update([
                 'status' => 'completed',
-                'notes'  => "Completed via {$source}",
+                'notes' => "Completed via {$source}",
             ]);
 
             $user = User::lockForUpdate()->find($locked->user_id);
-            if (!$user) {
+            if (! $user) {
                 Log::error("DepositService: User {$locked->user_id} not found for transaction {$locked->getKey()}");
+
                 return;
             }
 
@@ -103,7 +104,7 @@ class DepositService
 
         $transaction->update([
             'status' => 'rejected',
-            'notes'  => "Rejected via {$source}",
+            'notes' => "Rejected via {$source}",
         ]);
 
         AuditLog::log(

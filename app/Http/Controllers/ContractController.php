@@ -4,10 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\BusinessContract;
 use App\Models\ContractApplication;
-use App\Models\MarketerReview;
 use App\Models\MarketerSocialLink;
-use App\Models\User;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -63,9 +62,9 @@ class ContractController extends Controller
         });
 
         return Inertia::render('Contracts/Index', [
-            'my_contracts'        => $my_contracts,
+            'my_contracts' => $my_contracts,
             'available_contracts' => $available_contracts,
-            'top_marketers'       => $top_marketers,
+            'top_marketers' => $top_marketers,
         ]);
     }
 
@@ -78,8 +77,8 @@ class ContractController extends Controller
                 $q->with([
                     'marketer' => function ($q) {
                         $q->withAvg('receivedReviews as avg_rating', 'rating')
-                          ->withCount('receivedReviews as review_count')
-                          ->with('socialLinks');
+                            ->withCount('receivedReviews as review_count')
+                            ->with('socialLinks');
                     },
                     'decider',
                     'proofs',
@@ -104,7 +103,7 @@ class ContractController extends Controller
         [, , $totalBudget, $totalFee, $totalCharge] = $this->calculateFundingTotals($data);
 
         if ((float) $user->balance < $totalCharge) {
-            return back()->with('error', "Insufficient balance. Total campaign cost is $" . number_format($totalCharge, 2) . " (incl. 10% service fee). Please top up.");
+            return back()->with('error', 'Insufficient balance. Total campaign cost is $'.number_format($totalCharge, 2).' (incl. 10% service fee). Please top up.');
         }
 
         try {
@@ -114,7 +113,7 @@ class ContractController extends Controller
                 $balanceBefore = (float) $lockedUser->balance;
 
                 if ($balanceBefore < $totalCharge) {
-                    throw new \RuntimeException("Insufficient balance. Total campaign cost is $" . number_format($totalCharge, 2) . " (incl. 10% service fee). Please top up.");
+                    throw new \RuntimeException('Insufficient balance. Total campaign cost is $'.number_format($totalCharge, 2).' (incl. 10% service fee). Please top up.');
                 }
 
                 $lockedUser->decrement('balance', $totalCharge);
@@ -126,7 +125,7 @@ class ContractController extends Controller
                     'balance_before' => $balanceBefore,
                     'balance_after' => $balanceBefore - $totalCharge,
                     'status' => 'completed',
-                    'notes' => 'Pre-funding contract: ' . $data['title'] . ' (Budget: $' . $totalBudget . ', Fee: $' . $totalFee . ')',
+                    'notes' => 'Pre-funding contract: '.$data['title'].' (Budget: $'.$totalBudget.', Fee: $'.$totalFee.')',
                 ]);
 
                 BusinessContract::create([
@@ -146,7 +145,7 @@ class ContractController extends Controller
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to deploy contract: ' . $e->getMessage());
+            return back()->with('error', 'Failed to deploy contract: '.$e->getMessage());
         }
     }
 
@@ -188,7 +187,7 @@ class ContractController extends Controller
                     $balanceBefore = (float) $lockedUser->balance;
 
                     if ($balanceBefore < $chargeDifference) {
-                        throw new \RuntimeException('Insufficient balance to increase contract funding by $' . number_format($chargeDifference, 2) . '.');
+                        throw new \RuntimeException('Insufficient balance to increase contract funding by $'.number_format($chargeDifference, 2).'.');
                     }
 
                     $lockedUser->decrement('balance', $chargeDifference);
@@ -200,7 +199,7 @@ class ContractController extends Controller
                         'balance_before' => $balanceBefore,
                         'balance_after' => $balanceBefore - $chargeDifference,
                         'status' => 'completed',
-                        'notes' => 'Escrow increase for contract #' . $lockedContract->getKey() . ' (Budget: $' . $totalBudget . ', Fee: $' . $totalFee . ')',
+                        'notes' => 'Escrow increase for contract #'.$lockedContract->getKey().' (Budget: $'.$totalBudget.', Fee: $'.$totalFee.')',
                     ]);
                 } elseif ($chargeDifference < 0) {
                     $refundAmount = abs($chargeDifference);
@@ -214,7 +213,7 @@ class ContractController extends Controller
                         'balance_before' => $balanceBefore,
                         'balance_after' => $balanceBefore + $refundAmount,
                         'status' => 'completed',
-                        'notes' => 'Escrow adjustment refund for contract #' . $lockedContract->getKey(),
+                        'notes' => 'Escrow adjustment refund for contract #'.$lockedContract->getKey(),
                     ]);
                 }
 
@@ -236,7 +235,7 @@ class ContractController extends Controller
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to update contract: ' . $e->getMessage());
+            return back()->with('error', 'Failed to update contract: '.$e->getMessage());
         }
     }
 
@@ -255,7 +254,7 @@ class ContractController extends Controller
 
         // Require at least one social link before applying
         $hasSocialLinks = MarketerSocialLink::where('user_id', (int) $user->getAuthIdentifier())->exists();
-        if (!$hasSocialLinks) {
+        if (! $hasSocialLinks) {
             return back()->with('error', 'Add at least one managed social account in your Settings before applying to contracts.');
         }
 
@@ -307,12 +306,12 @@ class ContractController extends Controller
         }
 
         $decision = $request->validate([
-            'decision' => ['required', 'in:' . ContractApplication::STATUS_APPROVED . ',' . ContractApplication::STATUS_DENIED],
+            'decision' => ['required', 'in:'.ContractApplication::STATUS_APPROVED.','.ContractApplication::STATUS_DENIED],
         ])['decision'];
 
         if ($decision === ContractApplication::STATUS_APPROVED) {
             try {
-                DB::transaction(function () use ($contract, $application, $contractId, $userId): void {
+                DB::transaction(function () use ($application, $contractId, $userId): void {
                     // Lock the contract row to prevent concurrent slot allocation
                     $lockedContract = BusinessContract::lockForUpdate()->findOrFail($contractId);
                     $totalSlots = (int) $lockedContract->slots;
@@ -358,6 +357,7 @@ class ContractController extends Controller
                 'decided_by' => $userId,
                 'reviewed_at' => now(),
             ]);
+
             return back()->with('success', 'Application denied.');
         }
     }
@@ -398,7 +398,7 @@ class ContractController extends Controller
                         'balance_before' => $balanceBefore,
                         'balance_after' => $balanceBefore + $totalRefund,
                         'status' => 'completed',
-                        'notes' => 'Refund for ' . $unusedSlots . ' unused slots on contract #' . $lockedContract->id,
+                        'notes' => 'Refund for '.$unusedSlots.' unused slots on contract #'.$lockedContract->id,
                     ]);
                 }
 
@@ -415,7 +415,7 @@ class ContractController extends Controller
 
             return back()->with('success', 'Contract closed and unused funds refunded to your wallet.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to close contract: ' . $e->getMessage());
+            return back()->with('error', 'Failed to close contract: '.$e->getMessage());
         }
     }
 
@@ -435,7 +435,7 @@ class ContractController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array{0: float, 1: int, 2: float, 3: float, 4: float}
      */
     private function calculateFundingTotals(array $data): array

@@ -1,4 +1,5 @@
 <?php
+
 // app/Models/ManualPaymentDetail.php
 
 namespace App\Models;

@@ -5,13 +5,18 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ContractApplication extends Model
 {
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_DENIED = 'denied';
+
     public const STATUS_IGNORED = 'ignored';
 
     protected $fillable = [
@@ -62,7 +67,7 @@ class ContractApplication extends Model
         return $this->proofSubmissions();
     }
 
-    public function review(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function review(): HasOne
     {
         return $this->hasOne(MarketerReview::class, 'contract_application_id');
     }
@@ -80,4 +85,3 @@ class ContractApplication extends Model
         ];
     }
 }
-

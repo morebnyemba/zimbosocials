@@ -40,7 +40,7 @@ class ReferralFirstDepositRewardTest extends TestCase
             'method' => 'innbucks',
         ]);
 
-        $response = $this->actingAs($admin)->post('/admin/transactions/' . $deposit->getKey() . '/approve');
+        $response = $this->actingAs($admin)->post('/admin/transactions/'.$deposit->getKey().'/approve');
 
         $response->assertRedirect();
 
@@ -98,8 +98,8 @@ class ReferralFirstDepositRewardTest extends TestCase
             'method' => 'innbucks',
         ]);
 
-        $this->actingAs($admin)->post('/admin/transactions/' . $firstDeposit->getKey() . '/approve');
-        $this->actingAs($admin)->post('/admin/transactions/' . $secondDeposit->getKey() . '/approve');
+        $this->actingAs($admin)->post('/admin/transactions/'.$firstDeposit->getKey().'/approve');
+        $this->actingAs($admin)->post('/admin/transactions/'.$secondDeposit->getKey().'/approve');
 
         $referrer->refresh();
 

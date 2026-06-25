@@ -1,12 +1,13 @@
 <?php
+
 // app/Http/Controllers/AuthController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\NotificationService;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
@@ -30,7 +31,7 @@ class AuthController extends Controller
 
     // ─── Register ─────────────────────────────────────────────────────────────
 
-    public function showRegister(\Illuminate\Http\Request $request): Response
+    public function showRegister(Request $request): Response
     {
         // Capture referral code from query string into session
         if ($request->filled('ref')) {
@@ -54,34 +55,34 @@ class AuthController extends Controller
     public function register(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'name'             => ['required', 'string', 'max:100'],
-            'email'            => ['required', 'email', 'unique:users,email'],
-            'whatsapp_number'  => ['required', 'string', 'min:10', 'max:20'],
-            'password'         => ['required', 'confirmed', Password::min(8)],
-            'referral_code'    => ['nullable', 'string', 'max:32', 'exists:users,referral_code'],
+            'name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'unique:users,email'],
+            'whatsapp_number' => ['required', 'string', 'min:10', 'max:20'],
+            'password' => ['required', 'confirmed', Password::min(8)],
+            'referral_code' => ['nullable', 'string', 'max:32', 'exists:users,referral_code'],
         ]);
 
         // Normalize WhatsApp number — strip spaces, dashes, leading +
         $waNumber = preg_replace('/[^0-9]/', '', $data['whatsapp_number']);
 
         $referrer = null;
-        if (!empty($data['referral_code'])) {
+        if (! empty($data['referral_code'])) {
             $referrer = User::where('referral_code', $data['referral_code'])->first();
         }
 
         $user = User::create([
-            'name'            => $data['name'],
-            'email'           => $data['email'],
+            'name' => $data['name'],
+            'email' => $data['email'],
             'whatsapp_number' => $waNumber,
-            'phone'           => $waNumber,      // also set phone for convenience
-            'password'        => Hash::make($data['password']),
-            'locale'          => $request->get('locale', 'sn'),
-            'referral_code'   => User::generateReferralCode(),
-            'referred_by'     => $referrer?->getKey(),
+            'phone' => $waNumber,      // also set phone for convenience
+            'password' => Hash::make($data['password']),
+            'locale' => $request->get('locale', 'sn'),
+            'referral_code' => User::generateReferralCode(),
+            'referred_by' => $referrer?->getKey(),
         ]);
 
         // accept account path fields from multi-step registration form
-        $user->role         = in_array($request->input('role'), ['user', 'marketer']) ? $request->input('role') : 'user';
+        $user->role = in_array($request->input('role'), ['user', 'marketer']) ? $request->input('role') : 'user';
         $user->company_name = $request->input('company_name') ? strip_tags($request->input('company_name')) : null;
         $user->save();
         $user->generateApiKey();
@@ -91,7 +92,7 @@ class AuthController extends Controller
         // Send welcome WhatsApp notification
         NotificationService::sendWelcome($user);
 
-    $request->session()->forget('referral_code');
+        $request->session()->forget('referral_code');
 
         return redirect()->route($this->defaultDashboardRoute($user))
             ->with('success', __('messages.welcome', ['name' => $user->name]));
@@ -109,7 +110,7 @@ class AuthController extends Controller
     public function login(Request $request): RedirectResponse
     {
         $credentials = $request->validate([
-            'email'    => ['required', 'email'],
+            'email' => ['required', 'email'],
             'password' => ['required'],
         ]);
 

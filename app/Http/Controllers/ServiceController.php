@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Controllers/ServiceController.php
 
 namespace App\Http\Controllers;
@@ -18,11 +19,11 @@ class ServiceController extends Controller
             $query->byCategory($cat);
         }
 
-        $services   = $query->get();
+        $services = $query->get();
         $categories = Service::active()->distinct()->orderBy('category')->pluck('category');
 
         return Inertia::render('Services', [
-            'services'   => $services,
+            'services' => $services,
             'categories' => $categories,
         ]);
     }

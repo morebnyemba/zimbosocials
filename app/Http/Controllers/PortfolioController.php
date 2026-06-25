@@ -15,7 +15,7 @@ class PortfolioController extends Controller
     /** Public portfolio page */
     public function show(User $user): Response
     {
-        if (!$user->hasMarketerAccess()) {
+        if (! $user->hasMarketerAccess()) {
             abort(404);
         }
 
@@ -23,26 +23,26 @@ class PortfolioController extends Controller
 
         $stats = [
             'completed_contracts' => $user->contractApplications()->where('status', 'completed')->count(),
-            'social_accounts'    => $user->socialLinks()->count(),
+            'social_accounts' => $user->socialLinks()->count(),
         ];
 
         return Inertia::render('Marketer/Portfolio', [
-            'marketer'  => $user->only(['id', 'name', 'company_name', 'bio', 'profile_image_url']),
+            'marketer' => $user->only(['id', 'name', 'company_name', 'bio', 'profile_image_url']),
             'portfolio' => $user->portfolios,
-            'socials'   => $user->socialLinks,
-            'stats'     => $stats,
+            'socials' => $user->socialLinks,
+            'stats' => $stats,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'title'       => ['required', 'string', 'max:140'],
-            'platform'    => ['required', 'string', 'max:50'],
-            'url'         => ['required', 'url', 'max:1000'],
-            'thumbnail_url'=> ['nullable', 'url', 'max:1000'],
+            'title' => ['required', 'string', 'max:140'],
+            'platform' => ['required', 'string', 'max:50'],
+            'url' => ['required', 'url', 'max:1000'],
+            'thumbnail_url' => ['nullable', 'url', 'max:1000'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'metrics'     => ['nullable', 'array'],
+            'metrics' => ['nullable', 'array'],
         ]);
 
         $data['user_id'] = Auth::id();
@@ -54,7 +54,7 @@ class PortfolioController extends Controller
 
     public function destroy(MarketerPortfolio $portfolio): RedirectResponse
     {
-        if ((int)$portfolio->user_id !== (int)Auth::id()) {
+        if ((int) $portfolio->user_id !== (int) Auth::id()) {
             abort(403);
         }
 

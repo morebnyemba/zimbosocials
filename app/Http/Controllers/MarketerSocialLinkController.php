@@ -17,27 +17,27 @@ class MarketerSocialLinkController extends Controller
         $user = Auth::user();
         $role = (string) $user->getAttribute('role');
 
-        if (!in_array($role, ['marketer', 'reseller'], true)) {
+        if (! in_array($role, ['marketer', 'reseller'], true)) {
             return back()->with('error', 'Only marketer accounts can add social links.');
         }
 
         $data = $request->validate([
-            'platform'       => ['required', Rule::in(MarketerSocialLink::platforms())],
-            'handle'         => ['required', 'string', 'max:120'],
-            'profile_url'    => ['nullable', 'url', 'max:500'],
+            'platform' => ['required', Rule::in(MarketerSocialLink::platforms())],
+            'handle' => ['required', 'string', 'max:120'],
+            'profile_url' => ['nullable', 'url', 'max:500'],
             'follower_count' => ['nullable', 'integer', 'min:0'],
         ]);
 
         MarketerSocialLink::updateOrCreate(
             [
-                'user_id'  => (int) $user->getAuthIdentifier(),
+                'user_id' => (int) $user->getAuthIdentifier(),
                 'platform' => $data['platform'],
             ],
             [
-                'handle'         => $data['handle'],
-                'profile_url'    => $data['profile_url'] ?? null,
+                'handle' => $data['handle'],
+                'profile_url' => $data['profile_url'] ?? null,
                 'follower_count' => $data['follower_count'] ?? 0,
-                'verified'       => false, // reset verification on update
+                'verified' => false, // reset verification on update
             ]
         );
 

@@ -1,5 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
+import { useState } from 'react';
+import { Loader2, Sparkles } from 'lucide-react';
 
 interface Reply { id: number; message: string; is_admin: boolean; user?: { id: number; name: string }; created_at: string; }
 interface Ticket { id: number; subject: string; message: string; status: string; priority?: string; user?: { id: number; name: string; email: string }; replies: Reply[]; created_at: string; }
@@ -7,9 +9,37 @@ interface Props { ticket: Ticket; }
 
 export default function TicketShow({ ticket }: Props) {
     const { data, setData, post, processing } = useForm({ message: '' });
+    const [aiDrafting, setAiDrafting] = useState(false);
+    const [aiError, setAiError] = useState<string | null>(null);
 
     const submit = (e: React.FormEvent) => { e.preventDefault(); post(route('admin.tickets.reply', ticket.id), { preserveScroll: true, onSuccess: () => setData('message', '') }); };
     const close = () => router.post(route('admin.tickets.close', ticket.id));
+
+    const draftReply = async () => {
+        setAiDrafting(true);
+        setAiError(null);
+        try {
+            const res = await fetch(route('admin.tickets.draft-reply', ticket.id), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({}),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                setAiError(json.message ?? 'Failed to generate draft.');
+                return;
+            }
+            setData('message', json.draft ?? '');
+        } catch (e) {
+            setAiError('Failed to generate draft.');
+        } finally {
+            setAiDrafting(false);
+        }
+    };
 
     return (
         <AdminLayout>
@@ -50,9 +80,22 @@ export default function TicketShow({ ticket }: Props) {
 
                 {/* Reply Form */}
                 {ticket.status !== 'closed' && (
-                    <form onSubmit={submit} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                    <form onSubmit={submit} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium text-gray-700">Reply</label>
+                            <button
+                                type="button"
+                                onClick={draftReply}
+                                disabled={aiDrafting}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-brand-green/30 text-brand-green hover:bg-brand-green/5 disabled:opacity-50 transition-colors"
+                            >
+                                {aiDrafting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                {aiDrafting ? 'Drafting…' : 'AI Draft Reply'}
+                            </button>
+                        </div>
                         <textarea value={data.message} onChange={e => setData('message', e.target.value)} rows={4} placeholder="Write your reply..." className="w-full rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-sm px-4 py-3 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 placeholder:text-gray-400 resize-none transition-shadow" />
-                        <div className="flex justify-end mt-4">
+                        {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+                        <div className="flex justify-end">
                             <button type="submit" disabled={processing || !data.message} className="px-6 py-2.5 text-sm font-medium rounded-xl bg-brand-green text-white hover:bg-brand-green/90 disabled:opacity-50 transition-colors shadow-sm">Send Reply</button>
                         </div>
                     </form>

@@ -14,7 +14,7 @@ class ContractReviewController extends Controller
 {
     public function store(BusinessContract $contract, ContractApplication $application, Request $request): RedirectResponse
     {
-        $user  = Auth::user();
+        $user = Auth::user();
         $userId = (int) $user->getAuthIdentifier();
 
         // Only the business owner can leave a review
@@ -38,26 +38,26 @@ class ContractReviewController extends Controller
         }
 
         $data = $request->validate([
-            'rating'  => ['required', 'integer', 'min:1', 'max:5'],
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'comment' => ['nullable', 'string', 'max:500'],
         ]);
 
         $marketerId = (int) $application->getAttribute('marketer_id');
 
         MarketerReview::create([
-            'business_contract_id'    => (int) $contract->getKey(),
+            'business_contract_id' => (int) $contract->getKey(),
             'contract_application_id' => (int) $application->getKey(),
-            'reviewer_id'             => $userId,
-            'marketer_id'             => $marketerId,
-            'rating'                  => $data['rating'],
-            'comment'                 => $data['comment'] ?? null,
+            'reviewer_id' => $userId,
+            'marketer_id' => $marketerId,
+            'rating' => $data['rating'],
+            'comment' => $data['comment'] ?? null,
         ]);
 
         NotificationService::notify(
             $marketerId,
             'contract_review',
             'New Review Received',
-            $user->name . ' left you a ' . $data['rating'] . '-star review for: ' . $contract->getAttribute('title'),
+            $user->name.' left you a '.$data['rating'].'-star review for: '.$contract->getAttribute('title'),
             ['contract_id' => (int) $contract->getKey()],
         );
 

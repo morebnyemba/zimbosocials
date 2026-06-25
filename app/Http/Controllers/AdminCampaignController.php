@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Jobs\SendMarketingBroadcastJob;
 use App\Models\MarketingCampaign;
+use App\Services\AI\MarketingCopyGenerator;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -65,5 +67,27 @@ class AdminCampaignController extends Controller
         SendMarketingBroadcastJob::dispatch((int) $campaign->id)->onQueue('notifications');
 
         return back()->with('success', __('messages.broadcast_queued'));
+    }
+
+    public function generateCopy(Request $request, MarketingCopyGenerator $generator): JsonResponse
+    {
+        $data = $request->validate([
+            'brief' => ['required', 'string', 'max:500'],
+            'channels' => ['nullable', 'array'],
+            'channels.*' => ['string', 'in:email,whatsapp,in_app'],
+            'tone' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $result = $generator->generate([
+            'brief' => $data['brief'],
+            'channels' => $data['channels'] ?? ['email'],
+            'tone' => $data['tone'] ?? null,
+        ]);
+
+        if ($result === null) {
+            return response()->json(['message' => 'AI copywriter is not available.'], 503);
+        }
+
+        return response()->json($result);
     }
 }

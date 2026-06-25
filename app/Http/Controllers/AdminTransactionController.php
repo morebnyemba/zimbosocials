@@ -3,13 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
-use App\Services\DepositService;
-use App\Services\NotificationService;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Models\BusinessContract;
+use App\Services\DepositService;
+use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,8 +29,8 @@ class AdminTransactionController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('id', $search)
-                  ->orWhere('reference', 'like', "%{$search}%")
-                  ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
+                    ->orWhere('reference', 'like', "%{$search}%")
+                    ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
             });
         }
 
@@ -54,9 +53,9 @@ class AdminTransactionController extends Controller
         });
 
         return Inertia::render('Admin/Transactions/Index', [
-            'transactions'        => $transactions,
-            'filters'             => $request->only(['search', 'type', 'status']),
-            'pending_deposits'    => $pendingDeposits,
+            'transactions' => $transactions,
+            'filters' => $request->only(['search', 'type', 'status']),
+            'pending_deposits' => $pendingDeposits,
             'pending_withdrawals' => $pendingWithdrawals,
         ]);
     }
@@ -69,7 +68,7 @@ class AdminTransactionController extends Controller
 
         $credited = $this->depositService->credit($transaction, 'admin_approval');
 
-        if (!$credited) {
+        if (! $credited) {
             return back()->with('error', 'Transaction was already processed.');
         }
 
@@ -141,7 +140,7 @@ class AdminTransactionController extends Controller
         );
 
         NotificationService::notify($transaction->user_id, 'withdrawal_processed', 'Withdrawal Processed',
-            "Your withdrawal of \$" . abs((float)$transaction->amount) . " has been processed.");
+            'Your withdrawal of $'.abs((float) $transaction->amount).' has been processed.');
 
         // Bust admin dashboard caches
         Cache::forget('admin:pending_withdrawals');
@@ -171,22 +170,22 @@ class AdminTransactionController extends Controller
         // Consolidated summary — 1 query instead of 6
         $summary = Cache::remember("admin:revenue_summary:{$days}", 120, function () {
             return [
-                'total_revenue'   => Order::sum('charge'),
-                'month_revenue'   => Order::where('created_at', '>=', now()->startOfMonth())->sum('charge'),
-                'today_revenue'   => Order::where('created_at', '>=', now()->startOfDay())->sum('charge'),
-                'total_users'     => User::count(),
-                'total_orders'    => Order::count(),
+                'total_revenue' => Order::sum('charge'),
+                'month_revenue' => Order::where('created_at', '>=', now()->startOfMonth())->sum('charge'),
+                'today_revenue' => Order::where('created_at', '>=', now()->startOfDay())->sum('charge'),
+                'total_users' => User::count(),
+                'total_orders' => Order::count(),
                 'avg_order_value' => Order::avg('charge'),
             ];
         });
 
         return Inertia::render('Admin/Revenue', [
-            'daily_revenue'    => $daily_revenue,
-            'top_services'     => $top_services,
-            'new_users'        => $new_users,
+            'daily_revenue' => $daily_revenue,
+            'top_services' => $top_services,
+            'new_users' => $new_users,
             'orders_by_status' => $orders_by_status,
-            'summary'          => $summary,
-            'days'             => $days,
+            'summary' => $summary,
+            'days' => $days,
         ]);
     }
 }

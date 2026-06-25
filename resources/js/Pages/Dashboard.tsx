@@ -52,6 +52,18 @@ interface BusinessContract {
     created_at: string;
 }
 
+interface RecommendedService {
+    id: number;
+    name: string;
+    category: string;
+    description?: string | null;
+    min_qty?: number;
+    max_qty?: number;
+    rate?: number;
+    avg_time_minutes?: number | null;
+    reason?: string | null;
+}
+
 interface Props {
     auth: any;
     stats: {
@@ -70,6 +82,7 @@ interface Props {
         total_contracts: number;
         pending_applications: number;
     };
+    recommended_services?: RecommendedService[];
 }
 
 const statusThemes: Record<string, { bg: string; text: string; icon: any }> = {
@@ -89,6 +102,7 @@ export default function Dashboard({
     business_contracts,
     incoming_contract_applications,
     contract_stats,
+    recommended_services = [],
 }: Props) {
     const user = auth.user;
      const { t } = useTranslation();
@@ -199,6 +213,36 @@ export default function Dashboard({
                         </>
                     )}
                 </section>
+
+                {/* AI Recommendations */}
+                {recommended_services.length > 0 && (
+                    <section className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h3 className="text-2xl font-black text-zinc-900 tracking-tight">{t('recommended_for_you')}</h3>
+                                <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('ai_recommendations_subtitle')}</p>
+                            </div>
+                            <FaRegLightbulb className="text-emerald-500 text-2xl" />
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            {recommended_services.map((service) => (
+                                <Link
+                                    key={service.id}
+                                    href={route('orders.create', { service_id: service.id })}
+                                    className="group p-6 rounded-[2rem] border border-zinc-100 bg-zinc-50 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all"
+                                >
+                                    <p className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-2">{service.category}</p>
+                                    <p className="font-black text-zinc-900 mb-2 line-clamp-2 group-hover:text-emerald-700 transition-colors">{service.name}</p>
+                                    {service.reason && <p className="text-xs text-zinc-500 mb-3 line-clamp-2">{service.reason}</p>}
+                                    <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                                        <span>{t('from_qty', { qty: service.min_qty ?? 1 })}</span>
+                                        <FaArrowRight className="text-zinc-300 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 <div className={`grid gap-10 ${user.account_type === 'business' ? 'lg:grid-cols-[1.6fr,1fr]' : 'grid-cols-1'}`}>
                     {/* Active Work Section */}

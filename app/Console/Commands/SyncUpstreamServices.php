@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 class SyncUpstreamServices extends Command
 {
     protected $signature = 'upstream:sync-services';
+
     protected $description = 'Syncs service prices and constraints from all active upstream providers';
 
     public function handle(UpstreamProviderClient $client): int
@@ -20,6 +21,7 @@ class SyncUpstreamServices extends Command
 
         if ($providers->isEmpty()) {
             $this->warn('No active upstream providers found. Aborting sync.');
+
             return self::SUCCESS;
         }
 
@@ -33,6 +35,7 @@ class SyncUpstreamServices extends Command
 
             if (empty($upstreamServices)) {
                 $this->error("Failed to fetch services from {$provider->name}.");
+
                 continue;
             }
 
@@ -40,7 +43,7 @@ class SyncUpstreamServices extends Command
             $upstreamMap = [];
             foreach ($upstreamServices as $us) {
                 if (isset($us['service'])) {
-                    $upstreamMap[(string)$us['service']] = $us;
+                    $upstreamMap[(string) $us['service']] = $us;
                 }
             }
 
@@ -50,15 +53,16 @@ class SyncUpstreamServices extends Command
             foreach ($pivots as $pivot) {
                 $externalId = $pivot->external_service_id;
 
-                if (!isset($upstreamMap[$externalId])) {
+                if (! isset($upstreamMap[$externalId])) {
                     $this->warn("Provider {$provider->name} missing external ID {$externalId}. Disabling pivot.");
                     $pivot->update(['is_active' => false]);
+
                     continue;
                 }
 
                 $usData = $upstreamMap[$externalId];
                 $upstreamRate = (float) ($usData['rate'] ?? 0);
-                
+
                 if ($upstreamRate <= 0) {
                     continue;
                 }
@@ -101,6 +105,7 @@ class SyncUpstreamServices extends Command
         }
 
         $this->info("Successfully synced services. Updated: {$updatedCount}");
+
         return self::SUCCESS;
     }
 }

@@ -1,6 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, Link } from '@inertiajs/react';
-import { Users, ShoppingCart, Activity, DollarSign, Ticket, CreditCard, Box, PieChart, UserCheck, FileText } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Users, ShoppingCart, Activity, DollarSign, Ticket, CreditCard, Box, PieChart, UserCheck, FileText, Sparkles, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
 interface Stats {
@@ -71,7 +72,60 @@ function MiniBarChart({ data, maxHeight = 60 }: { data: { label: string; value: 
 
 export default function AdminDashboard({ stats, recent_orders, pending_proofs, daily_revenue, orders_by_status, recent_users }: Props) {
     const revenueChartData = daily_revenue.map(d => ({ label: d.date, value: Number(d.total) }));
-        const { t } = useTranslation();
+    const { t } = useTranslation();
+    const [moderationResults, setModerationResults] = useState<Record<number, { flagged: boolean; reason: string; severity: string }>>({});
+    const [moderating, setModerating] = useState<number | null>(null);
+
+    const moderateProof = async (proofId: number) => {
+        setModerating(proofId);
+        try {
+            const res = await fetch(route('admin.moderation.proof', proofId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({}),
+            });
+            if (res.ok) {
+                const json = await res.json();
+                setModerationResults(prev => ({ ...prev, [proofId]: json }));
+            }
+        } finally {
+            setModerating(null);
+        }
+    };
+    const [summary, setSummary] = useState<string | null>(null);
+    const [summaryLoading, setSummaryLoading] = useState(false);
+    const [summaryError, setSummaryError] = useState<string | null>(null);
+    const [summaryDays, setSummaryDays] = useState(7);
+
+    const fetchSummary = async (days: number) => {
+        setSummaryLoading(true);
+        setSummaryError(null);
+        try {
+            const res = await fetch(route('admin.analytics.summary', { days }), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                setSummaryError(json.message ?? t('ai_error'));
+                setSummary(null);
+                return;
+            }
+            setSummary(json.summary ?? null);
+        } catch (e) {
+            setSummaryError(t('ai_error'));
+            setSummary(null);
+        } finally {
+            setSummaryLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchSummary(summaryDays);
+    }, [summaryDays]);
 
     return (
         <AdminLayout>
@@ -90,6 +144,39 @@ export default function AdminDashboard({ stats, recent_orders, pending_proofs, d
                             {t('revenue_analytics')}
                         </Link>
                     </div>
+                </div>
+
+                {/* AI Summary */}
+                <div className="rounded-xl border border-brand-green/20 bg-brand-green/5 p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <Sparkles className="h-4 w-4 text-brand-green" />
+                            <h2 className="text-sm font-bold text-gray-900">{t('ai_summary')}</h2>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={summaryDays}
+                                onChange={e => setSummaryDays(Number(e.target.value))}
+                                className="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:border-brand-green"
+                            >
+                                <option value={7}>7 days</option>
+                                <option value={14}>14 days</option>
+                                <option value={30}>30 days</option>
+                                <option value={90}>90 days</option>
+                            </select>
+                            <button
+                                onClick={() => fetchSummary(summaryDays)}
+                                disabled={summaryLoading}
+                                className="p-1.5 rounded-lg hover:bg-brand-green/10 text-brand-green disabled:opacity-50"
+                                title={t('ai_refresh')}
+                            >
+                                {summaryLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                            </button>
+                        </div>
+                    </div>
+                    {summary && <p className="text-sm text-gray-700 leading-relaxed">{summary}</p>}
+                    {summaryError && <p className="text-xs text-red-600">{summaryError}</p>}
+                    {!summary && !summaryError && summaryLoading && <p className="text-xs text-gray-500">{t('ai_loading')}</p>}
                 </div>
 
                 {/* Stats Grid */}
@@ -219,15 +306,31 @@ export default function AdminDashboard({ stats, recent_orders, pending_proofs, d
                         </h2>
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                             {pending_proofs.map(p => (
-                                <div key={p.id} className="flex items-center justify-between p-4 rounded-xl bg-white border border-brand-orange/20 shadow-sm hover:shadow transition-shadow">
-                                    <div className="overflow-hidden pr-3">
-                                        <p className="text-sm font-semibold text-zinc-900 truncate">{p.marketer?.name}</p>
-                                        <p className="text-xs text-zinc-500 truncate">{p.contract_application?.contract?.title}</p>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-brand-orange mt-1">{p.contract_application?.contract?.platform}</p>
+                                <div key={p.id} className="flex flex-col p-4 rounded-xl bg-white border border-brand-orange/20 shadow-sm hover:shadow transition-shadow gap-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="overflow-hidden pr-3">
+                                            <p className="text-sm font-semibold text-zinc-900 truncate">{p.marketer?.name}</p>
+                                            <p className="text-xs text-zinc-500 truncate">{p.contract_application?.contract?.title}</p>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-brand-orange mt-1">{p.contract_application?.contract?.platform}</p>
+                                        </div>
+                                        <a href={p.proof_url} target="_blank" rel="noopener" className="shrink-0 text-xs font-semibold text-brand-green hover:text-brand-green/80 px-3 py-1.5 rounded-lg border border-brand-green/20 bg-brand-green/5 hover:bg-brand-green/10 transition-colors">
+                                            {t('review')}
+                                        </a>
                                     </div>
-                                    <a href={p.proof_url} target="_blank" rel="noopener" className="shrink-0 text-xs font-semibold text-brand-green hover:text-brand-green/80 px-3 py-1.5 rounded-lg border border-brand-green/20 bg-brand-green/5 hover:bg-brand-green/10 transition-colors">
-                                        {t('review')}
-                                    </a>
+                                    {moderationResults[p.id] && (
+                                        <div className={`text-xs p-2 rounded-lg ${moderationResults[p.id].severity === 'high' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                            <span className="font-semibold flex items-center gap-1"><ShieldAlert className="w-3 h-3" /> {t('ai_reason')}:</span> {moderationResults[p.id].reason}
+                                        </div>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => moderateProof(p.id)}
+                                        disabled={moderating === p.id}
+                                        className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-brand-green hover:text-brand-green/80 disabled:opacity-50"
+                                    >
+                                        {moderating === p.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                                        {t('ai_moderate')}
+                                    </button>
                                 </div>
                             ))}
                         </div>

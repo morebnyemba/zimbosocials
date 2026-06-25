@@ -6,7 +6,6 @@ use App\Jobs\SendEmailNotification;
 use App\Jobs\SendWhatsAppNotification;
 use App\Models\Notification;
 use App\Models\User;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Central notification orchestrator — dispatches to in-app + email + WhatsApp.
@@ -47,11 +46,8 @@ class NotificationService
     /**
      * Send a notification across all applicable channels.
      *
-     * @param  int    $userId
-     * @param  string $type         Notification type key (matches template name in config)
-     * @param  string $title
-     * @param  string $body
-     * @param  array  $data         Additional data (stored in notification + used for template params)
+     * @param  string  $type  Notification type key (matches template name in config)
+     * @param  array  $data  Additional data (stored in notification + used for template params)
      */
     public static function notify(
         int $userId,
@@ -65,12 +61,12 @@ class NotificationService
 
         // 2) Determine user's channel preferences
         $user = User::find($userId);
-        if (!$user) {
+        if (! $user) {
             return $notification;
         }
 
         $prefs = $user->notification_prefs ?? [
-            'email'    => true,
+            'email' => true,
             'whatsapp' => true,
         ];
 
@@ -78,7 +74,7 @@ class NotificationService
         if (
             in_array($type, self::WHATSAPP_TYPES, true)
             && ($prefs['whatsapp'] ?? true)
-            && !empty($user->whatsapp_number)
+            && ! empty($user->whatsapp_number)
         ) {
             $templateParams = self::buildTemplateParams($user, $type, $data);
 
@@ -159,7 +155,7 @@ class NotificationService
             'deposit_confirmed' => [
                 $user->name,
                 $data['amount'] ?? '—',
-                '$' . number_format((float)$user->balance, 2),
+                '$'.number_format((float) $user->balance, 2),
                 now()->format('M j, Y'),
             ],
             'deposit_rejected' => [
@@ -173,14 +169,14 @@ class NotificationService
             ],
             'order_status_changed' => [
                 $user->name,
-                (string)($data['order_id'] ?? ''),
+                (string) ($data['order_id'] ?? ''),
                 $data['status'] ?? '—',
                 $data['service_name'] ?? '—',
-                (string)($data['quantity'] ?? ''),
+                (string) ($data['quantity'] ?? ''),
             ],
             'order_refunded' => [
                 $user->name,
-                (string)($data['order_id'] ?? ''),
+                (string) ($data['order_id'] ?? ''),
                 $data['refund_amount'] ?? '—',
                 $data['amount'] ?? '—',
             ],
@@ -188,7 +184,7 @@ class NotificationService
                 $user->name,
                 $data['adjustment'] ?? $data['amount'] ?? '—',
                 $data['reason'] ?? '—',
-                '$' . number_format((float)$user->balance, 2),
+                '$'.number_format((float) $user->balance, 2),
             ],
             'role_changed' => [
                 $user->name,

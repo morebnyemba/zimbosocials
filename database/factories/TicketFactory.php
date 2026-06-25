@@ -16,11 +16,11 @@ class TicketFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id'       => User::factory(),
-            'subject'       => $this->faker->sentence(6),
-            'message'       => $this->faker->paragraph(),
-            'status'        => 'open',
-            'priority'      => $this->faker->randomElement(['low', 'normal', 'high']),
+            'user_id' => User::factory(),
+            'subject' => $this->faker->sentence(6),
+            'message' => $this->faker->paragraph(),
+            'status' => 'open',
+            'priority' => $this->faker->randomElement(['low', 'normal', 'high']),
             'last_reply_at' => now(),
         ];
     }

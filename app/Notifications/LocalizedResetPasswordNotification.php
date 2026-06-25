@@ -11,9 +11,7 @@ class LocalizedResetPasswordNotification extends Notification implements ShouldQ
 {
     use Queueable;
 
-    public function __construct(public readonly string $token)
-    {
-    }
+    public function __construct(public readonly string $token) {}
 
     public function via(object $notifiable): array
     {

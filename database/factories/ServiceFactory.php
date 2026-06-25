@@ -16,18 +16,19 @@ class ServiceFactory extends Factory
     {
         $rate = $this->faker->randomFloat(4, 0.1, 5.0);
         $name = $this->faker->words(3, true);
+
         return [
-            'name'          => $name,
-            'name_sn'       => $name,
-            'category'      => $this->faker->randomElement(['Instagram', 'TikTok', 'YouTube', 'Facebook', 'Twitter']),
-            'description'   => $this->faker->sentence(),
-            'rate'          => $rate,
-            'min_qty'       => 100,
-            'max_qty'       => 100000,
+            'name' => $name,
+            'name_sn' => $name,
+            'category' => $this->faker->randomElement(['Instagram', 'TikTok', 'YouTube', 'Facebook', 'Twitter']),
+            'description' => $this->faker->sentence(),
+            'rate' => $rate,
+            'min_qty' => 100,
+            'max_qty' => 100000,
             'display_order' => $this->faker->numberBetween(1, 100),
-            'is_active'     => true,
-            'is_dripfeed'   => false,
-            'is_refill'     => false,
+            'is_active' => true,
+            'is_dripfeed' => false,
+            'is_refill' => false,
         ];
     }
 

@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\AuditLog;
+use App\Models\ContractApplication;
+use App\Models\MarketerPortfolio;
+use App\Models\Transaction;
+use App\Models\User;
+use App\Services\AI\ContentModerator;
 use App\Services\NotificationService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Http\RedirectResponse;
 
 class AdminMarketerController extends Controller
 {
@@ -20,8 +25,8 @@ class AdminMarketerController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('company_name', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('company_name', 'like', "%{$search}%");
             });
         }
 
@@ -38,22 +43,22 @@ class AdminMarketerController extends Controller
             ->pluck('cnt', 'marketer_status');
 
         $status_counts = [
-            'all'      => $rawCounts->sum(),
-            'pending'  => (int) ($rawCounts['pending']  ?? 0),
+            'all' => $rawCounts->sum(),
+            'pending' => (int) ($rawCounts['pending'] ?? 0),
             'approved' => (int) ($rawCounts['approved'] ?? 0),
             'rejected' => (int) ($rawCounts['rejected'] ?? 0),
         ];
 
         return Inertia::render('Admin/Marketers/Index', [
-            'marketers'     => $marketers,
-            'filters'       => $request->only(['search', 'status']),
+            'marketers' => $marketers,
+            'filters' => $request->only(['search', 'status']),
             'status_counts' => $status_counts,
         ]);
     }
 
     public function approve(User $user): RedirectResponse
     {
-        if (!$user->isMarketer() && $user->role !== 'reseller') {
+        if (! $user->isMarketer() && $user->role !== 'reseller') {
             return back()->with('error', 'User is not a marketer.');
         }
 
@@ -80,7 +85,7 @@ class AdminMarketerController extends Controller
 
     public function reject(User $user, Request $request): RedirectResponse
     {
-        if (!$user->isMarketer() && $user->role !== 'reseller') {
+        if (! $user->isMarketer() && $user->role !== 'reseller') {
             return back()->with('error', 'User is not a marketer.');
         }
 
@@ -101,7 +106,7 @@ class AdminMarketerController extends Controller
             $user->id,
             'marketer_rejected',
             'Marketer Account Rejected',
-            'Your marketer account request was not approved. ' . ($request->reason ? "Reason: {$request->reason}" : "")
+            'Your marketer account request was not approved. '.($request->reason ? "Reason: {$request->reason}" : '')
         );
 
         return back()->with('success', "Marketer {$user->name} rejected.");
@@ -110,22 +115,22 @@ class AdminMarketerController extends Controller
     public function show($id): Response
     {
         $user = User::findOrFail($id);
-        
-        if (!$user->isMarketer() && $user->role !== 'reseller') {
+
+        if (! $user->isMarketer() && $user->role !== 'reseller') {
             abort(404);
         }
 
         $user->load(['socialLinks', 'portfolios']);
         $user->loadCount(['contractApplications', 'contractProofSubmissions']);
 
-        $recent_applications = \App\Models\ContractApplication::where('marketer_id', $user->id)
+        $recent_applications = ContractApplication::where('marketer_id', $user->id)
             ->with('contract.business')
             ->latest()
             ->limit(10)
             ->get();
 
         $stats = [
-            'earnings' => \App\Models\Transaction::where('user_id', $user->id)
+            'earnings' => Transaction::where('user_id', $user->id)
                 ->where('type', 'contract_earning')->where('status', 'completed')->sum('amount'),
             'applications' => $user->contract_applications_count,
             'proofs' => $user->contract_proof_submissions_count,
@@ -133,7 +138,7 @@ class AdminMarketerController extends Controller
 
         return Inertia::render('Admin/Marketers/Show', [
             'marketer' => $user,
-            'stats'    => $stats,
+            'stats' => $stats,
             'recent_applications' => $recent_applications,
         ]);
     }
@@ -141,9 +146,9 @@ class AdminMarketerController extends Controller
     public function suspend(User $user): RedirectResponse
     {
         $user->update(['is_active' => false]);
-        
+
         AuditLog::log('marketer.suspended', Auth::id(), User::class, $user->id);
-        
+
         return back()->with('success', "Marketer {$user->name} suspended.");
     }
 
@@ -151,11 +156,11 @@ class AdminMarketerController extends Controller
     {
         $user->update([
             'role' => 'user',
-            'marketer_status' => 'approved' // Reset status but they are now just a user
+            'marketer_status' => 'approved', // Reset status but they are now just a user
         ]);
-        
+
         AuditLog::log('marketer.demoted', Auth::id(), User::class, $user->id);
-        
+
         return redirect()->route('admin.users.show', $user->id)->with('success', "Marketer {$user->name} demoted to regular user.");
     }
 
@@ -163,16 +168,28 @@ class AdminMarketerController extends Controller
     {
         $name = $user->name;
         $user->delete();
-        
+
         AuditLog::log('marketer.terminated', Auth::id(), User::class, $user->id);
-        
+
         return redirect()->route('admin.marketers.index')->with('success', "Marketer {$name} account terminated.");
+    }
+
+    public function moderatePortfolio(MarketerPortfolio $portfolio, ContentModerator $moderator): JsonResponse
+    {
+        $result = $moderator->reviewPortfolio($portfolio);
+
+        if ($result === null) {
+            return response()->json(['message' => 'AI moderator is not available or content looks clean.'], 503);
+        }
+
+        return response()->json($result);
     }
 
     public function resendEmailVerification(User $user): RedirectResponse
     {
         $user->sendEmailVerificationNotification();
         AuditLog::log('marketer.email_verification_resent', Auth::id(), User::class, $user->id);
+
         return back()->with('success', "Verification email has been resent to {$user->email}.");
     }
 
@@ -180,12 +197,14 @@ class AdminMarketerController extends Controller
     {
         $user->markEmailAsVerified();
         AuditLog::log('marketer.email_manually_verified', Auth::id(), User::class, $user->id);
+
         return back()->with('success', "Email address for {$user->name} has been manually verified.");
     }
 
     public function resendPhoneVerification(User $user): RedirectResponse
     {
         AuditLog::log('marketer.phone_verification_resent', Auth::id(), User::class, $user->id);
+
         return back()->with('success', "Phone verification request has been resent to {$user->phone}.");
     }
 }
