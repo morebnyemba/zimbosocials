@@ -43,6 +43,7 @@ class HandleInertiaRequests extends Middleware
                     'profile_image_url' => $user->profile_image_url,
                     'account_type' => $user->account_type,
                     'notification_prefs' => $user->notification_prefs ?? ['email' => true, 'whatsapp' => true],
+                    'can_use_monetizer' => $user->hasMonetizerAccess(),
                 ] : null,
                 'is_impersonating' => $request->session()->has('impersonator_id'),
             ],

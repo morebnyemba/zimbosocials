@@ -60,6 +60,97 @@ return [
         'order_commission_min_total' => (float) env('REFERRAL_ORDER_COMMISSION_MIN_TOTAL', 20.00),
     ],
 
+    'monetizer' => [
+        'threshold_usd' => (float) env('MONETIZER_THRESHOLD_USD', 100.00),
+        'lookback_days' => (int) env('MONETIZER_LOOKBACK_DAYS', 90),
+
+        /**
+         * Platform monetization goals.
+         * Each requirement maps to active services by category + optional name keywords.
+         * Progress is calculated from the user's completed/processing/pending orders.
+         */
+        'platforms' => [
+            'youtube' => [
+                'label' => 'YouTube Partner Program',
+                'requirements' => [
+                    'subscribers' => [
+                        'label' => '1,000 subscribers',
+                        'target' => 1000,
+                        'metric' => 'subscribers',
+                        'match' => ['category' => 'youtube', 'name_contains' => ['subscriber']],
+                    ],
+                    'watch_hours' => [
+                        'label' => '4,000 watch hours',
+                        'target' => 4000,
+                        'metric' => 'watch_hours',
+                        'match' => ['category' => 'youtube', 'name_contains' => ['watch hour']],
+                    ],
+                ],
+            ],
+            'facebook' => [
+                'label' => 'Facebook Monetization',
+                'requirements' => [
+                    'page_followers' => [
+                        'label' => '5,000 page followers',
+                        'target' => 5000,
+                        'metric' => 'page_followers',
+                        'match' => ['category' => 'facebook', 'name_contains' => ['page follower']],
+                    ],
+                    'video_views' => [
+                        'label' => '60,000 video view minutes',
+                        'target' => 60000,
+                        'metric' => 'video_views',
+                        'match' => ['category' => 'facebook', 'name_contains' => ['video view']],
+                    ],
+                ],
+            ],
+            'tiktok' => [
+                'label' => 'TikTok Creator Rewards',
+                'requirements' => [
+                    'followers' => [
+                        'label' => '10,000 followers',
+                        'target' => 10000,
+                        'metric' => 'followers',
+                        'match' => ['category' => 'tiktok', 'name_contains' => ['follower']],
+                    ],
+                    'views' => [
+                        'label' => '100,000 video views (last 30 days)',
+                        'target' => 100000,
+                        'metric' => 'views',
+                        'match' => ['category' => 'tiktok', 'name_contains' => ['video view']],
+                    ],
+                ],
+            ],
+            'instagram' => [
+                'label' => 'Instagram Monetization',
+                'requirements' => [
+                    'followers' => [
+                        'label' => '10,000 followers',
+                        'target' => 10000,
+                        'metric' => 'followers',
+                        'match' => ['category' => 'instagram', 'name_contains' => ['follower']],
+                    ],
+                    'engagement' => [
+                        'label' => 'Engagement signals',
+                        'target' => null,
+                        'match' => ['category' => 'instagram', 'name_contains' => ['like', 'view', 'comment', 'save']],
+                    ],
+                ],
+            ],
+            'x' => [
+                'label' => 'X / Twitter Monetization',
+                'requirements' => [
+                    'followers' => [
+                        'label' => '500 followers',
+                        'target' => 500,
+                        'metric' => 'followers',
+                        'match' => ['category' => 'twitter', 'name_contains' => ['follower']],
+                    ],
+                ],
+            ],
+        ],
+    ],
+
     // Google Gemini — optional. When the API key is set, admins can opt in to
     // AI cleanup + Shona/Ndebele translation when importing upstream services.
     'gemini' => [

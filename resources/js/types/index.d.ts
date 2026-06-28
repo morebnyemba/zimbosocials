@@ -11,6 +11,16 @@ export interface User {
     locale?: string;
     profile_image_url?: string;
     account_type?: 'individual' | 'business' | 'marketer';
+    can_use_monetizer?: boolean;
+    monetizer_unlocked_at?: string;
+    youtube_channel_id?: string;
+    facebook_page_id?: string;
+    tiktok_username?: string;
+    instagram_username?: string;
+    x_username?: string;
+    manager_role?: string;
+    account_manager_id?: number;
+    support_manager_id?: number;
 }
 
 export type PageProps<

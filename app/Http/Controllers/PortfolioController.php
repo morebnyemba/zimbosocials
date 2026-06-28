@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\MarketerPortfolio;
 use App\Models\User;
+use App\Services\AI\PortfolioCaptionGenerator;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -61,5 +63,23 @@ class PortfolioController extends Controller
         $portfolio->delete();
 
         return back()->with('success', 'Portfolio item removed.');
+    }
+
+    /** AI caption generator for portfolio pieces */
+    public function generateCaption(Request $request, PortfolioCaptionGenerator $generator): JsonResponse
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:140'],
+            'platform' => ['required', 'string', 'max:50'],
+            'tone' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $result = $generator->generate($data['title'], $data['platform'], $data['tone'] ?? null);
+
+        if ($result === null) {
+            return response()->json(['message' => 'AI caption generator is not available.'], 503);
+        }
+
+        return response()->json($result);
     }
 }

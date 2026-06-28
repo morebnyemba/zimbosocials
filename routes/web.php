@@ -30,6 +30,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MarketerController;
 use App\Http\Controllers\MarketerSocialLinkController;
 use App\Http\Controllers\MarketingController;
+use App\Http\Controllers\MonetizerController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaynowController;
@@ -229,6 +230,20 @@ Route::middleware('auth')->group(function () {
     // ─── Marketer panel ───────────────────────────────────────────────────────
     Route::middleware('marketer')->prefix('marketer')->name('marketer.')->group(function () {
         Route::get('/dashboard', [MarketerController::class, 'index'])->name('dashboard');
+        Route::get('/content-calendar', [MarketerController::class, 'contentCalendar'])->name('content-calendar');
+        Route::post('/content-calendar/generate', [MarketerController::class, 'generateCalendar'])
+            ->middleware('throttle:ai-drafts')->name('content-calendar.generate');
+
+        Route::get('/portfolio-caption', [MarketerController::class, 'portfolioCaption'])->name('portfolio-caption');
+        Route::post('/portfolio-caption/generate', [PortfolioController::class, 'generateCaption'])
+            ->middleware('throttle:ai-drafts')->name('portfolio-caption.generate');
+    });
+
+    Route::middleware('marketer')->prefix('monetizer')->name('monetizer.')->group(function () {
+        Route::get('/', [MonetizerController::class, 'index'])->name('index');
+        Route::post('/unlock', [MonetizerController::class, 'unlock'])->name('unlock');
+        Route::post('/profiles', [MonetizerController::class, 'updateProfiles'])->name('profiles.update');
+        Route::post('/manual-stats', [MonetizerController::class, 'updateManualStats'])->name('manual-stats.update');
     });
 
     // Orders

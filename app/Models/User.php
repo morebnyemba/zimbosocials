@@ -45,6 +45,15 @@ class User extends Authenticatable implements MustVerifyEmail
         'admin_role',
         'profile_image_url',
         'account_type',
+        'monetizer_unlocked_at',
+        'youtube_channel_id',
+        'facebook_page_id',
+        'tiktok_username',
+        'instagram_username',
+        'x_username',
+        'manager_role',
+        'account_manager_id',
+        'support_manager_id',
     ];
 
     protected $hidden = [
@@ -57,6 +66,8 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'monetizer_unlocked_at' => 'datetime',
+            'manager_role' => 'string',
             'password' => 'hashed',
             'balance' => 'decimal:4',
             'is_active' => 'boolean',
@@ -186,6 +197,94 @@ class User extends Authenticatable implements MustVerifyEmail
     public function hasMarketerAccess(): bool
     {
         return in_array($this->role, ['marketer', 'reseller'], true);
+    }
+
+    /**
+     * Calculate the total successful deposits + non-refunded order spend over the
+     * configured lookback window for monetizer unlock eligibility.
+     */
+    public function monetizerActivityTotal(): float
+    {
+        $lookbackDays = (int) Setting::get(
+            'monetizer_lookback_days',
+            config('services.monetizer.lookback_days', 90)
+        );
+
+        $since = now()->subDays($lookbackDays);
+
+        $deposited = Transaction::where('user_id', $this->id)
+            ->where('type', 'deposit')
+            ->where('status', 'completed')
+            ->where('created_at', '>=', $since)
+            ->sum('amount');
+
+        $spent = Order::where('user_id', $this->id)
+            ->where('created_at', '>=', $since)
+            ->whereNotIn('status', ['refunded', 'cancelled'])
+            ->sum('charge');
+
+        return (float) $deposited + (float) $spent;
+    }
+
+    /**
+     * Returns true if the user's recent deposit/spend activity meets the monetizer threshold.
+     */
+    public function qualifiesForMonetizer(): bool
+    {
+        $threshold = (float) Setting::get(
+            'monetizer_threshold_usd',
+            config('services.monetizer.threshold_usd', 100.00)
+        );
+
+        return $this->monetizerActivityTotal() >= $threshold;
+    }
+
+    /**
+     * Returns true if the user has unlocked the monetizer panel (either permanently or currently qualifies).
+     */
+    public function hasMonetizerAccess(): bool
+    {
+        return $this->monetizer_unlocked_at !== null || $this->qualifiesForMonetizer();
+    }
+
+    public function isAccountManager(): bool
+    {
+        return $this->manager_role === 'account_manager';
+    }
+
+    public function isSupportManager(): bool
+    {
+        return $this->manager_role === 'support_manager';
+    }
+
+    public function scopeAccountManagers(Builder $query): Builder
+    {
+        return $query->where('manager_role', 'account_manager');
+    }
+
+    public function scopeSupportManagers(Builder $query): Builder
+    {
+        return $query->where('manager_role', 'support_manager');
+    }
+
+    public function accountManager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'account_manager_id');
+    }
+
+    public function supportManager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'support_manager_id');
+    }
+
+    public function managedAccounts(): HasMany
+    {
+        return $this->hasMany(User::class, 'account_manager_id');
+    }
+
+    public function supportedAccounts(): HasMany
+    {
+        return $this->hasMany(User::class, 'support_manager_id');
     }
 
     public function scopeByRole(Builder $query, string $role): Builder

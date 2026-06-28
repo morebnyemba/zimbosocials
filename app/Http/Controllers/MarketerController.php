@@ -11,6 +11,9 @@ use App\Models\MarketerSocialLink;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\Transaction;
+use App\Services\AI\ContentCalendarGenerator;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -133,5 +136,36 @@ class MarketerController extends Controller
             'approved_apps',
             'recent_reviews'
         ));
+    }
+
+    public function contentCalendar(): Response
+    {
+        return Inertia::render('Marketer/ContentCalendar');
+    }
+
+    public function portfolioCaption(): Response
+    {
+        return Inertia::render('Marketer/PortfolioCaption');
+    }
+
+    public function generateCalendar(Request $request, ContentCalendarGenerator $generator): JsonResponse
+    {
+        $data = $request->validate([
+            'brief' => ['required', 'string', 'max:500'],
+            'platform' => ['nullable', 'string', 'in:instagram,tiktok,facebook,x,whatsapp'],
+            'tone' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $result = $generator->generate(
+            (string) $data['brief'],
+            isset($data['platform']) ? (string) $data['platform'] : null,
+            isset($data['tone']) ? (string) $data['tone'] : null
+        );
+
+        if ($result === null) {
+            return response()->json(['message' => 'AI content calendar is not available.'], 503);
+        }
+
+        return response()->json($result);
     }
 }
