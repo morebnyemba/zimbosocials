@@ -83,15 +83,11 @@ export default function HelpPage() {
           <h2 className="text-2xl font-bold">Still need help?</h2>
           <p className="mt-2 max-w-2xl text-sm text-zinc-300">If your issue is payment-related or tied to a specific order, use the contact page and share the exact reference or order ID.</p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link href={route("marketing.contact")}>
-              <Button className="gap-2 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white">
-                Contact Support
-                <FiArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link href={route("register")}>
-              <Button variant="outline" className="border-white text-white hover:bg-white hover:text-zinc-950">Create Account</Button>
-            </Link>
+            <Button render={<Link href={route("marketing.contact")} />} nativeButton={false} className="gap-2 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white">
+              Contact Support
+              <FiArrowRight className="h-4 w-4" />
+            </Button>
+            <Button render={<Link href={route("register")} />} nativeButton={false} variant="outline" className="border-white text-white hover:bg-white hover:text-zinc-950">Create Account</Button>
           </div>
         </motion.div>
       </section>

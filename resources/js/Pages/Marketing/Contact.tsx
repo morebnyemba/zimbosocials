@@ -56,9 +56,7 @@ export default function ContactPage() {
               <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                 <p className="inline-flex items-center gap-2 font-semibold text-white"><FiShield className="h-4 w-4 text-emerald-400" /> Account passwords are never required</p>
               </div>
-              <Link href={route("register")}>
-                <Button className="mt-2 w-full bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white">Create Account</Button>
-              </Link>
+              <Button render={<Link href={route("register")} />} nativeButton={false} className="mt-2 w-full bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white">Create Account</Button>
             </CardContent>
           </Card>
 

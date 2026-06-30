@@ -214,12 +214,10 @@ export default function ServicesPage() {
                   <h2 className="text-2xl font-bold text-zinc-950">{meta.headline}</h2>
                   {meta.body && <p className="mt-1 text-sm text-zinc-600">{meta.body}</p>}
                 </div>
-                <Link href={route("register")}>
-                  <Button className="gap-2 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white">
-                    Register to Order
-                    <FiArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
+                <Button render={<Link href={route("register")} />} nativeButton={false} className="gap-2 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white">
+                  Register to Order
+                  <FiArrowRight className="h-4 w-4" />
+                </Button>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
