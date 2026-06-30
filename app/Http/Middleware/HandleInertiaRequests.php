@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Notification;
+use App\Services\TranslationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
@@ -61,7 +62,7 @@ class HandleInertiaRequests extends Middleware
                 )
                 : 0,
             'locale' => app()->getLocale(),
-            'translations' => fn () => __('messages'),
+            'translations' => fn () => app(TranslationService::class)->messages(app()->getLocale()),
         ];
     }
 }
