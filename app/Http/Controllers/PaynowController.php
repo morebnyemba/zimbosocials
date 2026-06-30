@@ -34,6 +34,33 @@ class PaynowController extends Controller
         private readonly DepositService $depositService,
     ) {}
 
+    /**
+     * Human-readable description of an exception. The Paynow SDK throws several
+     * empty-message exceptions (HashMismatchException, InvalidIntegrationException),
+     * so fall back to the class short-name when the message is blank.
+     */
+    private function describeException(\Throwable $e): string
+    {
+        $message = trim($e->getMessage());
+
+        return $message !== '' ? $message : class_basename($e);
+    }
+
+    /**
+     * Structured log context capturing the full exception detail (class, message,
+     * code, location) plus any extra fields — so blank-message gateway errors are
+     * still identifiable in the log.
+     */
+    private function exceptionContext(\Throwable $e, array $extra = []): array
+    {
+        return array_merge([
+            'exception' => $e::class,
+            'message' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'at' => $e->getFile().':'.$e->getLine(),
+        ], $extra);
+    }
+
     private function getPaynow(): Paynow
     {
         // Resolve through the container so tests can override with a mock
@@ -101,10 +128,10 @@ class PaynowController extends Controller
 
             return response()->json(['success' => false, 'message' => 'Failed to initiate Paynow transaction.'], 400);
 
-        } catch (\Exception $e) {
-            Log::error('Paynow Init Error: '.$e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('Paynow Init Error', $this->exceptionContext($e, ['method' => 'paynow', 'transaction_id' => $transaction->id]));
 
-            return response()->json(['success' => false, 'message' => 'Payment gateway error: '.$e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Payment gateway error: '.$this->describeException($e)], 500);
         }
     }
 
@@ -234,9 +261,9 @@ class PaynowController extends Controller
 
             return response()->json(['success' => false, 'message' => 'Could not send the payment request. Please try again.'], 400);
 
-        } catch (\Exception $e) {
-            Log::error("Paynow {$config['label']} Init Error: ".$e->getMessage());
-            $transaction->update(['status' => 'rejected', 'notes' => 'Exception: '.$e->getMessage()]);
+        } catch (\Throwable $e) {
+            Log::error("Paynow {$config['label']} Init Error", $this->exceptionContext($e, ['provider' => $provider, 'transaction_id' => $transaction->id]));
+            $transaction->update(['status' => 'rejected', 'notes' => 'Exception: '.$this->describeException($e)]);
 
             return response()->json(['success' => false, 'message' => 'Payment gateway error. Please try again later.'], 500);
         }
@@ -328,8 +355,8 @@ class PaynowController extends Controller
                 'message' => 'OTP accepted. Processing your payment…',
             ]);
 
-        } catch (\Exception $e) {
-            Log::error("Paynow O'mari OTP error: ".$e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error("Paynow O'mari OTP error", $this->exceptionContext($e, ['transaction_id' => $transaction->id]));
 
             return response()->json(['success' => false, 'message' => 'Could not submit OTP. Please try again.'], 500);
         }
@@ -413,7 +440,7 @@ class PaynowController extends Controller
                         ->with('error', 'Your payment was cancelled or failed. No funds were deducted.');
                 }
             } catch (\Exception $e) {
-                Log::warning('Paynow return URL poll error: '.$e->getMessage());
+                Log::warning('Paynow return URL poll error', $this->exceptionContext($e, ['transaction_id' => $transaction->id]));
             }
         }
 
@@ -469,8 +496,8 @@ class PaynowController extends Controller
 
                 return response()->json(['status' => 'rejected', 'resolved' => true]);
             }
-        } catch (\Exception $e) {
-            Log::warning('Paynow poll error: '.$e->getMessage());
+        } catch (\Throwable $e) {
+            Log::warning('Paynow poll error', $this->exceptionContext($e, ['transaction_id' => $transaction->id]));
         }
 
         return response()->json(['status' => 'pending', 'resolved' => false]);

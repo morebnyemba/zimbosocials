@@ -41,7 +41,7 @@ class LeaderboardController extends Controller
             $prevMonth->month
         )->groupBy('category')->map(fn ($items) => $items->map(fn ($s) => [
             'rank' => $s->rank,
-            'user_name' => $s->user?->name ?? 'Deleted User',
+            'user_name' => $s->user?->username ?? 'Deleted User',
             'score' => $s->score,
             'prize_title' => $s->prize?->title,
             'is_awarded' => $s->is_awarded,

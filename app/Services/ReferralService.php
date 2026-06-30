@@ -35,6 +35,96 @@ class ReferralService
         return (int) Setting::get('max_referral_commission_orders', 0);
     }
 
+    /**
+     * Percentage bonus credited to a *referred* user on their first deposit
+     * (default 10%). Configurable via the `referred_first_deposit_bonus_percent`
+     * setting.
+     */
+    public function referredFirstDepositBonusPercent(): float
+    {
+        return (float) Setting::get(
+            'referred_first_deposit_bonus_percent',
+            config('services.referral.referred_first_deposit_bonus_percent', 10.00)
+        );
+    }
+
+    /**
+     * Credit the referred user a percentage bonus (default 10%) on their first
+     * completed deposit. Distinct from the referrer's flat reward. Idempotent
+     * via the transaction reference, so retried webhooks/polls never double-pay.
+     */
+    public function creditReferredUserWelcomeBonus(Transaction $depositTransaction): void
+    {
+        if ($depositTransaction->getAttribute('type') !== 'deposit') {
+            return;
+        }
+        if ($depositTransaction->getAttribute('status') !== 'completed') {
+            return;
+        }
+
+        $referredUser = User::find($depositTransaction->getAttribute('user_id'));
+        if (! $referredUser || ! $referredUser->getAttribute('referred_by')) {
+            return;
+        }
+
+        $percent = $this->referredFirstDepositBonusPercent();
+        if ($percent <= 0) {
+            return;
+        }
+
+        // Only the first completed deposit qualifies.
+        $completedDepositCount = Transaction::query()
+            ->where('user_id', $referredUser->getKey())
+            ->where('type', 'deposit')
+            ->where('status', 'completed')
+            ->count();
+
+        if ($completedDepositCount !== 1) {
+            return;
+        }
+
+        $amount = (float) $depositTransaction->getAttribute('amount');
+        $bonus = round(($amount * $percent) / 100, 2);
+        if ($bonus <= 0) {
+            return;
+        }
+
+        $reference = 'REF-WELCOME-'.$referredUser->getKey();
+
+        DB::transaction(function () use ($referredUser, $reference, $bonus, $percent, $amount, $depositTransaction): void {
+            $fresh = User::lockForUpdate()->find($referredUser->getKey());
+            if (! $fresh) {
+                return;
+            }
+
+            $already = Transaction::query()
+                ->where('user_id', $fresh->getKey())
+                ->where('type', 'bonus')
+                ->where('reference', $reference)
+                ->exists();
+
+            if ($already) {
+                return;
+            }
+
+            $bonusTx = $fresh->creditBalance($bonus, 'referral_welcome', $reference, 'bonus');
+
+            AuditLog::log(
+                action: 'referral.referred_welcome_bonus_awarded',
+                userId: null,
+                modelType: Transaction::class,
+                modelId: (int) $bonusTx->getKey(),
+                newValues: [
+                    'referred_user_id' => (int) $fresh->getKey(),
+                    'source_deposit_id' => (int) $depositTransaction->getKey(),
+                    'bonus_percent' => $percent,
+                    'deposit_amount' => $amount,
+                    'bonus_amount' => $bonus,
+                ]
+            );
+        });
+    }
+
     public function rewardReferrerOnFirstDeposit(Transaction $depositTransaction): void
     {
         if ($depositTransaction->getAttribute('type') !== 'deposit') {

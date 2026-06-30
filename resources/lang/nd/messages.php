@@ -329,7 +329,7 @@ return [
     'order_commission' => 'I-order commission',
     'referral_reward_fallback' => 'Umvuzo we-referral',
     'not_available' => 'Akutholakali',
-    'referral_share_message' => 'Ngisebenzisa iZimbo Socials ukukhulisa i-social media presence lokuthola ama-digital marketing services endaweni eyodwa. Bangakuncedisa njalo ukuthi uthole i-monetization. Join me kuZimbo Socials usebenzisa referral link yami: :link. Lawe ungathola imali kumbe ama-followers nxa abantu abasebenzisa i-link yakho besenza ama-orders! Terms apply.',
+    'referral_share_message' => 'Ngisebenzisa iZimbo Socials ukukhulisa i-social media presence lokuthola ama-digital marketing services endaweni eyodwa. Bangakuncedisa njalo ukuthi uthole i-monetization. Bhalisa usebenzisa i-referral link yami uthole :percent% eyengeziweyo kudiphozithi yakho yokuqala: :link. Lawe ungathola imali kumbe ama-followers nxa abantu abasebenzisa i-link yakho besenza ama-orders! Terms apply.',
     'contracts_opportunities_terminal' => 'I-Terminal Yamathuba',
     'contracts_marketplace_title' => 'I-Marketplace YamaContract',
     'contracts_business_subtitle' => 'Faka ama-campaign akho njalo uqashe ithalente ledigital eliphezulu eZimbabwe ukuze ukhule ibhrendi yakho.',

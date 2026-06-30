@@ -6,10 +6,13 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\NotificationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -27,6 +30,44 @@ class AuthController extends Controller
         }
 
         return 'dashboard';
+    }
+
+    /**
+     * Shared username validation rules: 3–20 chars, letters/numbers/underscore,
+     * must start with a letter, unique (case-insensitive). Pass an id to ignore
+     * when updating an existing user.
+     */
+    private static function usernameRules(?int $ignoreId = null): array
+    {
+        $unique = Rule::unique('users', 'username');
+        if ($ignoreId) {
+            $unique->ignore($ignoreId);
+        }
+
+        return ['required', 'string', 'min:3', 'max:20', 'regex:/^[a-zA-Z][a-zA-Z0-9_]*$/', $unique];
+    }
+
+    /**
+     * Real-time username availability check for the registration form.
+     * Returns { available: bool, reason?: string, suggestion?: string }.
+     */
+    public function checkUsername(Request $request): JsonResponse
+    {
+        $username = strtolower(trim((string) $request->query('username', '')));
+
+        $validator = Validator::make(['username' => $username], ['username' => self::usernameRules()]);
+
+        if ($validator->fails()) {
+            $taken = User::where('username', $username)->exists();
+
+            return response()->json([
+                'available' => false,
+                'reason' => $taken ? 'taken' : 'invalid',
+                'suggestion' => $taken ? User::generateUsernameFromName($username) : null,
+            ]);
+        }
+
+        return response()->json(['available' => true]);
     }
 
     // ─── Register ─────────────────────────────────────────────────────────────
@@ -56,6 +97,7 @@ class AuthController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
+            'username' => self::usernameRules(),
             'email' => ['required', 'email', 'unique:users,email'],
             'whatsapp_number' => ['required', 'string', 'min:10', 'max:20'],
             'password' => ['required', 'confirmed', Password::min(8)],
@@ -72,6 +114,7 @@ class AuthController extends Controller
 
         $user = User::create([
             'name' => $data['name'],
+            'username' => strtolower($data['username']),
             'email' => $data['email'],
             'whatsapp_number' => $waNumber,
             'phone' => $waNumber,      // also set phone for convenience
@@ -110,10 +153,17 @@ class AuthController extends Controller
 
     public function login(Request $request): RedirectResponse
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
+        $data = $request->validate([
+            'login' => ['required', 'string'],
             'password' => ['required'],
         ]);
+
+        // Accept either an email address or a username in the single login field.
+        $field = filter_var($data['login'], FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+        $credentials = [
+            $field => $field === 'username' ? strtolower($data['login']) : $data['login'],
+            'password' => $data['password'],
+        ];
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $request->session()->regenerate();
@@ -125,8 +175,8 @@ class AuthController extends Controller
         }
 
         return back()->withErrors([
-            'email' => __('auth.failed'),
-        ])->onlyInput('email');
+            'login' => __('auth.failed'),
+        ])->onlyInput('login');
     }
 
     // ─── Logout ───────────────────────────────────────────────────────────────

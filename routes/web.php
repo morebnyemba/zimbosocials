@@ -86,6 +86,8 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
+    Route::get('/username-available', [AuthController::class, 'checkUsername'])
+        ->middleware('throttle:30,1')->name('username.check');
 
     // Password reset
     Route::get('/forgot-password', [PasswordResetLinkController::class, 'create'])->name('password.request');

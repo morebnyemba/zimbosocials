@@ -21,6 +21,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
         'balance',
@@ -322,6 +323,31 @@ class User extends Authenticatable implements MustVerifyEmail
         } while (static::where('referral_code', $code)->exists());
 
         return $code;
+    }
+
+    /**
+     * Build a unique, valid username from a free-text name (used to backfill
+     * existing users). Lowercases, strips to [a-z0-9_], trims to 3–20 chars,
+     * and appends a numeric suffix on collision.
+     */
+    public static function generateUsernameFromName(string $name, ?int $ignoreId = null): string
+    {
+        $base = strtolower(preg_replace('/[^a-z0-9_]/', '', str_replace([' ', '-', '.'], '_', strtolower($name))));
+        $base = trim($base, '_');
+
+        if (strlen($base) < 3) {
+            $base = 'user'.($base !== '' ? '_'.$base : '');
+        }
+        $base = substr($base, 0, 18);
+
+        $candidate = $base;
+        $suffix = 1;
+        while (static::where('username', $candidate)->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))->exists()) {
+            $candidate = substr($base, 0, 18 - strlen((string) $suffix)).$suffix;
+            $suffix++;
+        }
+
+        return $candidate;
     }
 
     /**

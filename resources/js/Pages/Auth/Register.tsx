@@ -5,8 +5,10 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react'
 import { PageProps } from '@/types'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { FormEventHandler, ReactNode } from 'react'
-import { useState } from 'react'
-import { FiArrowLeft, FiArrowRight, FiBriefcase, FiCheckCircle, FiUser, FiUsers, FiGift } from 'react-icons/fi'
+import { useEffect, useRef, useState } from 'react'
+import { FiArrowLeft, FiArrowRight, FiBriefcase, FiCheckCircle, FiUser, FiUsers, FiGift, FiLoader, FiXCircle } from 'react-icons/fi'
+
+type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
 
 type AccountPath = 'marketer' | 'individual' | 'business'
 
@@ -62,6 +64,7 @@ export default function Register() {
 
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
+        username: '',
         email: '',
         whatsapp_number: '',
         password: '',
@@ -72,6 +75,47 @@ export default function Register() {
         locale: 'sn',
         referral_code: referralCode ?? '',
     })
+
+    // Debounced real-time username availability check.
+    const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle')
+    const [usernameSuggestion, setUsernameSuggestion] = useState<string | null>(null)
+    const debounceRef = useRef<number | null>(null)
+
+    useEffect(() => {
+        const value = data.username.trim().toLowerCase()
+        setUsernameSuggestion(null)
+
+        if (debounceRef.current) window.clearTimeout(debounceRef.current)
+
+        if (value.length < 3) {
+            setUsernameStatus(value.length === 0 ? 'idle' : 'invalid')
+            return
+        }
+        if (!/^[a-z][a-z0-9_]*$/.test(value)) {
+            setUsernameStatus('invalid')
+            return
+        }
+
+        setUsernameStatus('checking')
+        debounceRef.current = window.setTimeout(async () => {
+            try {
+                const res = await fetch(`${route('username.check')}?username=${encodeURIComponent(value)}`, {
+                    headers: { Accept: 'application/json' },
+                })
+                const json = await res.json()
+                if (json.available) {
+                    setUsernameStatus('available')
+                } else {
+                    setUsernameStatus(json.reason === 'taken' ? 'taken' : 'invalid')
+                    setUsernameSuggestion(json.suggestion ?? null)
+                }
+            } catch {
+                setUsernameStatus('idle')
+            }
+        }, 450)
+
+        return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current) }
+    }, [data.username])
 
     const choosePath = (p: AccountPath) => {
         setSelectedPath(p)
@@ -202,6 +246,42 @@ export default function Register() {
                                             </div>
                                         </div>
 
+                                        {/* Username — unique handle, checked in real time */}
+                                        <div>
+                                            <InputLabel htmlFor="username" value="Username" />
+                                            <div className="relative">
+                                                <TextInput
+                                                    id="username"
+                                                    name="username"
+                                                    value={data.username}
+                                                    className="mt-1 block w-full pr-10 lowercase"
+                                                    autoComplete="username"
+                                                    onChange={(e) => setData('username', e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                                    placeholder="e.g. tariro_m"
+                                                    maxLength={20}
+                                                    required
+                                                />
+                                                <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2">
+                                                    {usernameStatus === 'checking' && <FiLoader className="h-4 w-4 animate-spin text-zinc-400" />}
+                                                    {usernameStatus === 'available' && <FiCheckCircle className="h-4 w-4 text-emerald-600" />}
+                                                    {(usernameStatus === 'taken' || usernameStatus === 'invalid') && <FiXCircle className="h-4 w-4 text-red-500" />}
+                                                </span>
+                                            </div>
+                                            {usernameStatus === 'available' && <p className="mt-1 text-xs font-medium text-emerald-600">Available</p>}
+                                            {usernameStatus === 'invalid' && <p className="mt-1 text-xs text-red-500">3–20 chars, start with a letter, letters/numbers/underscore only.</p>}
+                                            {usernameStatus === 'taken' && (
+                                                <p className="mt-1 text-xs text-red-500">
+                                                    Taken.{usernameSuggestion && (
+                                                        <button type="button" onClick={() => setData('username', usernameSuggestion)} className="ml-1 font-semibold text-emerald-700 underline">
+                                                            Try {usernameSuggestion}
+                                                        </button>
+                                                    )}
+                                                </p>
+                                            )}
+                                            <p className="mt-1 text-xs text-zinc-500">Shown publicly (e.g. on leaderboards) and usable to sign in.</p>
+                                            <InputError message={errors.username} className="mt-2" />
+                                        </div>
+
                                         {/* WhatsApp Number — required for all paths */}
                                         <div>
                                             <InputLabel htmlFor="whatsapp_number" value="WhatsApp Number" />
@@ -304,7 +384,7 @@ export default function Register() {
 
                                         <button
                                             type="submit"
-                                            disabled={processing}
+                                            disabled={processing || usernameStatus === 'taken' || usernameStatus === 'invalid' || usernameStatus === 'checking'}
                                             className="w-full rounded-xl bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 py-2.5 text-sm font-bold text-white shadow transition hover:opacity-90 disabled:opacity-60"
                                         >
                                             {processing ? 'Creating account…' : `Create ${chosen.label} Account`}
