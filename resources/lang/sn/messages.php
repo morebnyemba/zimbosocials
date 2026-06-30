@@ -6,7 +6,7 @@
 return [
 
     // ─── Auth ─────────────────────────────────────────────────────────────────
-    'welcome' => 'Wakatambira, :name! Ndokupindira muZvakawanda.',
+    'welcome' => 'Wakatambira, :name! Wapinda muZimbo Socials.',
     'login' => 'Pinda',
     'register' => 'Nyoresa',
     'logout' => 'Buda',

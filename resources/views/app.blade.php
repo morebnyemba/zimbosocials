@@ -23,14 +23,19 @@
         <meta property="og:url" content="{{ url()->current() }}">
         <meta property="og:title" content="Zimbo Socials - Grow Your Digital Presence">
         <meta property="og:description" content="Grow your social media presence, get monetization, and access digital marketing services in one place. Join today and start earning!">
-        <meta property="og:image" content="{{ asset('images/zimbosocials_og.png') }}">
-        
+        <meta property="og:image" content="{{ secure_asset('images/zimbosocials_og.jpg') }}">
+        <meta property="og:image:secure_url" content="{{ secure_asset('images/zimbosocials_og.jpg') }}">
+        <meta property="og:image:type" content="image/jpeg">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+        <meta property="og:image:alt" content="Zimbo Socials - Invite Friends, Earn Rewards">
+
         <!-- Twitter -->
         <meta property="twitter:card" content="summary_large_image">
         <meta property="twitter:url" content="{{ url()->current() }}">
         <meta property="twitter:title" content="Zimbo Socials - Grow Your Digital Presence">
         <meta property="twitter:description" content="Grow your social media presence, get monetization, and access digital marketing services in one place. Join today and start earning!">
-        <meta property="twitter:image" content="{{ asset('images/zimbosocials_og.png') }}">
+        <meta property="twitter:image" content="{{ secure_asset('images/zimbosocials_og.jpg') }}">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
