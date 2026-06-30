@@ -213,17 +213,13 @@ export default function Home() {
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Link href={route("marketing.services")}>
-                  <Button className="h-10 gap-2 bg-zinc-950 px-5 text-white transition duration-300 hover:-translate-y-1 hover:bg-zinc-800 hover:shadow-xl">
-                    Explore Services
-                    <FiArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href={route("register")}>
-                  <Button variant="outline" className="h-10 border-red-600 px-5 text-red-600 transition duration-300 hover:-translate-y-1 hover:bg-red-600 hover:text-white">
-                    Create Account
-                  </Button>
-                </Link>
+                <Button render={<Link href={route("marketing.services")} />} nativeButton={false} className="h-10 gap-2 bg-zinc-950 px-5 text-white transition duration-300 hover:-translate-y-1 hover:bg-zinc-800 hover:shadow-xl">
+                  Explore Services
+                  <FiArrowRight className="h-4 w-4" />
+                </Button>
+                <Button render={<Link href={route("register")} />} nativeButton={false} variant="outline" className="h-10 border-red-600 px-5 text-red-600 transition duration-300 hover:-translate-y-1 hover:bg-red-600 hover:text-white">
+                  Create Account
+                </Button>
               </div>
 
               <div className="mt-6 flex flex-wrap gap-4 text-sm text-zinc-700">
@@ -277,12 +273,8 @@ export default function Home() {
                 </div>
               </CardContent>
               <CardFooter className="justify-between gap-2">
-                <Link href={route("login")} className="w-full">
-                  <Button variant="outline" className="w-full border-white text-white hover:bg-white hover:text-zinc-950">Login</Button>
-                </Link>
-                <Link href={route("register")} className="w-full">
-                  <Button className="w-full bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white transition duration-300 hover:scale-[1.02]">Start Now</Button>
-                </Link>
+                <Button render={<Link href={route("login")} />} nativeButton={false} variant="outline" className="w-full border-white text-white hover:bg-white hover:text-zinc-950">Login</Button>
+                <Button render={<Link href={route("register")} />} nativeButton={false} className="w-full bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white transition duration-300 hover:scale-[1.02]">Start Now</Button>
               </CardFooter>
             </Card>
             </motion.div>
@@ -501,9 +493,7 @@ export default function Home() {
           ))}
         </motion.div>
         <div className="mt-5 text-center">
-          <Link href={route("register")}>
-            <Button className="h-10 bg-zinc-950 px-5 text-white transition duration-300 hover:-translate-y-1 hover:bg-red-600">Become a Marketer</Button>
-          </Link>
+          <Button render={<Link href={route("register")} />} nativeButton={false} className="h-10 bg-zinc-950 px-5 text-white transition duration-300 hover:-translate-y-1 hover:bg-red-600">Become a Marketer</Button>
         </div>
       </motion.section>
 
@@ -530,9 +520,7 @@ export default function Home() {
               <p className="inline-flex items-center gap-2"><FiCheckCircle className="h-4 w-4 text-white" /> Track delivery and ROI transparently</p>
             </CardContent>
             <CardFooter>
-              <Link href={route("register")}>
-                <Button className="gap-2 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white transition duration-300 hover:scale-[1.02]">Start B2B Campaign <FiArrowRight className="h-4 w-4" /></Button>
-              </Link>
+              <Button render={<Link href={route("register")} />} nativeButton={false} className="gap-2 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white transition duration-300 hover:scale-[1.02]">Start B2B Campaign <FiArrowRight className="h-4 w-4" /></Button>
             </CardFooter>
           </Card>
           </motion.div>
@@ -621,12 +609,8 @@ export default function Home() {
             </CardDescription>
           </CardHeader>
           <CardFooter className="flex flex-wrap gap-3">
-            <Link href={route("register")}>
-              <Button className="h-10 bg-white px-5 text-zinc-950 transition duration-300 hover:-translate-y-1 hover:bg-amber-100">Create Free Account</Button>
-            </Link>
-            <Link href={route("marketing.services")}>
-              <Button variant="outline" className="h-10 border-white px-5 text-white hover:bg-white hover:text-zinc-950">Browse Services</Button>
-            </Link>
+            <Button render={<Link href={route("register")} />} nativeButton={false} className="h-10 bg-white px-5 text-zinc-950 transition duration-300 hover:-translate-y-1 hover:bg-amber-100">Create Free Account</Button>
+            <Button render={<Link href={route("marketing.services")} />} nativeButton={false} variant="outline" className="h-10 border-white px-5 text-white hover:bg-white hover:text-zinc-950">Browse Services</Button>
           </CardFooter>
         </Card>
         </motion.div>

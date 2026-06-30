@@ -53,12 +53,10 @@ export default function AboutPage() {
               <p>
                 Instead of treating growth like a one-click commodity, we focus on stable execution, transparent quantity bands, and better visibility across the full order flow.
               </p>
-              <Link href={route("register")}>
-                <Button className="mt-2 gap-2 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white">
-                  Join the Platform
-                  <FiArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
+              <Button render={<Link href={route("register")} />} nativeButton={false} className="mt-2 gap-2 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white">
+                Join the Platform
+                <FiArrowRight className="h-4 w-4" />
+              </Button>
             </CardContent>
           </Card>
 
