@@ -5,7 +5,7 @@
 return [
 
     // ─── Auth ─────────────────────────────────────────────────────────────────
-    'welcome' => 'Welcome, :name! You are now logged in to Zvakawanda.',
+    'welcome' => 'Welcome, :name! You are now logged in to Zimbo Socials.',
     'login' => 'Login',
     'register' => 'Register',
     'logout' => 'Logout',
@@ -177,7 +177,7 @@ return [
     'api_key_regen' => 'Generate New Key',
     'api_key_warning' => 'Never share your API key. Generating a new one will invalidate the old one.',
     'api_endpoint' => 'API Endpoint',
-    'api_guide' => 'Use your API key to integrate your system with Zvakawanda SMM Panel.',
+    'api_guide' => 'Use your API key to integrate your system with the Zimbo Socials SMM Panel.',
 
     // ─── Dashboard extras ─────────────────────────────────────────────────────
     'all_time' => 'All time',

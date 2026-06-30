@@ -95,7 +95,7 @@ export default function PwaInstallPrompt() {
                     transition={{ type: 'spring', stiffness: 260, damping: 24 }}
                     role="dialog"
                     aria-label="Install Zimbo Socials app"
-                    className="fixed bottom-6 left-1/2 z-[9991] w-[min(92vw,26rem)] -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl"
+                    className="fixed inset-x-0 bottom-6 z-[9991] mx-auto w-[min(92vw,26rem)] rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl"
                 >
                     <button
                         onClick={dismiss}

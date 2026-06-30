@@ -272,9 +272,9 @@ export default function Home() {
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="justify-between gap-2">
-                <Button render={<Link href={route("login")} />} nativeButton={false} variant="outline" className="w-full border-white text-white hover:bg-white hover:text-zinc-950">Login</Button>
-                <Button render={<Link href={route("register")} />} nativeButton={false} className="w-full bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white transition duration-300 hover:scale-[1.02]">Start Now</Button>
+              <CardFooter className="gap-2">
+                <Button render={<Link href={route("login")} />} nativeButton={false} variant="outline" className="flex-1 border-white text-white hover:bg-white hover:text-zinc-950">Login</Button>
+                <Button render={<Link href={route("register")} />} nativeButton={false} className="flex-1 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white transition duration-300 hover:scale-[1.02]">Start Now</Button>
               </CardFooter>
             </Card>
             </motion.div>

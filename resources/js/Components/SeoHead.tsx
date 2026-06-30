@@ -13,7 +13,7 @@ type SeoHeadProps = {
   structuredData?: JsonLd | JsonLd[]
 }
 
-const DEFAULT_IMAGE = "/images/zimbosocials.png"
+const DEFAULT_IMAGE = "/images/zimbosocials_og.jpg"
 const DEFAULT_ORIGIN = "https://zimsocials.co.zw"
 
 function resolveOrigin() {
@@ -75,6 +75,9 @@ export default function SeoHead({
       <meta head-key="og:type" property="og:type" content={type} />
       <meta head-key="og:url" property="og:url" content={canonicalUrl} />
       <meta head-key="og:image" property="og:image" content={imageUrl} />
+      <meta head-key="og:image:secure_url" property="og:image:secure_url" content={imageUrl} />
+      <meta head-key="og:image:width" property="og:image:width" content="1200" />
+      <meta head-key="og:image:height" property="og:image:height" content="630" />
       <meta head-key="og:site_name" property="og:site_name" content="Zimbo Socials" />
       <meta head-key="twitter:card" name="twitter:card" content="summary_large_image" />
       <meta head-key="twitter:title" name="twitter:title" content={title} />

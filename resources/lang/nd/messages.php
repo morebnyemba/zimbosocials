@@ -6,7 +6,7 @@
 return [
 
     // ─── Auth ─────────────────────────────────────────────────────────────────
-    'welcome' => 'Wamukelekile, :name! Usuqalile ukusebenzisa iZvakawanda.',
+    'welcome' => 'Wamukelekile, :name! Usungene ku-Zimbo Socials.',
     'login' => 'Ngena',
     'register' => 'Bhalisa',
     'logout' => 'Phuma',

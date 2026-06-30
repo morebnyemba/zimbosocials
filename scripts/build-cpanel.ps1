@@ -87,8 +87,10 @@ $envFile = Join-Path $appStage '.env'
 if (Test-Path $envFile) { Remove-Item $envFile -Force }
 Get-ChildItem -Path (Join-Path $appStage 'storage/logs') -Filter '*.log' -ErrorAction SilentlyContinue | Remove-Item -Force
 
-# Public folder -> public_html (exclude prior build zips)
-& robocopy (Join-Path $root 'public') $publicStage /E /XF '*.zip' /NFL /NDL /NJH /NJS /NP | Out-Null
+# Public folder -> public_html (exclude prior build zips and the Vite dev-server 'hot' file).
+# The 'hot' file is written by `npm run dev`; if shipped, @vite serves assets from
+# http://127.0.0.1:5174 instead of /build, leaving the live site blank.
+& robocopy (Join-Path $root 'public') $publicStage /E /XF '*.zip' 'hot' /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy (public) failed with code $LASTEXITCODE." }
 
 # ── 4. cPanel-correct index.php (vendor/bootstrap live in ../my-app) ──────────
