@@ -5,6 +5,19 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#0B3E09">
 
+        @if ($gaId = config('services.google_analytics.id'))
+            {{-- Google Analytics 4. SPA page_views are sent on Inertia navigation (see app.tsx). --}}
+            <meta name="ga-id" content="{{ $gaId }}">
+            <script async src="https://www.googletagmanager.com/gtag/js?id={{ $gaId }}"></script>
+            <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                // send_page_view:false — Inertia drives page_view on each visit instead.
+                gtag('config', '{{ $gaId }}', { send_page_view: false, anonymize_ip: true });
+            </script>
+        @endif
+
         <!-- PWA / icons -->
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png">

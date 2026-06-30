@@ -1,7 +1,7 @@
 import '../css/app.css';
 import './bootstrap';
 
-import { createInertiaApp } from '@inertiajs/react';
+import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import AppErrorBoundary from './Components/AppErrorBoundary';
@@ -35,3 +35,25 @@ createInertiaApp({
 });
 
 registerServiceWorker();
+
+// Google Analytics: the gtag config in app.blade.php has send_page_view:false,
+// so we emit a page_view here on first load and on every Inertia navigation
+// (SPA visits don't trigger a full page load that GA would otherwise count).
+const gaId = document
+    .querySelector('meta[name="ga-id"]')
+    ?.getAttribute('content');
+
+if (gaId) {
+    const trackPageView = () => {
+        const gtag = (window as unknown as { gtag?: (...args: any[]) => void }).gtag;
+        if (typeof gtag !== 'function') return;
+        gtag('event', 'page_view', {
+            page_path: window.location.pathname + window.location.search,
+            page_location: window.location.href,
+            page_title: document.title,
+        });
+    };
+
+    trackPageView(); // initial load
+    router.on('navigate', trackPageView); // subsequent Inertia visits
+}

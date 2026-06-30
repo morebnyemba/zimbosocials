@@ -25,7 +25,6 @@ class PaynowController extends Controller
     private const MOBILE_PROVIDERS = [
         'ecocash' => ['label' => 'EcoCash',  'method' => 'ecocash',  'prefixes' => ['077', '078']],
         'onemoney' => ['label' => 'OneMoney', 'method' => 'onemoney', 'prefixes' => ['071']],
-        'telecash' => ['label' => 'TeleCash', 'method' => 'telecash', 'prefixes' => ['073']],
         'innbucks' => ['label' => 'InnBucks', 'method' => 'innbucks', 'prefixes' => []],     // any number can use InnBucks wallet
         'omari' => ['label' => "O'mari",   'method' => 'omari',    'prefixes' => ['077', '078']],
     ];
@@ -42,11 +41,13 @@ class PaynowController extends Controller
             return $this->app->make(Paynow::class);
         }
 
+        // Paynow constructor signature is (id, key, resultUrl, returnUrl) — result first.
+        // resultUrl = server-to-server status update (our webhook); returnUrl = browser redirect back.
         return new Paynow(
             config('services.paynow.integration_id'),
             config('services.paynow.integration_key'),
-            route('paynow.return'),
-            route('paynow.update')
+            route('paynow.update'),
+            route('paynow.return')
         );
     }
 
@@ -109,7 +110,7 @@ class PaynowController extends Controller
 
     /**
      * Initiate an express checkout for a specific mobile money provider.
-     * Route: POST /paynow/mobile/{provider}  (ecocash|onemoney|telecash|innbucks)
+     * Route: POST /paynow/mobile/{provider}  (ecocash|onemoney|innbucks|omari)
      */
     public function initMobile(Request $request, string $provider)
     {

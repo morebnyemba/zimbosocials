@@ -7,6 +7,15 @@ import { Plus, Edit2, Trash2 } from 'lucide-react';
 interface PaymentDetail { id: number; method_key: string; label: string; account_name?: string; account_number?: string; instructions?: string; is_active: boolean; sort_order: number; gateway_type?: string | null; }
 interface Props { paymentDetails: PaymentDetail[]; }
 
+// Paynow-supported method keys — the gateway controller only handles these.
+const PAYNOW_METHODS = [
+    { value: 'paynow', label: 'Paynow (Online / Card)' },
+    { value: 'ecocash', label: 'EcoCash Express' },
+    { value: 'onemoney', label: 'OneMoney Express' },
+    { value: 'innbucks', label: 'InnBucks' },
+    { value: 'omari', label: "O'mari" },
+];
+
 export default function PaymentDetails({ paymentDetails }: Props) {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -80,26 +89,61 @@ export default function PaymentDetails({ paymentDetails }: Props) {
                             </div>
                             
                             <div className="p-5 overflow-y-auto flex-1 space-y-4">
-                                {['method_key', 'label', 'account_name', 'account_number'].map(f => (
-                                    <div key={f}>
-                                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">{f.replace(/_/g, ' ')}</label>
-                                        <input type="text" value={(data as any)[f]} onChange={e => setData(f as any, e.target.value)} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow" placeholder={`Enter ${f.replace(/_/g, ' ')}`} />
-                                    </div>
-                                ))}
+                                {/* Method type drives the rest of the form */}
                                 <div>
-                                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Instructions</label>
-                                    <textarea value={data.instructions} onChange={e => setData('instructions', e.target.value)} rows={3} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow resize-none" placeholder="Optional payment instructions for users" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Gateway Type</label>
-                                    <select value={data.gateway_type} onChange={e => setData('gateway_type', e.target.value)} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm">
-                                        <option value="">Manual (bank transfer / cash)</option>
-                                        <option value="paynow">Paynow Gateway (automatic)</option>
+                                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Method Type</label>
+                                    <select value={data.gateway_type} onChange={e => {
+                                        const gw = e.target.value;
+                                        setData('gateway_type', gw);
+                                        // Switching to Paynow: default the key to a valid one so it's never blank.
+                                        if (gw === 'paynow' && !PAYNOW_METHODS.some(m => m.value === data.method_key)) {
+                                            setData('method_key', 'paynow');
+                                        }
+                                    }} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm">
+                                        <option value="">Manual (bank transfer / cash / proof upload)</option>
+                                        <option value="paynow">Paynow Gateway (automatic online / mobile money)</option>
                                     </select>
-                                    <p className="text-xs text-gray-400 mt-1">Paynow Gateway methods redirect users to the Paynow payment portal instead of showing bank details.</p>
+                                    <p className="text-xs text-gray-400 mt-1">Paynow methods redirect to the gateway. Manual methods show your account details and accept proof-of-payment uploads.</p>
                                 </div>
+
+                                {/* Method key: constrained dropdown for Paynow, free text for manual */}
+                                <div>
+                                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Method Key</label>
+                                    {data.gateway_type === 'paynow' ? (
+                                        <select value={data.method_key} onChange={e => setData('method_key', e.target.value)} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm">
+                                            {PAYNOW_METHODS.map(m => <option key={m.value} value={m.value}>{m.label} ({m.value})</option>)}
+                                        </select>
+                                    ) : (
+                                        <input type="text" value={data.method_key} onChange={e => setData('method_key', e.target.value)} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow" placeholder="e.g. bank, cash, innbucks" />
+                                    )}
+                                    <p className="text-xs text-gray-400 mt-1">{data.gateway_type === 'paynow' ? 'Must be a Paynow-supported method — others will error at checkout.' : 'A short unique identifier (lowercase).'}</p>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Label</label>
+                                    <input type="text" value={data.label} onChange={e => setData('label', e.target.value)} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow" placeholder="Name users see, e.g. CABS Bank Transfer" />
+                                </div>
+
+                                {/* Bank/account fields only matter for manual methods */}
+                                {data.gateway_type !== 'paynow' && (
+                                    <>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Account Name</label>
+                                            <input type="text" value={data.account_name} onChange={e => setData('account_name', e.target.value)} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow" placeholder="Account holder name" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Account Number</label>
+                                            <input type="text" value={data.account_number} onChange={e => setData('account_number', e.target.value)} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow" placeholder="Account / wallet number" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Instructions</label>
+                                            <textarea value={data.instructions} onChange={e => setData('instructions', e.target.value)} rows={3} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow resize-none" placeholder="Optional payment instructions for users" />
+                                        </div>
+                                    </>
+                                )}
+
                                 <label className="flex items-center gap-2.5 text-sm font-medium text-gray-700 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-                                    <input type="checkbox" checked={data.is_active} onChange={e => setData('is_active', e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green cursor-pointer" /> 
+                                    <input type="checkbox" checked={data.is_active} onChange={e => setData('is_active', e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green cursor-pointer" />
                                     Method is active and visible to users
                                 </label>
                             </div>
