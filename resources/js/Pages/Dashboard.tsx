@@ -1,5 +1,7 @@
+import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
+import CreateContractSlideOver from '@/Components/CreateContractSlideOver';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from '@/lib/i18n';
 import { 
@@ -17,7 +19,8 @@ import {
     FaHandshake,
     FaInfoCircle,
     FaExclamationCircle,
-    FaHeadset
+    FaHeadset,
+    FaTrophy
 } from 'react-icons/fa';
 
 interface Order {
@@ -83,6 +86,7 @@ interface Props {
         pending_applications: number;
     };
     recommended_services?: RecommendedService[];
+    myLeaderboardRanks?: Record<string, { rank: number; score: number } | null>;
 }
 
 const statusThemes: Record<string, { bg: string; text: string; icon: any }> = {
@@ -93,7 +97,19 @@ const statusThemes: Record<string, { bg: string; text: string; icon: any }> = {
     failed: { bg: 'bg-red-50', text: 'text-red-600', icon: FaExclamationCircle },
 };
 
-export default function Dashboard({
+
+export default function Dashboard(props: Props) {
+    const { auth } = props;
+    const user = auth.user;
+
+    if (user.account_type === 'business') {
+        return <BusinessDashboardView {...props} />;
+    }
+
+    return <CustomerDashboardView {...props} />;
+}
+
+function BusinessDashboardView({
     auth,
     stats,
     recent_orders,
@@ -105,9 +121,12 @@ export default function Dashboard({
     recommended_services = [],
 }: Props) {
     const user = auth.user;
-     const { t } = useTranslation();
+    const { t } = useTranslation();
     const firstName = (user?.name ?? '').trim().split(' ')[0] || 'User';
-    const contractForm = useForm({
+    
+    
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+const contractForm = useForm({
         title: '',
         platform: '',
         description: '',
@@ -122,6 +141,223 @@ export default function Dashboard({
             onSuccess: () => contractForm.reset(),
         });
     };
+
+    return (
+        <AuthenticatedLayout>
+            <Head title={t('dashboard') + " - Business"} />
+
+            <div className="space-y-12">
+                {/* Business Hero */}
+                <section className="relative overflow-hidden rounded-[3rem] bg-zinc-950 text-white shadow-2xl shadow-zinc-900/40">
+                    <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-blue-500/10 via-amber-500/5 to-transparent pointer-events-none" />
+                    <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none" />
+                    
+                    <div className="relative px-12 py-16 grid lg:grid-cols-[1.5fr,1fr] gap-12 items-center">
+                        <div className="space-y-8">
+                            <motion.div 
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="space-y-4"
+                            >
+                                <span className="px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black uppercase tracking-widest">
+                                      {t('business_panel')}
+                                </span>
+                                <h1 className="text-4xl lg:text-6xl font-black tracking-tighter leading-tight">
+                                    {t('welcome_home', { name: firstName })}, <br />
+                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
+                                        Business Portal
+                                    </span>
+                                </h1>
+                                <p className="text-zinc-400 text-lg max-w-xl font-medium leading-relaxed">
+                                    Manage your business contracts, review talent applications, and oversee your entire talent pipeline.
+                                </p>
+                            </motion.div>
+
+                            <motion.div 
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 }}
+                                className="flex flex-wrap gap-4"
+                            >
+                                <Link href={route('contracts.index')} className="px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 text-zinc-900 font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-500/20 hover:scale-105 transition-all">
+                                    Marketplace
+                                </Link>
+                                <Link href={route('wallet.index')} className="px-8 py-4 rounded-2xl bg-white/10 text-white border border-white/20 font-black text-sm uppercase tracking-widest hover:bg-white/20 transition-all">
+                                    {t('top_up_wallet')}
+                                </Link>
+                            </motion.div>
+                        </div>
+
+                        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 space-y-8">
+                            <div>
+                                <p className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mb-2">{t('available_budget')}</p>
+                                <div className="flex items-end gap-3">
+                                    <span className="text-5xl font-black tracking-tighter">${Number(user.balance || 0).toFixed(2)}</span>
+                                    <span className="text-amber-400 text-sm font-black mb-1">USD</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-5 rounded-3xl bg-zinc-800/50 border border-white/5">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">{t('active_contracts')}</p>
+                                    <p className="text-xl font-black">{contract_stats.open_contracts}</p>
+                                </div>
+                                <div className="p-5 rounded-3xl bg-zinc-800/50 border border-white/5">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">{t('pending_apps')}</p>
+                                    <p className="text-xl font-black text-amber-400">{contract_stats.pending_applications}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <div className="grid gap-10 lg:grid-cols-[1.6fr,1fr]">
+                    <div className="space-y-10">
+                        {/* Contract Terminal */}
+                        <div className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
+                            <div className="flex items-center justify-between mb-8">
+                                <div>
+                                    <h3 className="text-2xl font-black text-zinc-900 tracking-tight">{t('contract_terminal')}</h3>
+                                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('contract_terminal_subtitle')}</p>
+                                </div>
+                                <div className="h-12 w-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-500">
+                                    <FaPlus />
+                                </div>
+                            </div>
+
+                            
+                            <div className="bg-zinc-50 border-2 border-dashed border-zinc-200 rounded-[2rem] p-10 text-center space-y-6">
+                                <div className="h-16 w-16 bg-white rounded-2xl mx-auto flex items-center justify-center shadow-sm border border-zinc-100 text-amber-500">
+                                    <FaRocket className="text-2xl" />
+                                </div>
+                                <div>
+                                    <h4 className="text-lg font-black text-zinc-900">{t('need_fresh_talent')}</h4>
+                                    <p className="text-zinc-500 text-sm font-medium mt-1">{t('deploy_new_mission')}</p>
+                                </div>
+                                <button 
+                                    onClick={() => setIsCreateModalOpen(true)}
+                                    className="px-10 py-4 rounded-xl bg-zinc-900 text-white font-black text-xs uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition-all hover:scale-105 active:scale-95"
+                                >
+                                    Draft New Mission
+                                </button>
+                            </div>
+
+                        </div>
+
+                        {/* Active Contracts */}
+                        <div className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
+                            <div className="flex items-center justify-between mb-10">
+                                <div>
+                                    <h3 className="text-2xl font-black text-zinc-900 tracking-tight">{t('active_contracts')}</h3>
+                                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('active_contracts_subtitle')}</p>
+                                </div>
+                                <Link href={route('contracts.index')} className="text-[10px] font-black uppercase tracking-widest text-emerald-600">{t('archive')}</Link>
+                            </div>
+
+                            <div className="space-y-4">
+                                {business_contracts.length === 0 && (
+                                    <p className="text-zinc-400 text-sm font-medium italic p-6 border-2 border-dashed border-zinc-100 rounded-3xl text-center">{t('no_contracts_active')}</p>
+                                )}
+                                {business_contracts.map((contract) => (
+                                    <div key={contract.id} className="p-6 rounded-[2rem] bg-zinc-50 border border-zinc-100">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <p className="font-black text-zinc-900">{contract.title}</p>
+                                            <span className="text-[8px] font-black uppercase tracking-widest px-3 py-1 bg-white rounded-full text-zinc-500 border border-zinc-100">{contract.status}</span>
+                                        </div>
+                                        <p className="text-xs text-zinc-500 line-clamp-2 mb-3">{contract.description}</p>
+                                        <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-zinc-400">
+                                            <span className="flex items-center gap-1.5"><FaBriefcase className="text-emerald-500" /> {t('pending_count', { count: contract.pending_applications_count || 0 })}</span>
+                                            <span className="h-1 w-1 rounded-full bg-zinc-200" />
+                                            <span>{t('budget_amount', { amount: contract.budget || 0 })}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-10">
+                        {/* Pending Talent */}
+                        <div className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
+                            <div className="mb-10">
+                                <h3 className="text-2xl font-black text-zinc-900 tracking-tight">{t('pending_talent')}</h3>
+                                <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('pending_talent_subtitle')}</p>
+                            </div>
+
+                            <div className="space-y-6">
+                                {incoming_contract_applications.length === 0 && (
+                                    <p className="text-zinc-400 text-sm font-medium italic p-6 border-2 border-dashed border-zinc-100 rounded-3xl text-center">{t('no_pending_talent')}</p>
+                                )}
+                                {incoming_contract_applications.map((app) => {
+                                    const marketerName = app?.marketer?.name || 'Unknown';
+                                    const contractTitle = app?.contract?.title || 'Contract';
+                                    const contractId = app?.contract?.id;
+                                    const appId = app?.id;
+
+                                    return (
+                                    <div key={app.id} className="p-8 rounded-[2.5rem] border-2 border-amber-100 bg-amber-50/30">
+                                        <div className="flex items-center gap-4 mb-4">
+                                            <div className="h-12 w-12 rounded-2xl bg-white border border-amber-100 flex items-center justify-center font-black text-amber-600 shadow-sm">
+                                                {marketerName[0]}
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-black text-zinc-900">{marketerName}</p>
+                                                <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{t('applying_for', { title: contractTitle })}</p>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-zinc-600 bg-white p-4 rounded-2xl border border-amber-100 mb-6 italic leading-relaxed">
+                                            "{app.pitch || t('no_pitch_provided')}"
+                                        </p>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    if (!contractId || !appId) return;
+                                                    router.post(route('contracts.applications.decision', [contractId, appId]), { decision: 'approved' });
+                                                }}
+                                                disabled={!contractId || !appId}
+                                                className="flex-1 py-3 rounded-xl bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-500/20"
+                                            >
+                                                {t('approve')}
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    if (!contractId || !appId) return;
+                                                    router.post(route('contracts.applications.decision', [contractId, appId]), { decision: 'denied' });
+                                                }}
+                                                disabled={!contractId || !appId}
+                                                className="flex-1 py-3 rounded-xl bg-white border border-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                                            >
+                                                {t('decline')}
+                                            </button>
+                                        </div>
+                                    </div>
+                                );})}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        
+            <CreateContractSlideOver 
+                isOpen={isCreateModalOpen} 
+                onClose={() => setIsCreateModalOpen(false)} 
+                t={t} 
+            />
+</AuthenticatedLayout>
+    );
+}
+
+function CustomerDashboardView({
+    auth,
+    stats,
+    recent_orders,
+    recent_transactions,
+    category_counts,
+    recommended_services = [],
+    myLeaderboardRanks = {},
+}: Props) {
+    const user = auth.user;
+    const { t } = useTranslation();
+    const firstName = (user?.name ?? '').trim().split(' ')[0] || 'User';
 
     const topCategories = Object.entries(category_counts ?? {})
         .sort(([, a], [, b]) => b - a)
@@ -146,7 +382,7 @@ export default function Dashboard({
                                 className="space-y-4"
                             >
                                 <span className="px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest">
-                                      {user.account_type === 'business' ? t('business_panel') : t('your_performance')}
+                                      {t('your_performance')}
                                 </span>
                                 <h1 className="text-4xl lg:text-6xl font-black tracking-tighter leading-tight">
                                     {t('welcome_home', { name: firstName })}, <br />
@@ -202,16 +438,41 @@ export default function Dashboard({
                     </div>
                 </section>
 
+                {/* Leaderboard Ranks */}
+                <section className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    {[
+                        { key: 'referrals', label: 'Top Referrers', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                        { key: 'orders', label: 'Top Orderers', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                        { key: 'deposits', label: 'Top Depositors', color: 'text-amber-500', bg: 'bg-amber-500/10' }
+                    ].map(cat => {
+                        const rank = myLeaderboardRanks[cat.key];
+                        return (
+                            <Link key={cat.key} href={route('leaderboard.index')} className={`group p-6 rounded-[2rem] border border-zinc-100 bg-white hover:border-zinc-200 shadow-xl shadow-zinc-200/20 transition-all flex items-center justify-between`}>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">{cat.label}</p>
+                                    <div className="flex items-center gap-2">
+                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center ${cat.bg} ${cat.color}`}>
+                                            <FaTrophy className="text-sm" />
+                                        </div>
+                                        {rank ? (
+                                            <p className="text-2xl font-black text-zinc-900 group-hover:text-amber-500 transition-colors">
+                                                #{rank.rank}
+                                            </p>
+                                        ) : (
+                                            <p className="text-sm font-bold text-zinc-300">{t('unranked')}</p>
+                                        )}
+                                    </div>
+                                </div>
+                                <FaArrowRight className="text-zinc-200 group-hover:text-amber-500 group-hover:translate-x-1 transition-all" />
+                            </Link>
+                        );
+                    })}
+                </section>
+
                 {/* Core KPI Grid */}
-                <section className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                <section className="grid grid-cols-2 lg:grid-cols-2 gap-6">
                     <StatCard label={t('total_spent')} value={`$${Number(stats.total_spent || 0).toFixed(2)}`} icon={FaChartLine} color="text-indigo-500" />
                     <StatCard label={t('total_orders')} value={stats.total_orders} icon={FaRocket} color="text-emerald-500" />
-                    {user.account_type === 'business' && (
-                        <>
-                            <StatCard label={t('available_contracts')} value={contract_stats.open_contracts} icon={FaBriefcase} color="text-amber-500" />
-                            <StatCard label={t('pending_actions')} value={contract_stats.pending_applications} icon={FaHandshake} color="text-blue-500" />
-                        </>
-                    )}
                 </section>
 
                 {/* AI Recommendations */}
@@ -244,74 +505,9 @@ export default function Dashboard({
                     </section>
                 )}
 
-                <div className={`grid gap-10 ${user.account_type === 'business' ? 'lg:grid-cols-[1.6fr,1fr]' : 'grid-cols-1'}`}>
+                <div className="grid gap-10 grid-cols-1">
                     {/* Active Work Section */}
                     <div className="space-y-10">
-                        {user.account_type === 'business' && (
-                            <div className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
-                                <div className="flex items-center justify-between mb-8">
-                                    <div>
-                                        <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Contract Terminal</h3>
-                                        <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('contract_terminal_subtitle')}</p>
-                                    </div>
-                                    <div className="h-12 w-12 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-300">
-                                        <FaPlus />
-                                    </div>
-                                </div>
-
-                                <form onSubmit={submitContract} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="md:col-span-2">
-                                    <InputWrapper label={t('contract_mission_title')}>
-                                        <input 
-                                            type="text" 
-                                            value={contractForm.data.title}
-                                            onChange={e => contractForm.setData('title', e.target.value)}
-                                            placeholder={t('contract_mission_placeholder')}
-                                            className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-6 py-4 font-bold text-zinc-900 focus:outline-none focus:border-emerald-500 transition-all"
-                                        />
-                                    </InputWrapper>
-                                </div>
-                                <InputWrapper label={t('target_platform')}>
-                                    <input 
-                                        type="text" 
-                                        value={contractForm.data.platform}
-                                        onChange={e => contractForm.setData('platform', e.target.value)}
-                                        placeholder={t('target_platform_placeholder')}
-                                        className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-6 py-4 font-bold text-zinc-900 focus:outline-none focus:border-emerald-500 transition-all"
-                                    />
-                                </InputWrapper>
-                                <InputWrapper label={t('budget_ceiling')}>
-                                    <input 
-                                        type="number" 
-                                        value={contractForm.data.budget}
-                                        onChange={e => contractForm.setData('budget', e.target.value)}
-                                        placeholder="50.00"
-                                        className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-6 py-4 font-bold text-zinc-900 focus:outline-none focus:border-emerald-500 transition-all"
-                                    />
-                                </InputWrapper>
-                                <div className="md:col-span-2">
-                                    <InputWrapper label={t('mission_briefing')}>
-                                        <textarea 
-                                            rows={4}
-                                            value={contractForm.data.description}
-                                            onChange={e => contractForm.setData('description', e.target.value)}
-                                            placeholder={t('mission_briefing_placeholder')}
-                                            className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-6 py-4 font-bold text-zinc-900 focus:outline-none focus:border-emerald-500 transition-all resize-none"
-                                        />
-                                    </InputWrapper>
-                                </div>
-                                <div className="md:col-span-2 flex justify-end">
-                                    <button 
-                                        disabled={contractForm.processing}
-                                        className="px-10 py-4 rounded-2xl bg-zinc-900 text-white font-black text-xs uppercase tracking-widest shadow-xl hover:bg-zinc-800 transition-all active:scale-95 disabled:opacity-50"
-                                    >
-                                        {t('deploy_contract')}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                        )}
-
                         {/* Recent Activity Table */}
                         <div className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
                             <div className="flex items-center justify-between mb-10">
@@ -319,8 +515,8 @@ export default function Dashboard({
                                         <h3 className="text-2xl font-black text-zinc-900 tracking-tight">{t('recent_orders')}</h3>
                                         <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('active_orders')}</p>
                                 </div>
-                                <Link href={route('contracts.index')} className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 transition-colors">
-                                    {t('manage_marketplace')}
+                                <Link href={route('orders.index')} className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 transition-colors">
+                                    {t('manage')}
                                 </Link>
                             </div>
 
@@ -356,107 +552,14 @@ export default function Dashboard({
                                 })}
                             </div>
                         </div>
-
-                        {user.account_type === 'business' && (
-                            <>
-                                {/* Business Contracts Management */}
-                                <div className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
-                                    <div className="flex items-center justify-between mb-10">
-                                        <div>
-                                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Active Contracts</h3>
-                                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('active_contracts_subtitle')}</p>
-                                        </div>
-                                        <Link href={route('contracts.index')} className="text-[10px] font-black uppercase tracking-widest text-emerald-600">{t('archive')}</Link>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        {business_contracts.length === 0 && (
-                                            <p className="text-zinc-400 text-sm font-medium italic p-6 border-2 border-dashed border-zinc-100 rounded-3xl text-center">{t('no_contracts_active')}</p>
-                                        )}
-                                        {business_contracts.map((contract) => (
-                                            <div key={contract.id} className="p-6 rounded-[2rem] bg-zinc-50 border border-zinc-100">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <p className="font-black text-zinc-900">{contract.title}</p>
-                                                    <span className="text-[8px] font-black uppercase tracking-widest px-3 py-1 bg-white rounded-full text-zinc-500 border border-zinc-100">{contract.status}</span>
-                                                </div>
-                                                <p className="text-xs text-zinc-500 line-clamp-2 mb-3">{contract.description}</p>
-                                                <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-zinc-400">
-                                                    <span className="flex items-center gap-1.5"><FaBriefcase className="text-emerald-500" /> {t('pending_count', { count: contract.pending_applications_count || 0 })}</span>
-                                                    <span className="h-1 w-1 rounded-full bg-zinc-200" />
-                                                    <span>{t('budget_amount', { amount: contract.budget || 0 })}</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Incoming Applications */}
-                                {incoming_contract_applications.length > 0 && (
-                                    <div className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
-                                        <div className="mb-10">
-                                            <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Pending Talent</h3>
-                                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{t('pending_talent_subtitle')}</p>
-                                        </div>
-
-                                        <div className="space-y-6">
-                                            {incoming_contract_applications.map((app) => {
-                                                const marketerName = app?.marketer?.name || 'Unknown';
-                                                const contractTitle = app?.contract?.title || 'Contract';
-                                                const contractId = app?.contract?.id;
-                                                const appId = app?.id;
-
-                                                return (
-                                                <div key={app.id} className="p-8 rounded-[2.5rem] border-2 border-emerald-100 bg-emerald-50/30">
-                                                    <div className="flex items-center gap-4 mb-4">
-                                                        <div className="h-12 w-12 rounded-2xl bg-white border border-emerald-100 flex items-center justify-center font-black text-emerald-600 shadow-sm">
-                                                            {marketerName[0]}
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-black text-zinc-900">{marketerName}</p>
-                                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{t('applying_for', { title: contractTitle })}</p>
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-xs text-zinc-600 bg-white p-4 rounded-2xl border border-emerald-100 mb-6 italic leading-relaxed">
-                                                        "{app.pitch || t('no_pitch_provided')}"
-                                                    </p>
-                                                    <div className="flex gap-2">
-                                                        <button 
-                                                            onClick={() => {
-                                                                if (!contractId || !appId) return;
-                                                                router.post(route('contracts.applications.decision', [contractId, appId]), { decision: 'approved' });
-                                                            }}
-                                                            disabled={!contractId || !appId}
-                                                            className="flex-1 py-3 rounded-xl bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20"
-                                                        >
-                                                            {t('approve')}
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => {
-                                                                if (!contractId || !appId) return;
-                                                                router.post(route('contracts.applications.decision', [contractId, appId]), { decision: 'denied' });
-                                                            }}
-                                                            disabled={!contractId || !appId}
-                                                            className="flex-1 py-3 rounded-xl bg-white border border-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
-                                                        >
-                                                            {t('decline')}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            );})}
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        )}
                     </div>
-
 
                     {/* Analytics & Side Panels */}
                     <div className="space-y-10">
                         {/* Demand Mix Visualization */}
                         <div className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40">
                             <div className="flex items-center justify-between mb-10">
-                                <h3 className="text-xl font-black text-zinc-900 tracking-tight">Demand Mix</h3>
+                                <h3 className="text-xl font-black text-zinc-900 tracking-tight">{t('demand_mix')}</h3>
                                 <FaRegLightbulb className="text-zinc-300" />
                             </div>
                             <div className="space-y-8">

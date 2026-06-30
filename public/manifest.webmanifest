@@ -1,0 +1,56 @@
+{
+    "name": "Zimbo Socials",
+    "short_name": "ZimboSocials",
+    "description": "Grow your social media presence, unlock monetization, and access digital marketing services — all in one place.",
+    "id": "/",
+    "start_url": "/?source=pwa",
+    "scope": "/",
+    "display": "standalone",
+    "display_override": ["standalone", "minimal-ui"],
+    "orientation": "portrait-primary",
+    "theme_color": "#0B3E09",
+    "background_color": "#000000",
+    "lang": "en",
+    "dir": "ltr",
+    "categories": ["business", "social", "marketing"],
+    "icons": [
+        {
+            "src": "/pwa-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/pwa-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/pwa-maskable-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Dashboard",
+            "short_name": "Dashboard",
+            "url": "/dashboard?source=pwa",
+            "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "New Order",
+            "short_name": "Order",
+            "url": "/orders/create?source=pwa",
+            "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "Leaderboard",
+            "short_name": "Leaderboard",
+            "url": "/leaderboard?source=pwa",
+            "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+        }
+    ]
+}

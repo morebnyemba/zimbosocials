@@ -53,7 +53,7 @@ class OrderController extends Controller
 
         // Hard guard: users with empty balance cannot place orders.
         if ((float) $user->balance <= 0) {
-            return back()->withErrors(['balance' => __('orders.insufficient_balance')])->withInput();
+            return back()->withErrors(['balance' => __('messages.insufficient_balance')])->withInput();
         }
 
         $result = $orderService->placeOrder(
@@ -76,14 +76,12 @@ class OrderController extends Controller
 
         if (! $result['dispatch']['ok']) {
             return redirect()->route('orders.index')
-                ->with('success', __('orders.placed_success', ['id' => $order->id]))
-                ->with('info', app()->getLocale() === 'sn'
-                    ? 'Odha yakagadzirwa asi kutumira kumupi kwatadza. Tiri kuyedza zvakare munguva pfupi.'
-                    : 'Order was created but upstream push failed. The system will retry soon.');
+                ->with('success', __('messages.placed_success', ['id' => $order->id]))
+                ->with('info', __('messages.dispatch_retry'));
         }
 
         return redirect()->route('orders.index')
-            ->with('success', __('orders.placed_success', ['id' => $order->id]));
+            ->with('success', __('messages.placed_success', ['id' => $order->id]));
     }
 
     /**
@@ -133,14 +131,14 @@ class OrderController extends Controller
         $this->authorize('update', $order);
 
         if (! $order->canCancel()) {
-            return back()->withErrors(['order' => __('orders.cannot_cancel')]);
+            return back()->withErrors(['order' => __('messages.cannot_cancel')]);
         }
 
         DB::transaction(function () use ($order): void {
             $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
 
             if (! $lockedOrder->canCancel()) {
-                throw new \RuntimeException(__('orders.cannot_cancel'));
+                throw new \RuntimeException(__('messages.cannot_cancel'));
             }
 
             $lockedOrder->update(['status' => 'cancelled']);
@@ -154,6 +152,6 @@ class OrderController extends Controller
             );
         });
 
-        return back()->with('success', __('orders.cancelled_success'));
+        return back()->with('success', __('messages.cancelled_success'));
     }
 }

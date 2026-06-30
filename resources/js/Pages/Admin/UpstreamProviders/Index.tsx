@@ -29,12 +29,14 @@ interface ImportableService {
     is_refill: boolean;
     already_imported: boolean;
     existing_service_name?: string | null;
-    default_markup_percentage: number;
+    default_markup_type?: 'percentage' | 'fixed';
+    default_markup_value?: number;
 }
 
 interface ImportSelection {
     selected: boolean;
-    markup_percentage: string;
+    markup_type: 'percentage' | 'fixed';
+    markup_value: string;
 }
 
 export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEnabled }: PageProps<{ providers: UpstreamProvider[]; aiEnrichmentEnabled?: boolean }>) {
@@ -47,7 +49,8 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
     const [loadingImportServices, setLoadingImportServices] = useState(false);
     const [importingServices, setImportingServices] = useState(false);
     const [importSearch, setImportSearch] = useState('');
-    const [bulkMarkup, setBulkMarkup] = useState('');
+    const [bulkMarkupType, setBulkMarkupType] = useState<'percentage' | 'fixed'>('percentage');
+    const [bulkMarkupValue, setBulkMarkupValue] = useState('');
     const [importError, setImportError] = useState('');
     const [enrichWithAi, setEnrichWithAi] = useState(false);
 
@@ -111,7 +114,8 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
         setLoadingImportServices(false);
         setImportingServices(false);
         setImportSearch('');
-        setBulkMarkup('');
+        setBulkMarkupType('percentage');
+        setBulkMarkupValue('');
         setImportError('');
         setEnrichWithAi(false);
     };
@@ -122,7 +126,8 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
         setAvailableServices([]);
         setServiceSelections({});
         setImportSearch('');
-        setBulkMarkup('');
+        setBulkMarkupType('percentage');
+        setBulkMarkupValue('');
         setImportError('');
 
         try {
@@ -144,7 +149,8 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
             const initialSelections = services.reduce<Record<string, ImportSelection>>((acc, service) => {
                 acc[service.external_service_id] = {
                     selected: !service.already_imported,
-                    markup_percentage: String(service.default_markup_percentage),
+                    markup_type: service.default_markup_type || 'percentage',
+                    markup_value: String(service.default_markup_value || 0),
                 };
 
                 return acc;
@@ -152,7 +158,8 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
 
             setAvailableServices(services);
             setServiceSelections(initialSelections);
-            setBulkMarkup(services[0] ? String(services[0].default_markup_percentage) : '');
+            setBulkMarkupType(services[0]?.default_markup_type || 'percentage');
+            setBulkMarkupValue(services[0] ? String(services[0].default_markup_value || 0) : '');
         } catch (error) {
             setImportError(error instanceof Error ? error.message : 'Failed to load services from provider.');
         } finally {
@@ -209,7 +216,7 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
     };
 
     const applyBulkMarkup = () => {
-        if (bulkMarkup.trim() === '') {
+        if (bulkMarkupValue.trim() === '') {
             return;
         }
 
@@ -223,7 +230,8 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
 
                 next[service.external_service_id] = {
                     ...next[service.external_service_id],
-                    markup_percentage: bulkMarkup,
+                    markup_type: bulkMarkupType,
+                    markup_value: bulkMarkupValue,
                 };
             });
 
@@ -240,7 +248,8 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
             .filter(service => !service.already_imported && serviceSelections[service.external_service_id]?.selected)
             .map(service => ({
                 external_service_id: service.external_service_id,
-                markup_percentage: Number(serviceSelections[service.external_service_id]?.markup_percentage ?? 0),
+                markup_type: serviceSelections[service.external_service_id]?.markup_type ?? 'percentage',
+                markup_value: Number(serviceSelections[service.external_service_id]?.markup_value ?? 0),
             }));
 
         if (services.length === 0) {
@@ -355,8 +364,8 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
                     )}
 
                     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full text-sm text-left">
+                        <div className="overflow-x-auto mt-4">
+                            <table className="min-w-[800px] text-left text-sm">
                                 <thead className="bg-gray-50 border-b border-gray-200">
                                     <tr className="text-gray-500 font-medium">
                                         <th className="px-6 py-3">Name</th>
@@ -492,15 +501,25 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
                                         className="w-full rounded-xl border border-gray-300 px-10 py-2.5 text-sm text-gray-900 outline-none transition focus:border-brand-green focus:ring-1 focus:ring-brand-green/20"
                                     />
                                 </div>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={bulkMarkup}
-                                    onChange={e => setBulkMarkup(e.target.value)}
-                                    placeholder="Markup %"
-                                    className="rounded-xl border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-brand-green focus:ring-1 focus:ring-brand-green/20"
-                                />
+                                <div className="flex items-center rounded-xl border border-gray-300 bg-white overflow-hidden focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green/20">
+                                    <select
+                                        value={bulkMarkupType}
+                                        onChange={e => setBulkMarkupType(e.target.value as 'percentage' | 'fixed')}
+                                        className="border-none bg-gray-50 px-3 py-2.5 text-sm text-gray-700 outline-none focus:ring-0"
+                                    >
+                                        <option value="percentage">%</option>
+                                        <option value="fixed">$</option>
+                                    </select>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={bulkMarkupValue}
+                                        onChange={e => setBulkMarkupValue(e.target.value)}
+                                        placeholder={bulkMarkupType === 'percentage' ? "Markup %" : "Fixed Amount"}
+                                        className="w-28 border-none px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-0"
+                                    />
+                                </div>
                                 <button
                                     type="button"
                                     onClick={applyBulkMarkup}
@@ -539,7 +558,7 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
                                             <th className="px-4 py-3 font-medium">Import</th>
                                             <th className="px-4 py-3 font-medium">Service</th>
                                             <th className="px-4 py-3 font-medium">Provider Rate</th>
-                                            <th className="px-4 py-3 font-medium">Markup %</th>
+                                            <th className="px-4 py-3 font-medium">Markup</th>
                                             <th className="px-4 py-3 font-medium">Local Rate</th>
                                         </tr>
                                     </thead>
@@ -554,10 +573,14 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
                                             visibleServices.map(service => {
                                                 const selection = serviceSelections[service.external_service_id] ?? {
                                                     selected: false,
-                                                    markup_percentage: String(service.default_markup_percentage),
+                                                    markup_type: service.default_markup_type || 'percentage',
+                                                    markup_value: String(service.default_markup_value || 0),
                                                 };
-                                                const markup = Number(selection.markup_percentage || 0);
-                                                const localRate = service.external_rate * (1 + (markup / 100));
+                                                const markupType = selection.markup_type || 'percentage';
+                                                const markupVal = Number(selection.markup_value || 0);
+                                                const localRate = markupType === 'percentage'
+                                                    ? service.external_rate * (1 + (markupVal / 100))
+                                                    : service.external_rate + markupVal;
 
                                                 return (
                                                     <tr key={service.external_service_id} className={service.already_imported ? 'bg-gray-50/80' : ''}>
@@ -593,17 +616,25 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
                                                             ${service.external_rate.toFixed(4)}
                                                         </td>
                                                         <td className="px-4 py-4 align-top">
-                                                            <div className="flex items-center gap-2">
+                                                            <div className="flex items-center rounded-lg border border-gray-300 bg-white focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green/20 overflow-hidden w-max">
+                                                                <select
+                                                                    value={markupType}
+                                                                    disabled={service.already_imported || !selection.selected}
+                                                                    onChange={e => updateServiceSelection(service.external_service_id, { markup_type: e.target.value as 'percentage' | 'fixed' })}
+                                                                    className="border-none bg-gray-50 px-2 py-2 text-sm text-gray-700 outline-none focus:ring-0 disabled:bg-gray-100 disabled:text-gray-400"
+                                                                >
+                                                                    <option value="percentage">%</option>
+                                                                    <option value="fixed">$</option>
+                                                                </select>
                                                                 <input
                                                                     type="number"
                                                                     min="0"
                                                                     step="0.01"
-                                                                    value={selection.markup_percentage}
+                                                                    value={selection.markup_value}
                                                                     disabled={service.already_imported || !selection.selected}
-                                                                    onChange={e => updateServiceSelection(service.external_service_id, { markup_percentage: e.target.value })}
-                                                                    className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 disabled:bg-gray-100 disabled:text-gray-400"
+                                                                    onChange={e => updateServiceSelection(service.external_service_id, { markup_value: e.target.value })}
+                                                                    className="w-20 border-none px-2 py-2 text-sm text-gray-900 outline-none focus:ring-0 disabled:bg-gray-100 disabled:text-gray-400"
                                                                 />
-                                                                <span className="text-gray-500">%</span>
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-4 align-top font-mono text-gray-900">

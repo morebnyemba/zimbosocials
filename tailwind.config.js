@@ -13,14 +13,28 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Inter', ...defaultTheme.fontFamily.sans],
             },
             colors: {
                 brand: {
                     green: '#0B3E09',
                     orange: '#DC7112',
                 }
-            }
+            },
+            keyframes: {
+                marquee: {
+                    '0%': { transform: 'translateX(0%)' },
+                    '100%': { transform: 'translateX(-100%)' },
+                },
+                marquee2: {
+                    '0%': { transform: 'translateX(100%)' },
+                    '100%': { transform: 'translateX(0%)' },
+                },
+            },
+            animation: {
+                marquee: 'marquee 25s linear infinite',
+                marquee2: 'marquee2 25s linear infinite',
+            },
         },
     },
 

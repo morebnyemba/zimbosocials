@@ -16,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -309,7 +310,15 @@ class WalletController extends Controller
      */
     public function handleWebhook(Request $request): JsonResponse
     {
-        // TODO: Verify webhook signature for your payment provider
+        if (! $this->webhookSignatureIsValid($request)) {
+            Log::warning('Rejected payment webhook with invalid signature', [
+                'ip' => $request->ip(),
+                'reference' => $request->input('reference'),
+            ]);
+
+            return response()->json(['error' => 'Invalid signature'], 401);
+        }
+
         $reference = $request->input('reference');
 
         $transaction = Transaction::where('reference', $reference)
@@ -323,5 +332,26 @@ class WalletController extends Controller
         $this->depositService->credit($transaction, 'external_webhook');
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Constant-time HMAC-SHA256 check of the raw body against the
+     * X-Webhook-Signature header. Fails closed when no secret is configured.
+     */
+    private function webhookSignatureIsValid(Request $request): bool
+    {
+        $secret = (string) config('services.payment_webhook.secret');
+        if ($secret === '') {
+            return false;
+        }
+
+        $provided = (string) $request->header('X-Webhook-Signature');
+        if ($provided === '') {
+            return false;
+        }
+
+        $expected = 'sha256='.hash_hmac('sha256', $request->getContent(), $secret);
+
+        return hash_equals($expected, $provided);
     }
 }

@@ -35,7 +35,7 @@ export default function UserShow({ targetUser, recent_orders, recent_transaction
     const [showBalanceModal, setShowBalanceModal] = useState(false);
     const [balanceForm, setBalanceForm] = useState({ amount: '', reason: '' });
     const [showRoleModal, setShowRoleModal] = useState(false);
-    const [roleForm, setRoleForm] = useState({ role: targetUser.role, admin_role: targetUser.admin_role || 'support' });
+    const [roleForm, setRoleForm] = useState({ role: targetUser.role, admin_role: targetUser.admin_role || 'support', account_type: targetUser.account_type || 'individual' });
     const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; danger?: boolean } | null>(null);
 
     if (!targetUser) return <AdminLayout><div className="p-8">Loading...</div></AdminLayout>;
@@ -119,7 +119,7 @@ export default function UserShow({ targetUser, recent_orders, recent_transaction
                                             onClick={() => setShowRoleModal(true)}
                                             className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-full border border-indigo-100 uppercase tracking-widest text-[10px] font-black hover:bg-indigo-100 transition-all"
                                         >
-                                            <FaShieldAlt /> {targetUser.role} {targetUser.admin_role ? `(${adminRoleLabels[targetUser.admin_role]})` : ''}
+                                            <FaShieldAlt /> {targetUser.role} {targetUser.admin_role ? `(${adminRoleLabels[targetUser.admin_role]})` : ''} • {targetUser.account_type}
                                         </button>
                                         {!targetUser.is_active && <span className="px-4 py-2 rounded-full text-[10px] font-black uppercase bg-red-50 text-red-600 border border-red-100 shadow-sm">Banned</span>}
                                     </div>
@@ -322,6 +322,17 @@ export default function UserShow({ targetUser, recent_orders, recent_transaction
                                     <button onClick={() => setShowRoleModal(false)} className="text-2xl font-black font-mono">&times;</button>
                                 </div>
                                 <div className="p-10 space-y-6">
+                                    <div>
+                                        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-4 mb-2 block">Account Type</label>
+                                        <select 
+                                            value={roleForm.account_type}
+                                            onChange={e => setRoleForm(f => ({...f, account_type: e.target.value}))}
+                                            className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-6 py-4 font-bold text-zinc-900 focus:outline-none focus:border-indigo-500 appearance-none mb-6"
+                                        >
+                                            <option value="individual">Individual Account</option>
+                                            <option value="business">Business Account</option>
+                                        </select>
+                                    </div>
                                     <div>
                                         <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-4 mb-2 block">System Role</label>
                                         <select 

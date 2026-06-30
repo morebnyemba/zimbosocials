@@ -9,10 +9,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/Components/ui/card"
+import TestimonialsSection from "@/Components/TestimonialsSection"
+import FaqSection from "@/Components/FaqSection"
+import AnimatedCounter from "@/Components/AnimatedCounter"
 import { PageProps } from "@/types"
-import { motion } from "framer-motion"
+import { motion, useReducedMotion } from "framer-motion"
 import { Link, usePage } from "@inertiajs/react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import {
   FiArrowRight,
   FiBarChart2,
@@ -25,6 +28,7 @@ import {
   FiLock,
   FiRadio,
   FiShield,
+  FiStar,
   FiTrendingUp,
   FiUsers,
   FiZap,
@@ -39,12 +43,9 @@ import {
   FaYoutube,
 } from "react-icons/fa6"
 
-type Service = {
-  id: number
-  name: string
-  name_sn?: string | null
-  category: string
-}
+import { fallbackServices, fallbackCategories } from "@/lib/constants"
+import { Service } from "@/lib/types"
+
 
 type HomeStats = {
   services: number
@@ -57,17 +58,7 @@ type Props = {
   stats?: HomeStats
 }
 
-type LiveActivity = {
-  id: string
-  serviceId: number
-  buyer: string
-  town: string
-  service: string
-  category: string
-  quantity: number
-  timeAgo: string
-  action: string
-}
+
 
 const sectionViewport = { once: true, amount: 0.2 }
 
@@ -94,264 +85,31 @@ const itemVariants = {
   },
 }
 
-const shonaNames = [
-  "Tendai",
-  "Rudo",
-  "Nyasha",
-  "Tafadzwa",
-  "Rutendo",
-  "Tadiwa",
-  "Munashe",
-  "Anesu",
-  "Tanaka",
-  "Kudakwashe",
-  "Ropafadzo",
-  "Simbarashe",
-  "Chiedza",
-  "Farai",
-  "Shingirai",
-  "Vimbai",
-  "Tinashe",
-  "Mufaro",
-  "Tawananyasha",
-  "Tatenda",
-  "Tonderai",
-  "Tariro",
-  "Tsitsi",
-  "Tapiwa",
-  "Blessing",
-  "Panashe",
-  "Takudzwa",
-  "Nomsa",
-  "Memory",
-  "Ashley",
-  "Rumbidzai",
-  "Kundai",
-  "Loveness",
-  "Virginia",
-  "Fadzai",
-  "Priscilla",
-  "Taurai",
-  "Melody",
-  "Shamiso",
-  "Takunda",
-  "Wadzi",
-  "Yamurai",
-  "Munyaradzi",
-  "Chenai",
-  "Rangarirai",
-  "Dzimbanhete",
-  "Tafara",
-  "Tashinga",
-  "Vongai",
-  "Nyaradzo",
-  "Ruramai",
-  "Tendekai",
-  "Makanaka",
-  "Tinotenda",
-  "Kudzai",
-  "Marvellous",
-  "Ratidzo",
-  "Yeukai",
-]
-
-const zimbabweTowns = [
-  "Harare",
-  "Chitungwiza",
-  "Mutare",
-  "Gweru",
-  "Masvingo",
-  "Kadoma",
-  "Marondera",
-  "Bindura",
-  "Chegutu",
-  "Kwekwe",
-  "Norton",
-  "Rusape",
-  "Karoi",
-  "Chipinge",
-  "Zvishavane",
-  "Redcliff",
-  "Shurugwi",
-  "Mvurwi",
-  "Gokwe",
-  "Hwange",
-]
-
-const timePool = ["just now", "8 sec ago", "14 sec ago", "22 sec ago", "41 sec ago", "1 min ago", "2 min ago", "3 min ago", "5 min ago"]
-const activityWindowSize = 5
-const categoryWeights: Record<string, number> = {
-  instagram: 1.25,
-  tiktok: 1.22,
-  youtube: 1.16,
-  facebook: 1.08,
-  telegram: 1.04,
-  twitter: 0.96,
-  whatsapp: 0.92,
+// Motion-reduced fallbacks: fade only, no transform/stagger (avoids vestibular discomfort).
+const reducedSectionVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.2, staggerChildren: 0 } },
 }
-const fallbackServices: Service[] = [
-  { id: 1, name: "Instagram Followers", name_sn: "Instagram Followers", category: "instagram" },
-  { id: 2, name: "TikTok Views", name_sn: "TikTok Views", category: "tiktok" },
-  { id: 3, name: "YouTube Likes", name_sn: "YouTube Likes", category: "youtube" },
-  { id: 4, name: "Facebook Page Likes", name_sn: "Facebook Page Likes", category: "facebook" },
-  { id: 5, name: "Telegram Members", name_sn: "Telegram Members", category: "telegram" },
-]
-
-const fallbackCategories = ["instagram", "tiktok", "youtube", "facebook", "twitter", "telegram", "whatsapp"]
-
-type WeightedItem<T> = {
-  item: T
-  weight: number
-}
-
-type ServiceProfile = {
-  weight: number
-  quantityOptions: number[]
-  actionPhrases: string[]
-}
-
-function pickRandom<T>(items: T[]): T {
-  return items[Math.floor(Math.random() * items.length)]
-}
-
-function pickWithCooldown<T>(items: T[], recent: T[]): T {
-  const freshItems = items.filter((item) => !recent.includes(item))
-  return pickRandom(freshItems.length > 0 ? freshItems : items)
-}
-
-function pickWeighted<T>(items: Array<WeightedItem<T>>): T {
-  const totalWeight = items.reduce((sum, entry) => sum + entry.weight, 0)
-  let cursor = Math.random() * totalWeight
-
-  for (const entry of items) {
-    cursor -= entry.weight
-    if (cursor <= 0) {
-      return entry.item
-    }
-  }
-
-  return items[items.length - 1].item
-}
-
-function pickWeightedQuantity(quantityOptions: number[]): number {
-  const middleIndex = (quantityOptions.length - 1) / 2
-
-  return pickWeighted(quantityOptions.map((quantity, index) => ({
-    item: quantity,
-    weight: Math.max(1, quantityOptions.length - Math.abs(index - middleIndex) * 1.4),
-  })))
-}
-
-function getServiceProfile(service: Service): ServiceProfile {
-  const name = `${service.name} ${service.name_sn ?? ""}`.toLowerCase()
-  const categoryWeight = categoryWeights[service.category.toLowerCase()] ?? 1
-  let weight = 1.2 * categoryWeight
-  let quantityOptions = [100, 250, 500, 1000, 1500]
-  let actionPhrases = ["just ordered", "is boosting", "queued up"]
-
-  if (name.includes("view") || name.includes("watch")) {
-    weight += 4.8
-    quantityOptions = [500, 1000, 2000, 5000, 10000, 15000]
-    actionPhrases = ["is pushing", "just boosted", "started a run for"]
-  } else if (name.includes("follower") || name.includes("subscriber")) {
-    weight += 4.2
-    quantityOptions = [50, 100, 250, 500, 1000, 2000]
-    actionPhrases = ["is growing with", "just ordered", "is building momentum with"]
-  } else if (name.includes("like") || name.includes("heart")) {
-    weight += 3.7
-    quantityOptions = [100, 250, 500, 1000, 1500, 2500]
-    actionPhrases = ["is topping up", "just boosted", "queued up"]
-  } else if (name.includes("comment")) {
-    weight += 2.6
-    quantityOptions = [10, 20, 30, 50, 75, 100, 150]
-    actionPhrases = ["is sparking chatter with", "just ordered", "is warming up"]
-  } else if (name.includes("share") || name.includes("retweet")) {
-    weight += 2.9
-    quantityOptions = [25, 50, 100, 200, 300, 500]
-    actionPhrases = ["is widening reach with", "queued up", "just pushed"]
-  } else if (name.includes("member") || name.includes("join")) {
-    weight += 3.1
-    quantityOptions = [50, 100, 250, 500, 1000, 1500]
-    actionPhrases = ["is filling up", "just ordered", "is growing"]
-  }
-
-  if (name.includes("real") || name.includes("premium")) {
-    weight += 1.1
-  }
-
-  if (name.includes("instant") || name.includes("fast")) {
-    weight += 0.6
-  }
-
-  return {
-    weight,
-    quantityOptions,
-    actionPhrases,
-  }
-}
-
-function createLiveActivity(pool: Service[], previousActivities: LiveActivity[]): LiveActivity {
-  const services = pool.length > 0 ? pool : fallbackServices
-  const recentServiceIds = previousActivities.slice(0, 3).map((activity) => activity.serviceId)
-  const recentBuyers = previousActivities.slice(0, 4).map((activity) => activity.buyer)
-  const recentTowns = previousActivities.slice(0, 3).map((activity) => activity.town)
-
-  const weightedServices = services.map((service) => {
-    const profile = getServiceProfile(service)
-    const repetitionPenalty = recentServiceIds.includes(service.id) ? 0.14 : 1
-
-    return {
-      item: service,
-      weight: Math.max(profile.weight * repetitionPenalty, 0.08),
-    }
-  })
-
-  const service = pickWeighted(weightedServices)
-  const profile = getServiceProfile(service)
-  const buyer = pickWithCooldown(shonaNames, recentBuyers)
-  const town = pickWithCooldown(zimbabweTowns, recentTowns)
-  const quantity = pickWeightedQuantity(profile.quantityOptions)
-  const action = pickRandom(profile.actionPhrases)
-  const timeAgo = pickRandom(timePool)
-
-  return {
-    id: `${service.id}-${buyer}-${town}-${Date.now()}`,
-    serviceId: service.id,
-    buyer,
-    town,
-    service: service.name_sn || service.name,
-    category: service.category,
-    quantity,
-    timeAgo,
-    action,
-  }
-}
-
-function createInitialLiveActivities(pool: Service[], count: number): LiveActivity[] {
-  let activities: LiveActivity[] = []
-
-  for (let index = 0; index < count; index += 1) {
-    activities = [createLiveActivity(pool, activities), ...activities]
-  }
-
-  return activities
+const reducedItemVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.2 } },
 }
 
 export default function Home() {
   const { props } = usePage<PageProps<Props>>()
-  const servicePool = props.activityServices.length > 0 ? props.activityServices : fallbackServices
+  const reduceMotion = useReducedMotion()
+  const sv = reduceMotion ? reducedSectionVariants : sectionVariants
+  const iv = reduceMotion ? reducedItemVariants : itemVariants
+  const servicePool = useMemo(() => props.activityServices.length > 0 ? props.activityServices : fallbackServices, [props.activityServices])
   const displayCategories = props.categories.length > 0 ? props.categories : fallbackCategories
   const stats = props.stats ?? { services: 0, categories: 0 }
-  const servicesValue = stats.services > 0 ? `${stats.services.toLocaleString()}+` : "500+"
-  const platformsValue = String(stats.categories > 0 ? stats.categories : displayCategories.length)
+  const servicesValue = stats.services > 0 ? stats.services : 500
+  const platformsValue = stats.categories > 0 ? stats.categories : displayCategories.length
   const heroMetrics = [
-    { label: "Services Available", value: servicesValue },
-    { label: "Average Setup Time", value: "< 2 mins" },
-    { label: "Platforms Supported", value: platformsValue },
+    { label: "Services Available", value: servicesValue, suffix: "+" },
+    { label: "Average Setup Time", value: "< 2 mins", suffix: "" },
+    { label: "Platforms Supported", value: platformsValue, suffix: "" },
   ]
-  const [liveActivities, setLiveActivities] = useState<LiveActivity[]>(() => (
-    createInitialLiveActivities(servicePool, activityWindowSize)
-  ))
 
   const homeStructuredData: Array<Record<string, unknown>> = [
     {
@@ -368,32 +126,13 @@ export default function Home() {
       "@context": "https://schema.org",
       "@type": "ItemList",
       name: "Popular Social Growth Services",
-      itemListElement: servicePool.slice(0, 8).map((service, index) => ({
+      itemListElement: servicePool.slice(0, 8).map((service: Service, index: number) => ({
         "@type": "ListItem",
         position: index + 1,
         name: service.name,
       })),
     },
   ]
-
-  useEffect(() => {
-    setLiveActivities(createInitialLiveActivities(servicePool, activityWindowSize))
-
-    // Respect users who prefer reduced motion: render a static stream, no rotation.
-    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-    if (prefersReducedMotion) {
-      return
-    }
-
-    const intervalId = window.setInterval(() => {
-      setLiveActivities((current) => [
-        createLiveActivity(servicePool, current),
-        ...current,
-      ].slice(0, activityWindowSize))
-    }, 1800)
-
-    return () => window.clearInterval(intervalId)
-  }, [servicePool])
 
   const categoryLabel = (category: string) => {
     if (category === "twitter") return "X / Twitter"
@@ -404,21 +143,21 @@ export default function Home() {
   const categoryIcon = (category: string) => {
     switch (category.toLowerCase()) {
       case "instagram":
-        return <FaInstagram className="h-5 w-5" />
+        return <FaInstagram className="h-6 w-6" />
       case "youtube":
-        return <FaYoutube className="h-5 w-5" />
+        return <FaYoutube className="h-6 w-6" />
       case "facebook":
-        return <FaFacebookF className="h-5 w-5" />
+        return <FaFacebookF className="h-6 w-6" />
       case "twitter":
-        return <FaXTwitter className="h-5 w-5" />
+        return <FaXTwitter className="h-6 w-6" />
       case "telegram":
-        return <FaTelegram className="h-5 w-5" />
+        return <FaTelegram className="h-6 w-6" />
       case "tiktok":
-        return <FaTiktok className="h-5 w-5" />
+        return <FaTiktok className="h-6 w-6" />
       case "whatsapp":
-        return <FaWhatsapp className="h-5 w-5" />
+        return <FaWhatsapp className="h-6 w-6" />
       default:
-        return <FiTrendingUp className="h-5 w-5" />
+        return <FiTrendingUp className="h-6 w-6" />
     }
   }
 
@@ -433,17 +172,17 @@ export default function Home() {
 
       <section className="relative overflow-hidden border-b border-zinc-950 bg-gradient-to-br from-white via-amber-50 to-emerald-50">
         <motion.div
-          animate={{ y: [0, -10, 0], scale: [1, 1.04, 1] }}
+          animate={reduceMotion ? undefined : { y: [0, -10, 0], scale: [1, 1.04, 1] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
           className="pointer-events-none absolute -top-24 left-8 h-72 w-72 rounded-full bg-emerald-300/40 blur-3xl"
         />
         <motion.div
-          animate={{ y: [0, 14, 0], x: [0, -12, 0] }}
+          animate={reduceMotion ? undefined : { y: [0, 14, 0], x: [0, -12, 0] }}
           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
           className="pointer-events-none absolute right-0 top-10 h-72 w-72 rounded-full bg-red-300/30 blur-3xl"
         />
         <motion.div
-          animate={{ y: [0, -8, 0], x: [0, 10, 0] }}
+          animate={reduceMotion ? undefined : { y: [0, -8, 0], x: [0, 10, 0] }}
           transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
           className="pointer-events-none absolute bottom-0 left-1/3 h-52 w-52 rounded-full bg-amber-300/40 blur-3xl"
         />
@@ -451,10 +190,10 @@ export default function Home() {
         <div className="relative mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="grid items-center gap-10 lg:grid-cols-[1.2fr_0.8fr]">
             <motion.div
-              initial={{ opacity: 0, x: -32 }}
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -32 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={sectionViewport}
-              transition={{ duration: 0.7 }}
+              transition={{ duration: reduceMotion ? 0.2 : 0.7 }}
             >
               <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-950 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-950 shadow-sm">
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white">
@@ -495,29 +234,46 @@ export default function Home() {
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, x: 32, rotate: 1.5 }}
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 32, rotate: 1.5 }}
               whileInView={{ opacity: 1, x: 0, rotate: 0 }}
               viewport={sectionViewport}
-              transition={{ duration: 0.8 }}
-              whileHover={{ y: -6 }}
+              transition={{ duration: reduceMotion ? 0.2 : 0.8 }}
+              whileHover={reduceMotion ? undefined : { y: -6 }}
             >
             <Card className="border-zinc-950 bg-zinc-950 text-white shadow-2xl backdrop-blur">
               <CardHeader>
                 <CardTitle className="text-white">Quick Start</CardTitle>
                 <CardDescription className="text-zinc-300">Get your first order live in under 2 minutes.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-300">Platform / Service</p>
-                  <Input placeholder="e.g. Instagram Followers" readOnly className="border-emerald-500/40 bg-white text-zinc-950" />
+              <CardContent className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex -space-x-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className={`flex h-10 w-10 items-center justify-center rounded-full border-2 border-zinc-950 bg-gradient-to-br text-sm font-bold text-white shadow-sm ${i === 1 ? 'from-emerald-400 to-emerald-600' : i === 2 ? 'from-amber-400 to-amber-600' : i === 3 ? 'from-red-400 to-red-600' : 'from-blue-400 to-blue-600'}`}>
+                        {['T', 'C', 'M', 'R'][i-1]}
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1 text-amber-400">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <FiStar key={i} className="h-4 w-4 fill-current" />
+                      ))}
+                    </div>
+                    <p className="mt-0.5 text-sm font-medium text-zinc-300">Trusted by 5,000+ creators</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-300">Link</p>
-                  <Input placeholder="https://instagram.com/yourprofile" readOnly className="border-amber-400/50 bg-white text-zinc-950" />
-                </div>
-                <div>
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-300">Quantity</p>
-                  <Input placeholder="1000" readOnly className="border-red-500/50 bg-white text-zinc-950" />
+                
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-sm font-medium text-zinc-300">
+                    <FiCheckCircle className="h-5 w-5 text-emerald-500" /> Instant activation
+                  </div>
+                  <div className="flex items-center gap-3 text-sm font-medium text-zinc-300">
+                    <FiCheckCircle className="h-5 w-5 text-amber-500" /> Automated delivery
+                  </div>
+                  <div className="flex items-center gap-3 text-sm font-medium text-zinc-300">
+                    <FiCheckCircle className="h-5 w-5 text-red-500" /> Local payment methods
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="justify-between gap-2">
@@ -536,19 +292,21 @@ export default function Home() {
 
       <motion.section
         className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8"
-        variants={sectionVariants}
+        variants={sv}
         initial="hidden"
         whileInView="visible"
         viewport={sectionViewport}
       >
-        <motion.div className="mb-8 grid gap-4 sm:grid-cols-3" variants={sectionVariants}>
+        <motion.div className="mb-8 grid gap-4 sm:grid-cols-3" variants={sv}>
           {heroMetrics.map((metric) => (
-            <motion.div key={metric.label} variants={itemVariants} whileHover={{ y: -8 }}>
+            <motion.div key={metric.label} variants={iv} whileHover={{ y: -8 }}>
             <Card className="group overflow-hidden border-zinc-950 transition-transform duration-300 hover:shadow-xl">
               <div className="h-1 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600" />
               <CardHeader>
                 <CardDescription className="text-zinc-600">{metric.label}</CardDescription>
-                <CardTitle className="text-2xl font-bold text-zinc-950 group-hover:text-emerald-700">{metric.value}</CardTitle>
+                <CardTitle className="text-2xl font-bold text-zinc-950 group-hover:text-emerald-700">
+                  <AnimatedCounter value={metric.value} suffix={metric.suffix} />
+                </CardTitle>
               </CardHeader>
             </Card>
             </motion.div>
@@ -565,18 +323,35 @@ export default function Home() {
           </Link>
         </div>
 
-        <motion.div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" variants={sectionVariants}>
+        <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" variants={sv}>
           {displayCategories.map((category, index) => (
-            <motion.div key={category} variants={itemVariants} whileHover={{ y: -10, scale: 1.02 }}>
-            <Link
-              key={category}
-              href={`${route("marketing.services")}?category=${category}`}
-              className={`rounded-xl border px-4 py-4 text-center text-sm font-semibold capitalize shadow-sm transition duration-300 hover:-translate-y-2 hover:shadow-xl ${index % 3 === 0 ? "border-emerald-300 bg-emerald-50 text-zinc-950" : index % 3 === 1 ? "border-amber-300 bg-amber-50 text-zinc-950" : "border-red-300 bg-red-50 text-zinc-950"}`}
-            >
-              <span className="mb-2 inline-flex items-center justify-center rounded-full bg-zinc-950 p-3 text-white transition duration-300 group-hover:scale-110">{categoryIcon(category)}</span>
-              <span className="block">{categoryLabel(category)}</span>
-              <span className="mt-1 block text-xs font-medium text-zinc-600">Followers, Likes & Views</span>
-            </Link>
+            <motion.div key={category} variants={iv} whileHover={{ y: -6, scale: 1.01 }}>
+              <Link
+                href={`${route("marketing.services")}?category=${category}`}
+                className="group relative flex h-full flex-col overflow-hidden rounded-3xl bg-white p-6 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] transition-all duration-300 hover:shadow-2xl"
+              >
+                <div className={`absolute -inset-[1px] -z-10 rounded-3xl opacity-20 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br ${index % 3 === 0 ? "from-emerald-400 to-emerald-600" : index % 3 === 1 ? "from-amber-400 to-amber-600" : "from-red-400 to-red-600"}`} />
+                <div className="absolute inset-[1px] -z-10 rounded-[23px] bg-white transition-colors duration-300 group-hover:bg-zinc-50/50" />
+                <div className="flex items-center gap-4">
+                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-sm transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 ${index % 3 === 0 ? "bg-emerald-50 text-emerald-600" : index % 3 === 1 ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"}`}>
+                    {categoryIcon(category)}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-950 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-zinc-950 group-hover:to-zinc-600">{categoryLabel(category)}</h3>
+                    <p className="mt-0.5 text-sm font-medium text-zinc-500">Premium Growth</p>
+                  </div>
+                </div>
+                <div className="mt-8 flex flex-1 items-end justify-between">
+                  <div className="flex -space-x-2">
+                    <div className={`h-8 w-8 rounded-full border-2 border-white bg-gradient-to-br opacity-80 ${index % 3 === 0 ? "from-emerald-300 to-emerald-500" : index % 3 === 1 ? "from-amber-300 to-amber-500" : "from-red-300 to-red-500"}`} />
+                    <div className="h-8 w-8 rounded-full border-2 border-white bg-zinc-200" />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-zinc-100 text-[10px] font-bold text-zinc-600">+</div>
+                  </div>
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-zinc-50 text-zinc-400 transition-colors duration-300 group-hover:text-white ${index % 3 === 0 ? "group-hover:bg-emerald-600" : index % 3 === 1 ? "group-hover:bg-amber-500" : "group-hover:bg-red-600"}`}>
+                    <FiArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-0.5" />
+                  </div>
+                </div>
+              </Link>
             </motion.div>
           ))}
         </motion.div>
@@ -584,7 +359,7 @@ export default function Home() {
 
       <motion.section
         className="bg-zinc-950 py-14 text-white"
-        variants={sectionVariants}
+        variants={sv}
         initial="hidden"
         whileInView="visible"
         viewport={sectionViewport}
@@ -594,7 +369,7 @@ export default function Home() {
           <h2 className="text-3xl font-bold">Why Trust Zimbo Socials?</h2>
           <p className="text-sm text-zinc-300">Built for Zimbabwe's creators, businesses, and growth professionals.</p>
         </div>
-        <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" variants={sectionVariants}>
+        <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" variants={sv}>
           {[
             {
               title: "Fast Delivery",
@@ -617,7 +392,7 @@ export default function Home() {
               icon: <FiUsers className="h-5 w-5 text-white" />,
             },
           ].map((item) => (
-            <motion.div key={item.title} variants={itemVariants} whileHover={{ y: -8 }}>
+            <motion.div key={item.title} variants={iv} whileHover={{ y: -8 }}>
             <Card className="border-zinc-700 bg-zinc-900 text-white transition-transform duration-300 hover:border-amber-300 hover:shadow-2xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">{item.icon}{item.title}</CardTitle>
@@ -630,139 +405,11 @@ export default function Home() {
         </div>
       </motion.section>
 
-      <motion.section
-        className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 lg:px-8"
-        variants={sectionVariants}
-        initial="hidden"
-        whileInView="visible"
-        viewport={sectionViewport}
-      >
-        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-red-700">
-              <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
-              Live Broadcasting
-            </div>
-            <h2 className="text-2xl font-bold text-zinc-950">See what Zimbabwe is ordering right now.</h2>
-            <p className="mt-1 max-w-2xl text-sm text-zinc-700">
-              A live look at the orders flowing through Zimbo Socials. Join thousands of Zimbabweans
-              growing their socials every single day.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:w-auto">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700">Services</p>
-              <p className="mt-1 text-lg font-extrabold text-zinc-950">{servicesValue}</p>
-            </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">Orders</p>
-              <p className="mt-1 text-lg font-extrabold text-zinc-950">Live</p>
-            </div>
-          </div>
-        </div>
-
-        <motion.div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]" variants={sectionVariants}>
-          <motion.div variants={itemVariants} whileHover={{ y: -6 }}>
-            <Card className="overflow-hidden border-zinc-950 shadow-xl">
-              <div className="border-b border-zinc-200 bg-gradient-to-r from-zinc-950 via-red-600 to-emerald-600 px-5 py-4 text-white">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-white/80">
-                      <FiRadio className="h-3.5 w-3.5" />
-                      Activity Stream
-                    </p>
-                    <h3 className="mt-1 text-xl font-bold">People are ordering right now</h3>
-                  </div>
-                  <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur">
-                    <FiEye className="h-4 w-4" />
-                    Watching 24/7
-                  </div>
-                </div>
-              </div>
-              <CardContent className="space-y-4 p-5">
-                <div className="rounded-2xl border border-red-100 bg-red-50/70 p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-700">Latest Broadcast</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-800">
-                    <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 font-semibold shadow-sm">
-                      <FiBell className="h-4 w-4 text-red-500" />
-                      {liveActivities[0]?.buyer} from {liveActivities[0]?.town}
-                    </span>
-                    <span>{liveActivities[0]?.action}</span>
-                    <span className="rounded-full bg-zinc-950 px-3 py-1 font-semibold text-white">
-                      {liveActivities[0]?.service}
-                    </span>
-                    <span className="rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-800">
-                      {liveActivities[0]?.quantity.toLocaleString()} qty
-                    </span>
-                    <span className="text-zinc-500">{liveActivities[0]?.timeAgo}</span>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {liveActivities.slice(1, 5).map((activity, index) => (
-                    <motion.div
-                      key={activity.id}
-                      variants={itemVariants}
-                      whileHover={{ y: -4 }}
-                      className={`rounded-2xl border p-4 ${index % 3 === 0 ? "border-emerald-200 bg-emerald-50/70" : index % 3 === 1 ? "border-amber-200 bg-amber-50/70" : "border-red-200 bg-red-50/70"}`}
-                    >
-                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">{activity.timeAgo}</p>
-                      <h4 className="mt-2 text-base font-bold text-zinc-950">{activity.buyer} • {activity.town}</h4>
-                      <p className="mt-1 text-sm text-zinc-700">{activity.action} <span className="font-semibold text-zinc-950">{activity.service}</span></p>
-                      <div className="mt-3 flex items-center justify-between text-xs">
-                        <span className="rounded-full bg-white px-2.5 py-1 font-semibold text-zinc-700 shadow-sm">{categoryLabel(activity.category)}</span>
-                        <span className="font-bold text-zinc-950">{activity.quantity.toLocaleString()} qty</span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={itemVariants} whileHover={{ y: -6 }}>
-            <Card className="border-zinc-950 bg-zinc-950 text-white shadow-2xl">
-              <CardHeader>
-                <CardTitle className="text-2xl">Why creators choose us</CardTitle>
-                <CardDescription className="text-zinc-300">
-                  Thousands of Zimbabweans rely on Zimbo Socials to grow their reach with confidence.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {[
-                  "Orders start within minutes, so your campaigns gain momentum fast.",
-                  "Pay securely in USD or local mobile money — no card required.",
-                  "Track every order in real time from your dashboard.",
-                  "Friendly Zimbabwe-based support whenever you need a hand.",
-                ].map((point) => (
-                  <div key={point} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90">
-                    <p className="inline-flex items-start gap-2">
-                      <FiCheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                      <span>{point}</span>
-                    </p>
-                  </div>
-                ))}
-              </CardContent>
-              <CardFooter className="flex flex-wrap gap-3">
-                <Link href={route("marketing.services")}>
-                  <Button className="bg-white text-zinc-950 transition duration-300 hover:-translate-y-1 hover:bg-amber-100">
-                    Browse Full Catalog
-                  </Button>
-                </Link>
-                <Link href={route("register")}>
-                  <Button variant="outline" className="border-white text-white hover:bg-white hover:text-zinc-950">
-                    Start Growing
-                  </Button>
-                </Link>
-              </CardFooter>
-            </Card>
-          </motion.div>
-        </motion.div>
-      </motion.section>
+      {/* We removed the Live Broadcasting section as the live ticker is now in the header */}
 
       <motion.section
         className="bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 py-14"
-        variants={sectionVariants}
+        variants={sv}
         initial="hidden"
         whileInView="visible"
         viewport={sectionViewport}
@@ -772,7 +419,7 @@ export default function Home() {
           <h2 className="text-3xl font-bold text-white">Getting Started</h2>
           <p className="text-sm text-white/90">Three simple steps to begin growing your social presence.</p>
         </div>
-        <motion.div className="grid gap-4 md:grid-cols-3" variants={sectionVariants}>
+        <motion.div className="grid gap-4 md:grid-cols-3" variants={sv}>
           {[
             {
               n: "1",
@@ -793,14 +440,14 @@ export default function Home() {
               grad: "from-emerald-600 to-red-600",
             },
           ].map((step) => (
-            <motion.div key={step.n} variants={itemVariants} whileHover={{ y: -8, scale: 1.01 }}>
-            <Card className="border-white/40 bg-white text-center transition-transform duration-300 hover:shadow-xl">
+            <motion.div key={step.n} variants={iv} whileHover={{ y: -8, scale: 1.01 }}>
+            <Card className="border-white/20 bg-white/10 text-center backdrop-blur-md transition-all duration-300 hover:bg-white/20 hover:shadow-xl">
               <CardHeader>
-                <div className={`mx-auto mb-1 inline-flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br ${step.grad} text-lg font-bold text-white`}>
+                <div className={`mx-auto mb-1 inline-flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br ${step.grad} text-lg font-bold text-white shadow-lg`}>
                   {step.n}
                 </div>
-                <CardTitle className="text-base">{step.title}</CardTitle>
-                <CardDescription className="text-zinc-700">{step.desc}</CardDescription>
+                <CardTitle className="text-base text-white">{step.title}</CardTitle>
+                <CardDescription className="text-white/80">{step.desc}</CardDescription>
               </CardHeader>
             </Card>
             </motion.div>
@@ -811,7 +458,7 @@ export default function Home() {
 
       <motion.section
         className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 lg:px-8"
-        variants={sectionVariants}
+        variants={sv}
         initial="hidden"
         whileInView="visible"
         viewport={sectionViewport}
@@ -820,7 +467,7 @@ export default function Home() {
           <h2 className="text-2xl font-bold text-zinc-950">Earn as a Marketer</h2>
           <p className="text-sm text-zinc-700">Monetize your audience with campaign opportunities and tracked payouts.</p>
         </div>
-        <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" variants={sectionVariants}>
+        <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" variants={sv}>
           {[
             {
               title: "Discover Contracts",
@@ -843,7 +490,7 @@ export default function Home() {
               icon: <FiUsers className="h-5 w-5 text-zinc-900" />,
             },
           ].map((item) => (
-            <motion.div key={item.title} variants={itemVariants} whileHover={{ y: -8 }}>
+            <motion.div key={item.title} variants={iv} whileHover={{ y: -8 }}>
             <Card className="border-zinc-950 transition-transform duration-300 hover:shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">{item.icon}{item.title}</CardTitle>
@@ -862,13 +509,13 @@ export default function Home() {
 
       <motion.section
         className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 lg:px-8"
-        variants={sectionVariants}
+        variants={sv}
         initial="hidden"
         whileInView="visible"
         viewport={sectionViewport}
       >
-        <motion.div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]" variants={sectionVariants}>
-          <motion.div variants={itemVariants} whileHover={{ y: -8 }}>
+        <motion.div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]" variants={sv}>
+          <motion.div variants={iv} whileHover={{ y: -8 }}>
           <Card className="border-zinc-950 bg-zinc-950 text-white shadow-2xl">
             <CardHeader>
               <CardTitle className="text-2xl">Launch Campaigns on Premium Pages</CardTitle>
@@ -890,7 +537,7 @@ export default function Home() {
           </Card>
           </motion.div>
 
-          <motion.div variants={itemVariants} whileHover={{ y: -8 }}>
+          <motion.div variants={iv} whileHover={{ y: -8 }}>
           <Card className="border-red-300 bg-gradient-to-br from-red-50 via-white to-amber-50">
             <CardHeader>
               <CardTitle className="text-base text-zinc-950">Creator Network Reach</CardTitle>
@@ -916,12 +563,12 @@ export default function Home() {
 
       <motion.section
         className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8"
-        variants={sectionVariants}
+        variants={sv}
         initial="hidden"
         whileInView="visible"
         viewport={sectionViewport}
       >
-        <motion.div className="grid gap-4 md:grid-cols-3" variants={sectionVariants}>
+        <motion.div className="grid gap-4 md:grid-cols-3" variants={sv}>
           {[
             {
               icon: <FiUsers className="h-5 w-5 text-emerald-600" />,
@@ -939,8 +586,8 @@ export default function Home() {
               desc: "Launch and track campaigns quickly with clear status updates and account-level reporting.",
             },
           ].map((item) => (
-            <motion.div key={item.title} variants={itemVariants} whileHover={{ y: -8 }}>
-            <Card className="border-zinc-950 bg-white transition duration-300 hover:bg-zinc-950 hover:text-white hover:shadow-xl">
+            <motion.div key={item.title} variants={iv} whileHover={{ y: -8 }}>
+            <Card className="group border-zinc-950 bg-white transition duration-300 hover:bg-zinc-950 hover:text-white hover:shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   {item.icon}
@@ -954,14 +601,18 @@ export default function Home() {
         </motion.div>
       </motion.section>
 
+      <TestimonialsSection />
+      
+      <FaqSection />
+
       <motion.section
         className="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6 lg:px-8"
-        variants={sectionVariants}
+        variants={sv}
         initial="hidden"
         whileInView="visible"
         viewport={sectionViewport}
       >
-        <motion.div variants={itemVariants} whileHover={{ y: -6 }}>
+        <motion.div variants={iv} whileHover={{ y: -6 }}>
         <Card className="border-zinc-950 bg-gradient-to-r from-zinc-950 via-red-600 to-emerald-600 text-white shadow-2xl">
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-white">Ready to scale your socials?</CardTitle>

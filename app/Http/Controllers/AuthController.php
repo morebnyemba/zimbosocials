@@ -83,6 +83,7 @@ class AuthController extends Controller
 
         // accept account path fields from multi-step registration form
         $user->role = in_array($request->input('role'), ['user', 'marketer']) ? $request->input('role') : 'user';
+        $user->account_type = in_array($request->input('account_type'), ['individual', 'business', 'marketer']) ? $request->input('account_type') : 'individual';
         $user->company_name = $request->input('company_name') ? strip_tags($request->input('company_name')) : null;
         $user->save();
         $user->generateApiKey();

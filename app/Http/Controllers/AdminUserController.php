@@ -187,12 +187,16 @@ class AdminUserController extends Controller
         $data = $request->validate([
             'role' => ['required', 'in:user,marketer,reseller,admin'],
             'admin_role' => ['nullable', 'string', 'in:full,support,finance,compliance'],
+            'account_type' => ['nullable', 'in:individual,business,marketer'],
         ]);
 
         $oldRole = $user->role;
+        $oldType = $user->account_type;
+
         $user->update([
             'role' => $data['role'],
             'admin_role' => $data['role'] === 'admin' ? ($data['admin_role'] ?? $user->admin_role ?? 'support') : null,
+            'account_type' => $data['account_type'] ?? $user->account_type,
         ]);
 
         AuditLog::log(
@@ -200,8 +204,8 @@ class AdminUserController extends Controller
             Auth::id(),
             User::class,
             $user->id,
-            ['role' => $oldRole],
-            ['role' => $data['role']],
+            ['role' => $oldRole, 'account_type' => $oldType],
+            ['role' => $data['role'], 'account_type' => $data['account_type'] ?? $user->account_type],
         );
 
         NotificationService::notify(

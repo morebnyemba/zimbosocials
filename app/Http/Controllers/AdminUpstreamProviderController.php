@@ -107,7 +107,8 @@ class AdminUpstreamProviderController extends Controller
                     'is_refill' => (bool) ($service['refill'] ?? false),
                     'already_imported' => $mappedServiceId !== null,
                     'existing_service_name' => $mappedService?->name,
-                    'default_markup_percentage' => $this->defaultMarkupPercentage(),
+                    'default_markup_type' => 'percentage',
+                    'default_markup_value' => $this->defaultMarkupPercentage(),
                 ];
             })
             ->values();
@@ -122,7 +123,8 @@ class AdminUpstreamProviderController extends Controller
         $validated = $request->validate([
             'services' => ['required', 'array', 'min:1'],
             'services.*.external_service_id' => ['required', 'string'],
-            'services.*.markup_percentage' => ['required', 'numeric', 'min:0', 'max:1000'],
+            'services.*.markup_type' => ['required', 'in:percentage,fixed'],
+            'services.*.markup_value' => ['required', 'numeric', 'min:0'],
             'enrich_with_ai' => ['nullable', 'boolean'],
         ]);
 
@@ -162,8 +164,9 @@ class AdminUpstreamProviderController extends Controller
                 continue;
             }
 
-            $markupPercentage = (float) $selectedServices[(string) $s['service']]['markup_percentage'];
-            $service = $this->findOrCreateService($upstreamProvider, $s, $markupPercentage, $enrichment[(string) $s['service']] ?? null);
+            $markupType = (string) $selectedServices[(string) $s['service']]['markup_type'];
+            $markupValue = (float) $selectedServices[(string) $s['service']]['markup_value'];
+            $service = $this->findOrCreateService($upstreamProvider, $s, $markupType, $markupValue, $enrichment[(string) $s['service']] ?? null);
 
             ServiceUpstream::create([
                 'service_id' => $service->id,
@@ -220,7 +223,7 @@ class AdminUpstreamProviderController extends Controller
      * @param  array<string, mixed>  $providerService
      * @param  array<string, string>|null  $enriched  Optional AI-cleaned name/description + sn/nd translations.
      */
-    private function findOrCreateService(UpstreamProvider $upstreamProvider, array $providerService, float $markupPercentage, ?array $enriched = null): Service
+    private function findOrCreateService(UpstreamProvider $upstreamProvider, array $providerService, string $markupType, float $markupValue, ?array $enriched = null): Service
     {
         // Prefer the AI-cleaned English name when available; fall back to the raw upstream name.
         $serviceName = $enriched['name'] ?? (string) $providerService['name'];
@@ -245,6 +248,10 @@ class AdminUpstreamProviderController extends Controller
         $rawDescription = (string) ($providerService['desc'] ?? '');
         $description = $enriched['description'] ?? $rawDescription;
 
+        $localRate = $markupType === 'percentage'
+            ? $externalRate * (1 + ($markupValue / 100))
+            : $externalRate + $markupValue;
+
         return Service::create([
             'name' => $serviceName,
             'name_sn' => $enriched['name_sn'] ?? $serviceName,
@@ -254,7 +261,7 @@ class AdminUpstreamProviderController extends Controller
             'description_nd' => $enriched['description_nd'] ?? $description,
             'category' => $providerService['category'] ?? 'Default',
             'type' => $providerService['type'] ?? 'Default',
-            'rate' => round($externalRate * (1 + ($markupPercentage / 100)), 4),
+            'rate' => round($localRate, 4),
             'min_qty' => (int) ($providerService['min'] ?? 0),
             'max_qty' => (int) ($providerService['max'] ?? 0),
             // Imported services are created inactive. An admin reviews the markup/rate
