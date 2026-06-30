@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Service, LiveActivity } from "./types"
 import {
   shonaNames,
@@ -148,27 +148,34 @@ function createInitialLiveActivities(pool: Service[], count: number): LiveActivi
 }
 
 export function useLiveActivity(servicePool: Service[]) {
+  // Hold the latest pool in a ref so the ticker reads current data without the
+  // interval being a dependency. Passing `props.activityServices || []` from a
+  // layout yields a new array every render/navigation; depending on it here
+  // would tear down and recreate the interval (and re-seed the feed) constantly,
+  // which is what made the ticker speed up after switching pages.
+  const poolRef = useRef(servicePool)
+  poolRef.current = servicePool
+
   const [liveActivities, setLiveActivities] = useState<LiveActivity[]>(() =>
     createInitialLiveActivities(servicePool, activityWindowSize)
   )
 
   useEffect(() => {
-    setLiveActivities(createInitialLiveActivities(servicePool, activityWindowSize))
-
     const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     if (prefersReducedMotion) {
       return
     }
 
+    // Exactly one interval per mounted instance, cleared on unmount.
     const intervalId = window.setInterval(() => {
       setLiveActivities((current) => [
-        createLiveActivity(servicePool, current),
+        createLiveActivity(poolRef.current, current),
         ...current,
       ].slice(0, activityWindowSize))
     }, 2800)
 
     return () => window.clearInterval(intervalId)
-  }, [servicePool])
+  }, [])
 
   return liveActivities
 }
