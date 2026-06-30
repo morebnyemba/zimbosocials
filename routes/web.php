@@ -41,7 +41,9 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReferralController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\AdminTranslationController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\TranslationContributionController;
 use App\Http\Controllers\WalletController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Http\Request;
@@ -115,6 +117,11 @@ Route::middleware('auth')->group(function () {
     Route::post('confirm-password', [ConfirmablePasswordController::class, 'store']);
     Route::put('password', [PasswordController::class, 'update'])->name('password.update');
 
+    // Community translations — customers propose, admins approve
+    Route::get('/translations', [TranslationContributionController::class, 'index'])->name('translations.index');
+    Route::post('/translations', [TranslationContributionController::class, 'store'])
+        ->middleware('throttle:30,1')->name('translations.store');
+
     // Account profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -147,6 +154,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/users/{user}/reset-password', [AdminUserController::class, 'sendPasswordReset'])->name('users.reset-password');
         Route::post('/users/{user}/ban', [AdminUserController::class, 'ban'])->name('users.ban');
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy'])->name('users.destroy');
+
+        // Community translation review
+        Route::get('/translations', [AdminTranslationController::class, 'index'])->name('translations.index');
+        Route::post('/translations/{suggestion}/approve', [AdminTranslationController::class, 'approve'])->name('translations.approve');
+        Route::post('/translations/{suggestion}/reject', [AdminTranslationController::class, 'reject'])->name('translations.reject');
 
         // App Settings
         Route::get('/settings', [AdminSettingsController::class, 'index'])->name('settings.index');

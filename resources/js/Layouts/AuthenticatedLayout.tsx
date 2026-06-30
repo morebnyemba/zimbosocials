@@ -29,6 +29,7 @@ import {
     FaDollarSign,
     FaPen,
     FaTrophy,
+    FaLanguage,
 } from 'react-icons/fa';
 
 function LangSwitcher() {
@@ -97,6 +98,7 @@ function LangSwitcher() {
 }
 
 export default function AuthenticatedLayout({ header, children }: PropsWithChildren<{ header?: ReactNode }>) {
+    const { t } = useTranslation();
     const user = usePage().props.auth.user;
     const flash = (usePage().props as any).flash as { success?: string; error?: string; info?: string } | undefined;
     const notificationsCount = (usePage().props as any).notifications_count || 0;
@@ -245,6 +247,9 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                                                 </Link>
                                                 <Link href={route('developer.api')} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black text-zinc-600 hover:bg-zinc-50 transition-all">
                                                     <FaCode className="text-zinc-300" /> Developer Terminal
+                                                </Link>
+                                                <Link href={route('translations.index')} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black text-zinc-600 hover:bg-zinc-50 transition-all">
+                                                    <FaLanguage className="text-zinc-300" /> {t('help_translate')}
                                                 </Link>
                                                 {user.role === 'admin' && (
                                                     <Link href={route('admin.dashboard')} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-all">

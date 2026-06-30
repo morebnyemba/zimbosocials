@@ -23,7 +23,8 @@ import {
     ChevronRight,
     Search,
     Bell,
-    PenTool
+    PenTool,
+    Languages
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +57,7 @@ export default function AdminLayout({
         { href: route('admin.whatsapp.templates'), name: 'admin.whatsapp.templates', label: 'WhatsApp', icon: MessageSquare },
         { href: route('admin.campaigns.index'), name: 'admin.campaigns.*', label: 'Campaigns', icon: Megaphone },
         { href: route('admin.seo.index'), name: 'admin.seo.index', label: 'AI SEO', icon: PenTool },
+        { href: route('admin.translations.index'), name: 'admin.translations.index', label: t('translation_review'), icon: Languages },
         { href: route('admin.settings.index'), name: 'admin.settings.index', label: 'System Settings', icon: Settings },
     ];
 
