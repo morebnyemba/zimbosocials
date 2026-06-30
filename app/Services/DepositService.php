@@ -82,8 +82,11 @@ class DepositService
                 ['amount' => "\${$amount}"]
             );
 
-            // Referral reward (first-deposit bonus)
+            // Referral rewards on first deposit:
+            //  - flat reward to the referrer
+            //  - percentage welcome bonus (default 10%) to the referred user
             $this->referralService->rewardReferrerOnFirstDeposit($locked->fresh());
+            $this->referralService->creditReferredUserWelcomeBonus($locked->fresh());
 
             $credited = true;
         });

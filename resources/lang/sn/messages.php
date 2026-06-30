@@ -331,7 +331,7 @@ return [
     'order_commission' => 'Commission yeodha',
     'referral_reward_fallback' => 'Mubairo wereferral',
     'not_available' => 'Hazvina',
-    'referral_share_message' => 'Ndiri kushandisa Zimbo Socials kukura pa social media uye kutenga digital marketing services zviri nyore. Vanogona zvakare kukubatsira kuti uwane monetization. Join me paZimbo Socials uchishandisa referral link yangu: :link. Iwewo unogona kuwana mari kana followers kana vanhu vakashandisa link yako vachiita ma-orders! Terms apply.',
+    'referral_share_message' => 'Ndiri kushandisa Zimbo Socials kukura pa social media uye kutenga digital marketing services zviri nyore. Vanogona zvakare kukubatsira kuti uwane monetization. Nyoresa uchishandisa referral link yangu uwane :percent% yemari yakawedzerwa pakudhipoziti kwako kwekutanga: :link. Iwewo unogona kuwana mari kana followers kana vanhu vakashandisa link yako vachiita ma-orders! Terms apply.',
     'contracts_opportunities_terminal' => 'Terminal Yemikana',
     'contracts_marketplace_title' => 'Marketplace Yemakontraka',
     'contracts_business_subtitle' => 'Isa macampaign ako uye haya matarenda eZimbabwe epamusoro kuti ukure brand yako.',

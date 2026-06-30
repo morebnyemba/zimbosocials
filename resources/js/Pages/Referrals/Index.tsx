@@ -46,14 +46,15 @@ interface Props {
     rewardHistory: RewardItem[];
     myRank: { rank: number; score: number } | null;
     globalRecentRewards: GlobalRewardItem[];
+    welcomeBonusPercent?: number;
 }
 
-export default function ReferralsIndex({ summary, referralCode, referralLink, referrals, rewardHistory, myRank, globalRecentRewards }: Props) {
+export default function ReferralsIndex({ summary, referralCode, referralLink, referrals, rewardHistory, myRank, globalRecentRewards, welcomeBonusPercent = 10 }: Props) {
     const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
     const [shareStatus, setShareStatus] = useState<string | null>(null);
 
-    const shareText = t('referral_share_message', { link: referralLink });
+    const shareText = t('referral_share_message', { link: referralLink, percent: welcomeBonusPercent });
     const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
     const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`;
 

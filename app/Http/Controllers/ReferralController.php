@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Setting;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\LeaderboardService;
@@ -14,6 +15,27 @@ class ReferralController extends Controller
     public function __construct(
         private readonly LeaderboardService $leaderboardService,
     ) {}
+
+    /**
+     * Build a referral link for the given code. The landing page is configurable
+     * via the `referral_landing_path` setting (admin → Settings) and defaults to
+     * the home page. The CaptureReferral middleware records `?ref=` on any page.
+     */
+    private function referralLink(string $code): string
+    {
+        $path = trim((string) Setting::get('referral_landing_path', '/'));
+
+        if ($path === '') {
+            $path = '/';
+        }
+        if (! str_starts_with($path, '/')) {
+            $path = '/'.$path;
+        }
+
+        $separator = str_contains($path, '?') ? '&' : '?';
+
+        return url($path.$separator.'ref='.urlencode($code));
+    }
 
     public function index(): Response
     {
@@ -91,11 +113,12 @@ class ReferralController extends Controller
         return Inertia::render('Referrals/Index', [
             'summary' => $summary,
             'referralCode' => $user->getAttribute('referral_code'),
-            'referralLink' => url('/register?ref='.$user->getAttribute('referral_code')),
+            'referralLink' => $this->referralLink((string) $user->getAttribute('referral_code')),
             'referrals' => $referrals,
             'rewardHistory' => $rewardTransactions,
             'myRank' => $myRank,
             'globalRecentRewards' => $globalRecentRewards,
+            'welcomeBonusPercent' => (int) round(app(\App\Services\ReferralService::class)->referredFirstDepositBonusPercent()),
         ]);
     }
 }

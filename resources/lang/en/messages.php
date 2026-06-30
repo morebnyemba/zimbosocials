@@ -330,7 +330,7 @@ return [
     'order_commission' => 'Order commission',
     'referral_reward_fallback' => 'Referral reward',
     'not_available' => 'N/A',
-    'referral_share_message' => 'I use Zimbo Socials to grow social media presence and access digital marketing services in one place. They can also assist you get monetization. Join me using my referral link: :link. You can also earn money or followers when people who use your referral link place orders! Terms apply.',
+    'referral_share_message' => 'I use Zimbo Socials to grow social media presence and access digital marketing services in one place. They can also assist you get monetization. Sign up with my referral link and get :percent% extra on your first deposit: :link. You can also earn money or followers when people who use your referral link place orders! Terms apply.',
     'contracts_opportunities_terminal' => 'Opportunities Terminal',
     'contracts_marketplace_title' => 'Contract Marketplace',
     'contracts_business_subtitle' => 'Post strategic campaigns and hire top Zimbabwean digital talent to scale your brand.',
