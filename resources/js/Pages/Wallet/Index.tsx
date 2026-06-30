@@ -37,8 +37,7 @@ interface ManualPaymentDetail {
     label: string;
     instructions?: string | null;
     account_number?: string | null;
-    account_holder?: string | null;
-    bank_name?: string | null;
+    account_name?: string | null;
 }
 
 interface Props extends PageProps {
@@ -511,13 +510,21 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                     <StatCard label="Withdrawn" value={`$${Number(totals.withdrawn).toFixed(2)}`} />
                 </section>
 
-                <AnimatePresence mode="wait">
+                <AnimatePresence>
                     {showDeposit && (
-                        <motion.section 
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="bg-white rounded-[3rem] p-10 border border-zinc-200 shadow-xl shadow-zinc-200/40"
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowDeposit(false)}
+                            className="fixed inset-0 z-[115] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
+                        >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.96, y: 16 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="my-8 w-full max-w-3xl rounded-[2.5rem] border border-zinc-200 bg-white p-7 shadow-2xl sm:p-10"
                         >
                             <div className="flex items-center justify-between mb-8">
                                 <h3 className="text-2xl font-black text-zinc-900">
@@ -612,18 +619,12 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                             {chosenDetails && (
                                                 <div className="p-6 rounded-3xl bg-zinc-900 text-zinc-300 text-xs font-medium leading-relaxed border border-white/5 space-y-4">
                                                     <p className="text-emerald-400 font-black uppercase tracking-widest text-[9px] flex items-center gap-2">
-                                                        <FaInfoCircle /> Bank Details
+                                                        <FaInfoCircle /> Payment Details
                                                     </p>
-                                                    {chosenDetails.bank_name && (
+                                                    {chosenDetails.account_name && (
                                                         <div>
-                                                            <span className="text-zinc-400 text-[9px] uppercase tracking-widest">Bank</span>
-                                                            <p className="text-white font-black">{chosenDetails.bank_name}</p>
-                                                        </div>
-                                                    )}
-                                                    {chosenDetails.account_holder && (
-                                                        <div>
-                                                            <span className="text-zinc-400 text-[9px] uppercase tracking-widest">Account Holder</span>
-                                                            <p className="text-white font-black">{chosenDetails.account_holder}</p>
+                                                            <span className="text-zinc-400 text-[9px] uppercase tracking-widest">Account Name</span>
+                                                            <p className="text-white font-black">{chosenDetails.account_name}</p>
                                                         </div>
                                                     )}
                                                     {chosenDetails.account_number && (
@@ -653,7 +654,8 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                     )}
                                 </div>
                             </form>
-                        </motion.section>
+                        </motion.div>
+                        </motion.div>
                     )}
 
                     {showWithdraw && (

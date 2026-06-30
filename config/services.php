@@ -54,6 +54,11 @@ return [
         'integration_key' => env('PAYNOW_INTEGRATION_KEY'),
     ],
 
+    'google_analytics' => [
+        // GA4 Measurement ID, e.g. G-XXXXXXXXXX. Leave empty to disable tracking.
+        'id' => env('GOOGLE_ANALYTICS_ID'),
+    ],
+
     /*
      * Shared secret used to authenticate the generic payment webhook
      * (POST /webhooks/payment). The caller must send an
