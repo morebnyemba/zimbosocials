@@ -100,8 +100,8 @@ export default function MarketersIndex({ marketers, filters, status_counts }: Pr
                     <button onClick={applySearch} className="px-6 py-2.5 rounded-xl bg-zinc-900 text-white text-sm font-bold hover:bg-zinc-800 transition-colors">Search</button>
                 </div>
 
-                <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-                    <table className="w-full text-sm text-left">
+                <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden overflow-x-auto">
+                    <table className="w-full text-sm text-left min-w-[800px]">
                         <thead className="bg-zinc-50 border-b border-zinc-200">
                             <tr className="text-zinc-500 font-bold text-xs uppercase tracking-wider">
                                 <th className="px-6 py-4">Marketer</th>

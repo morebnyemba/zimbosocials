@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\WhatsAppTemplateController;
 use App\Http\Controllers\AdminCampaignController;
 use App\Http\Controllers\AdminContractController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminLeaderboardController;
 use App\Http\Controllers\AdminMarketerController;
 use App\Http\Controllers\AdminOrderController;
 use App\Http\Controllers\AdminPaymentDetailController;
@@ -27,6 +28,7 @@ use App\Http\Controllers\ContractController;
 use App\Http\Controllers\ContractProofController;
 use App\Http\Controllers\ContractReviewController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\MarketerController;
 use App\Http\Controllers\MarketerSocialLinkController;
 use App\Http\Controllers\MarketingController;
@@ -225,6 +227,14 @@ Route::middleware('auth')->group(function () {
         Route::post('/upstream-providers/{upstreamProvider}/sync-balance', [AdminUpstreamProviderController::class, 'syncBalance'])->name('upstream-providers.sync-balance');
         Route::get('/upstream-providers/{upstreamProvider}/available-services', [AdminUpstreamProviderController::class, 'availableServices'])->name('upstream-providers.available-services');
         Route::post('/upstream-providers/{upstreamProvider}/import-services', [AdminUpstreamProviderController::class, 'importServices'])->name('upstream-providers.import-services');
+
+        // Leaderboard management
+        Route::get('/leaderboard/prizes', [AdminLeaderboardController::class, 'prizes'])->name('leaderboard.prizes');
+        Route::post('/leaderboard/prizes', [AdminLeaderboardController::class, 'storePrize'])->name('leaderboard.prizes.store');
+        Route::put('/leaderboard/prizes/{prize}', [AdminLeaderboardController::class, 'updatePrize'])->name('leaderboard.prizes.update');
+        Route::delete('/leaderboard/prizes/{prize}', [AdminLeaderboardController::class, 'destroyPrize'])->name('leaderboard.prizes.destroy');
+        Route::get('/leaderboard/results/{year}/{month}', [AdminLeaderboardController::class, 'results'])->name('leaderboard.results');
+        Route::post('/leaderboard/snapshots/{snapshot}/award', [AdminLeaderboardController::class, 'awardPrize'])->name('leaderboard.award');
     });
 
     // ─── Marketer panel ───────────────────────────────────────────────────────
@@ -264,6 +274,9 @@ Route::middleware('auth')->group(function () {
 
     // Referrals
     Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');
+
+    // Leaderboard
+    Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');
 
     // Paynow — web redirect (credit card / Paynow balance)
     Route::post('/paynow/init', [PaynowController::class, 'init'])->middleware('throttle:paynow-init')->name('paynow.init');

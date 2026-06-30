@@ -124,15 +124,17 @@ $app->handleRequest(Request::capture());
 Set-Content -Path (Join-Path $publicStage 'index.php') -Value $indexContent -Encoding utf8 -NoNewline
 
 # ── 5. Zip ────────────────────────────────────────────────────────────────────
-Write-Host "==> Creating archives..."
+Write-Host "==> Creating unified release.zip archive..."
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $level = [System.IO.Compression.CompressionLevel]::Optimal
-$appZip    = Join-Path $dist 'my-app.zip'
-$publicZip = Join-Path $dist 'public_html.zip'
-[System.IO.Compression.ZipFile]::CreateFromDirectory($appStage, $appZip, $level, $false)
-[System.IO.Compression.ZipFile]::CreateFromDirectory($publicStage, $publicZip, $level, $false)
+$releaseZip = Join-Path $dist 'release.zip'
+[System.IO.Compression.ZipFile]::CreateFromDirectory($stage, $releaseZip, $level, $false)
 
-# ── 6. Restore dev dependencies ───────────────────────────────────────────────
+# ── 6. Copy Auto-Extractor ────────────────────────────────────────────────────
+Write-Host "==> Copying deploy.php..."
+Copy-Item -Path (Join-Path $root 'scripts\deploy.php') -Destination (Join-Path $dist 'deploy.php')
+
+# ── 7. Restore dev dependencies ───────────────────────────────────────────────
 if (-not $SkipComposer) {
     Write-Host "==> Restoring dev Composer dependencies..."
     & composer install --no-interaction --prefer-dist | Out-Null
@@ -141,10 +143,11 @@ if (-not $SkipComposer) {
 
 Remove-Item $stage -Recurse -Force
 
-$appSize    = [math]::Round((Get-Item $appZip).Length / 1MB, 1)
-$publicSize = [math]::Round((Get-Item $publicZip).Length / 1MB, 1)
+$releaseSize = [math]::Round((Get-Item $releaseZip).Length / 1MB, 1)
 Write-Host ""
 Write-Host "==> Done."
-Write-Host "    dist/my-app.zip       ($appSize MB)  -> extract into /home/<user>/my-app"
-Write-Host "    dist/public_html.zip  ($publicSize MB)  -> extract into /home/<user>/public_html"
-Write-Host "    Then visit https://<domain>/cpanel-installer.php to finish setup, and DELETE it after."
+Write-Host "    dist/release.zip ($releaseSize MB)"
+Write-Host "    dist/deploy.php"
+Write-Host ""
+Write-Host "    Upload BOTH files to your /home/<user>/public_html directory."
+Write-Host "    Then visit https://<domain>/deploy.php to auto-extract and configure!"

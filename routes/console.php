@@ -16,3 +16,6 @@ Schedule::command('transactions:cleanup-stale --hours=24')->hourly()->withoutOve
 
 // Prune completed queue jobs older than 48 hours
 Schedule::command('queue:prune-batches --hours=48')->daily();
+
+// Close previous month's leaderboard on the 1st at 00:05 and notify winners
+Schedule::command('leaderboard:close-month --notify')->monthlyOn(1, '00:05')->withoutOverlapping();

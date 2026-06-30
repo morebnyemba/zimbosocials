@@ -4,12 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\LeaderboardService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ReferralController extends Controller
 {
+    public function __construct(
+        private readonly LeaderboardService $leaderboardService,
+    ) {}
+
     public function index(): Response
     {
         /** @var User $user */
@@ -65,12 +70,32 @@ class ReferralController extends Controller
             'order_commissions_earned' => round((float) $rewardTransactions->where('method', 'referral_order')->sum('amount'), 4),
         ];
 
+        $myRank = $this->leaderboardService->getUserRank($user->id, 'referrals');
+
+        $globalRecentRewards = Transaction::query()
+            ->where('type', 'bonus')
+            ->whereIn('method', ['referral', 'referral_order'])
+            ->with('user:id,name')
+            ->latest()
+            ->limit(10)
+            ->get(['id', 'user_id', 'amount', 'method', 'created_at'])
+            ->map(fn (Transaction $t) => [
+                'id' => $t->id,
+                'user_name' => explode(' ', $t->user->name ?? 'Someone')[0],
+                'amount' => (float) $t->amount,
+                'method' => $t->method,
+                'time_ago' => $t->created_at->diffForHumans(),
+            ])
+            ->values();
+
         return Inertia::render('Referrals/Index', [
             'summary' => $summary,
             'referralCode' => $user->getAttribute('referral_code'),
             'referralLink' => url('/register?ref='.$user->getAttribute('referral_code')),
             'referrals' => $referrals,
             'rewardHistory' => $rewardTransactions,
+            'myRank' => $myRank,
+            'globalRecentRewards' => $globalRecentRewards,
         ]);
     }
 }

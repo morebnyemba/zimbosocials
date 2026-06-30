@@ -7,12 +7,18 @@ import {
 } from "@/Components/ui/navigation-menu"
 import SeoHead from "@/Components/SeoHead"
 import { cn } from "@/lib/utils"
-import { Link, router } from "@inertiajs/react"
-import { FiArrowRight, FiLogIn, FiMenu, FiZap, FiX } from "react-icons/fi"
+import { Link, router, usePage } from "@inertiajs/react"
+import { FiArrowRight, FiLogIn, FiMenu, FiZap, FiX, FiMail } from "react-icons/fi"
 import { FaGlobe, FaChevronDown } from "react-icons/fa"
+import { FaFacebookF, FaInstagram, FaWhatsapp, FaXTwitter } from "react-icons/fa6"
+import { Button } from "@/Components/ui/button"
+import { Input } from "@/Components/ui/input"
 import { PropsWithChildren, useState, useRef, useEffect } from "react"
 import { useTranslation } from "@/lib/i18n"
 import { AnimatePresence, motion } from "framer-motion"
+import LiveActivityFeed from "@/Components/LiveActivityFeed"
+import { useLiveActivity } from "@/lib/useLiveActivity"
+import { Service } from "@/lib/types"
 
 type MarketingLayoutProps = PropsWithChildren<{
   title?: string
@@ -107,6 +113,8 @@ export default function MarketingLayout({
   const [legalOpen, setLegalOpen] = useState(false)
   const legalDropdownRef = useRef<HTMLDivElement>(null)
   const { t } = useTranslation()
+  const pageProps = usePage().props as any
+  const liveActivities = useLiveActivity(pageProps.activityServices || [])
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -188,12 +196,7 @@ export default function MarketingLayout({
         structuredData={mergedStructuredData}
       />
       <div className="min-h-screen bg-white text-zinc-950">
-        <div className="border-b border-amber-300 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600">
-          <div className="mx-auto flex w-full max-w-7xl items-center justify-center gap-2 px-4 py-2 text-center text-xs font-semibold text-white sm:px-6 lg:px-8">
-            <FiZap className="h-3.5 w-3.5 animate-pulse" />
-            Faster fulfillment windows now available for select services.
-          </div>
-        </div>
+        <LiveActivityFeed activities={liveActivities} />
         <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
             <Link href="/" className="inline-flex items-center" aria-label="Zimbo Socials Home">
@@ -366,42 +369,62 @@ export default function MarketingLayout({
         <main>{children}</main>
 
         <footer className="mt-20 border-t border-slate-200 bg-white">
-          <div className="mx-auto grid w-full max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-2 lg:grid-cols-4 lg:px-8">
-            <div>
-              <img src="/images/zimbosocials.png" alt="Zimbo Socials" className="mb-3 h-10 w-auto" />
-              <p className="text-sm text-slate-600">
-                {t('footer_tagline')}
-              </p>
-            </div>
+          <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+            <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-5">
+              <div className="lg:col-span-2">
+                <img src="/images/zimbosocials.png" alt="Zimbo Socials" className="mb-4 h-10 w-auto" />
+                <p className="mb-6 max-w-xs text-sm text-slate-600">
+                  {t('footer_tagline')}
+                </p>
+                <div className="flex items-center gap-4 text-slate-400">
+                  <a href="#" className="hover:text-emerald-600 transition"><FaFacebookF className="h-5 w-5" /></a>
+                  <a href="#" className="hover:text-red-500 transition"><FaInstagram className="h-5 w-5" /></a>
+                  <a href="#" className="hover:text-emerald-500 transition"><FaWhatsapp className="h-5 w-5" /></a>
+                  <a href="#" className="hover:text-slate-900 transition"><FaXTwitter className="h-5 w-5" /></a>
+                </div>
+              </div>
 
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-slate-900">Platform</h3>
-              <ul className="space-y-2 text-sm text-slate-600">
-                <li><Link href="/our-services" className="hover:text-emerald-700">{t('browse_services')}</Link></li>
-                <li><Link href="/contact" className="hover:text-emerald-700">{t('contact')}</Link></li>
-              </ul>
-            </div>
+              <div>
+                <h3 className="mb-4 text-sm font-bold text-slate-900 uppercase tracking-wider">Platform</h3>
+                <ul className="space-y-3 text-sm text-slate-600">
+                  <li><Link href="/our-services" className="hover:text-emerald-600 transition">{t('browse_services')}</Link></li>
+                  <li><Link href="/contact" className="hover:text-emerald-600 transition">{t('contact')}</Link></li>
+                  <li><Link href="/about" className="hover:text-emerald-600 transition">{t('about')}</Link></li>
+                </ul>
+              </div>
 
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-slate-900">Company</h3>
-              <ul className="space-y-2 text-sm text-slate-600">
-                <li><Link href="/about" className="hover:text-emerald-700">{t('about')}</Link></li>
-                <li><Link href="/privacy-policy" className="hover:text-emerald-700">{t('privacy')}</Link></li>
-                <li><Link href="/terms-of-service" className="hover:text-emerald-700">{t('terms')}</Link></li>
-              </ul>
-            </div>
+              <div>
+                <h3 className="mb-4 text-sm font-bold text-slate-900 uppercase tracking-wider">Legal</h3>
+                <ul className="space-y-3 text-sm text-slate-600">
+                  <li><Link href="/privacy-policy" className="hover:text-emerald-600 transition">{t('privacy')}</Link></li>
+                  <li><Link href="/terms-of-service" className="hover:text-emerald-600 transition">{t('terms')}</Link></li>
+                  <li><Link href="/help-center" className="hover:text-emerald-600 transition">{t('help_center')}</Link></li>
+                </ul>
+              </div>
 
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-slate-900">Support</h3>
-              <ul className="space-y-2 text-sm text-slate-600">
-                <li><Link href="/help-center" className="hover:text-emerald-700">{t('help_center')}</Link></li>
-                <li><Link href="/login" className="hover:text-emerald-700">{t('client_login')}</Link></li>
-              </ul>
+              <div className="lg:col-span-1">
+                <h3 className="mb-4 text-sm font-bold text-slate-900 uppercase tracking-wider">Stay Updated</h3>
+                <p className="mb-3 text-sm text-slate-600">Get the latest platform updates and marketing tips.</p>
+                <div className="flex gap-2">
+                  <Input placeholder="Email address" className="bg-slate-50 text-sm" />
+                  <Button size="icon" className="bg-zinc-900 shrink-0 text-white hover:bg-emerald-600 transition">
+                    <FiArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="mt-8">
+                  <h4 className="mb-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Accepted Payments</h4>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600">PAYNOW</span>
+                    <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600">ECOCASH</span>
+                    <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600">INNBUCKS</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="border-t border-slate-100 py-4 text-center text-xs text-slate-500">
-            © {new Date().getFullYear()} Zimbo Socials. All rights reserved.
+          <div className="border-t border-slate-100 bg-slate-50 py-6 text-center text-xs text-slate-500">
+            <p>© {new Date().getFullYear()} Zimbo Socials. All rights reserved.</p>
           </div>
         </footer>
       </div>

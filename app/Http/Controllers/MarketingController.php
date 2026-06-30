@@ -16,7 +16,7 @@ class MarketingController extends Controller
         $activityServices = Service::active()
             ->select(['id', 'name', 'name_sn', 'category'])
             ->inRandomOrder()
-            ->limit(200)
+            ->limit(80)
             ->get();
 
         $categories = Service::active()

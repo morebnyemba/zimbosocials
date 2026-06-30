@@ -131,6 +131,10 @@ class AppServiceProvider extends ServiceProvider
                     config(["app.{$setting['key']}" => $setting['value']]);
                 }
 
+                if ($setting['group'] === 'tawk') {
+                    config(["services.tawk.{$setting['key']}" => $setting['value']]);
+                }
+
                 config(["settings.{$setting['key']}" => $setting['value']]);
             }
         } catch (\Exception $e) {

@@ -3,7 +3,8 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import ToastContainer, { ToastKind } from '@/Components/Toast';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Search, Filter, Edit2, X, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface UpstreamProvider { id: number; name: string; url: string; }
 interface ServiceUpstream { id?: number; upstream_provider_id: number; external_service_id: string; priority: number; provider?: UpstreamProvider; }
@@ -76,74 +77,118 @@ export default function ServicesIndex({ services, categories, providers, stats, 
     return (
         <AdminLayout>
             <Head title="Service Management" />
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
+            <div className="space-y-8 pb-12">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Services</h1>
-                        <p className="text-gray-500 text-sm mt-1">{stats.active} active · {stats.inactive} inactive</p>
+                        <h1 className="text-3xl font-black text-zinc-900 tracking-tight">Service Catalog</h1>
+                        <p className="text-zinc-500 font-medium text-sm mt-1">{stats.active} Active Services · {stats.inactive} Inactive</p>
                     </div>
-                    <div className="flex gap-2">
-                        <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-brand-green text-white hover:bg-brand-green/90 shadow-sm transition-colors">
-                            <Plus size={16} /> Add Service
+                    <div>
+                        <button onClick={openCreate} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-zinc-900 text-white hover:bg-emerald-500 transition-all shadow-xl hover:shadow-emerald-500/20 active:scale-95">
+                            <Plus size={18} /> Deploy New Service
                         </button>
                     </div>
                 </div>
 
                 {/* Filters */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <select
-                        value={filters.category || ''}
-                        onChange={e => filterCategory(e.target.value)}
-                        className="w-full sm:w-64 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition-all focus:border-brand-green focus:ring-1 focus:ring-brand-green/20"
-                    >
-                        <option value="">All Categories</option>
-                        {categories.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
+                <div className="flex flex-col md:flex-row gap-4 p-4 bg-white rounded-3xl border border-zinc-200 shadow-sm">
+                    <div className="relative w-full md:w-64">
+                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+                        <select
+                            value={filters.category || ''}
+                            onChange={e => filterCategory(e.target.value)}
+                            className="w-full pl-10 pr-4 py-3 rounded-2xl bg-zinc-50 border-none font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer appearance-none"
+                        >
+                            <option value="">All Categories</option>
+                            {categories.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                            ))}
+                        </select>
+                    </div>
 
-                    <div className="flex flex-1 gap-3">
-                        <input type="text" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && applySearch()} placeholder="Search services..." className="flex-1 rounded-xl bg-white border border-gray-200 text-gray-900 text-sm px-4 py-2.5 focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 outline-none transition-all placeholder:text-gray-400 shadow-sm" />
-                        <button onClick={applySearch} className="px-5 py-2.5 rounded-xl bg-brand-green text-white font-medium text-sm hover:bg-brand-green/90 transition-colors shadow-sm">Search</button>
+                    <div className="flex-1 flex gap-2">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+                            <input 
+                                type="text" 
+                                value={search} 
+                                onChange={e => setSearch(e.target.value)} 
+                                onKeyDown={e => e.key === 'Enter' && applySearch()} 
+                                placeholder="Search by name, ID, or description..." 
+                                className="w-full pl-10 pr-4 py-3 rounded-2xl bg-zinc-50 border-none font-medium text-zinc-900 focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-zinc-400"
+                            />
+                        </div>
+                        <button onClick={applySearch} className="px-6 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black hover:bg-emerald-100 transition-colors">
+                            Search
+                        </button>
                     </div>
                 </div>
 
                 {/* Table */}
-                <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                <div className="rounded-[2.5rem] border border-zinc-200 bg-white shadow-xl shadow-zinc-200/20 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr className="text-gray-500 font-medium text-xs uppercase tracking-wider">
-                                    <th className="py-3 px-5">ID</th><th className="py-3 px-5">Name</th><th className="py-3 px-5">Providers</th>
-                                    <th className="text-right py-3 px-5">Rate/1K</th><th className="text-center py-3 px-5">Min–Max</th><th className="text-center py-3 px-5">Orders</th>
-                                    <th className="text-center py-3 px-5">Active</th><th className="text-right py-3 px-5">Actions</th>
+                            <thead className="bg-zinc-50/50 border-b border-zinc-200">
+                                <tr className="text-zinc-400 font-black text-[10px] uppercase tracking-widest">
+                                    <th className="py-5 px-6">Service</th>
+                                    <th className="py-5 px-6">Pricing</th>
+                                    <th className="py-5 px-6">Limits</th>
+                                    <th className="py-5 px-6">Upstream Nodes</th>
+                                    <th className="py-5 px-6 text-center">Status</th>
+                                    <th className="py-5 px-6 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-zinc-100">
                                 {services.data.map(s => (
-                                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="py-3 px-5 font-medium text-gray-500">#{s.id}</td>
-                                        <td className="py-3 px-5 text-gray-900 truncate max-w-[200px]">
-                                            <div className="font-medium">{s.name}</div>
-                                            <div className="text-xs text-gray-500 mt-0.5">{s.category}</div>
-                                        </td>
-                                        <td className="py-3 px-5">
-                                            <div className="flex flex-col gap-1.5">
-                                                {s.upstreams?.map((u, i) => (
-                                                    <span key={i} className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full border ${i === 0 ? 'bg-brand-green/10 text-brand-green border-brand-green/20' : 'bg-gray-100 text-gray-600 border-gray-200'} w-max`}>
-                                                        {u.provider?.name || 'Unknown'} (ID: {u.external_service_id})
-                                                    </span>
-                                                ))}
-                                                {(!s.upstreams || s.upstreams.length === 0) && <span className="text-xs text-gray-400 italic">None</span>}
+                                    <tr key={s.id} className="hover:bg-zinc-50/80 transition-colors group">
+                                        <td className="py-4 px-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-xs font-black text-zinc-400 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                                                    {s.id}
+                                                </div>
+                                                <div>
+                                                    <div className="font-bold text-zinc-900 text-sm max-w-[250px] truncate">{s.name}</div>
+                                                    <div className="text-xs font-medium text-zinc-500 mt-0.5 uppercase tracking-wider">{s.category}</div>
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="py-3 px-5 text-right text-gray-900 font-mono font-bold">${Number(s.rate).toFixed(2)}</td>
-                                        <td className="py-3 px-5 text-center text-gray-500 text-xs font-medium">{s.min_qty}–{s.max_qty}</td>
-                                        <td className="py-3 px-5 text-center text-gray-600 font-medium">{s.orders_count}</td>
-                                        <td className="py-3 px-5 text-center">{s.is_active ? <span className="text-brand-green font-bold">✓</span> : <span className="text-red-500 font-bold">✗</span>}</td>
-                                        <td className="py-3 px-5 text-right space-x-3">
-                                            <button onClick={() => openEdit(s)} className="text-brand-green hover:text-brand-green/80 font-medium text-xs">Edit</button>
-                                            {s.is_active && <button onClick={() => deactivate(s.id)} className="text-red-600 hover:text-red-800 font-medium text-xs">Deactivate</button>}
+                                        <td className="py-4 px-6">
+                                            <div className="font-black text-emerald-600">${Number(s.rate).toFixed(2)}</div>
+                                            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Per 1k</div>
+                                        </td>
+                                        <td className="py-4 px-6">
+                                            <div className="font-bold text-zinc-700">{Number(s.min_qty).toLocaleString()}</div>
+                                            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">to {Number(s.max_qty).toLocaleString()}</div>
+                                        </td>
+                                        <td className="py-4 px-6">
+                                            <div className="flex flex-col gap-1.5 max-w-[200px]">
+                                                {s.upstreams?.map((u, i) => (
+                                                    <div key={i} className={`text-[10px] font-bold px-2 py-1 rounded-md border truncate ${i === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-zinc-50 text-zinc-500 border-zinc-200'}`}>
+                                                        <span className="opacity-50 mr-1">#{u.priority}</span>
+                                                        {u.provider?.name || 'Unknown'} <span className="opacity-50 ml-1">ID:{u.external_service_id}</span>
+                                                    </div>
+                                                ))}
+                                                {(!s.upstreams || s.upstreams.length === 0) && <span className="text-xs font-bold text-zinc-400 italic">Local / Manual</span>}
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6 text-center">
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${s.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full ${s.is_active ? 'bg-emerald-500' : 'bg-zinc-400'}`}></span>
+                                                {s.is_active ? 'Active' : 'Offline'}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-6 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button onClick={() => openEdit(s)} className="p-2 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all">
+                                                    <Edit2 size={16} />
+                                                </button>
+                                                {s.is_active && (
+                                                    <button onClick={() => deactivate(s.id)} className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -151,101 +196,179 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                         </table>
                     </div>
                     {services.links && services.data.length > 0 && (
-                        <div className="flex justify-center gap-1 py-4 border-t border-gray-100 bg-gray-50">
-                            {services.links.map((l: any, i: number) => <Link key={i} href={l.url || '#'} className={`px-3 py-1.5 text-xs font-medium rounded-lg ${l.active ? 'bg-brand-green text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'}`} dangerouslySetInnerHTML={{ __html: l.label }} />)}
+                        <div className="flex justify-center gap-1 p-6 border-t border-zinc-100 bg-zinc-50/50">
+                            {services.links.map((l: any, i: number) => (
+                                <Link 
+                                    key={i} 
+                                    href={l.url || '#'} 
+                                    className={`px-4 py-2 text-xs font-black rounded-xl transition-all ${l.active ? 'bg-zinc-900 text-white shadow-md scale-105' : 'text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900'}`} 
+                                    dangerouslySetInnerHTML={{ __html: l.label }} 
+                                />
+                            ))}
                         </div>
                     )}
                 </div>
 
-                {/* Create/Edit Modal */}
-                {showForm && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm overflow-y-auto py-8 px-4" onClick={() => setShowForm(false)}>
-                        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-full" onClick={e => e.stopPropagation()}>
-                            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                <h3 className="text-lg font-bold text-gray-900">{editingId ? 'Edit Service' : 'Add Service'}</h3>
-                                <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-                            </div>
-                            
-                            <div className="p-5 overflow-y-auto flex-1 space-y-5">
-                                {/* Basic Fields */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    {['name', 'category', 'type', 'rate', 'min_qty', 'max_qty', 'display_order'].map(field => (
-                                        <div key={field} className={field === 'name' ? 'col-span-2' : ''}>
-                                            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">{field.replace(/_/g, ' ')}</label>
-                                            <input type={['rate', 'min_qty', 'max_qty', 'display_order'].includes(field) ? 'number' : 'text'} value={form[field]} onChange={e => setForm({ ...form, [field]: e.target.value })} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow" />
-                                        </div>
-                                    ))}
+                {/* Premium Slide-Over Editor */}
+                <AnimatePresence>
+                    {showForm && (
+                        <>
+                            <motion.div 
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm z-40"
+                                onClick={() => setShowForm(false)}
+                            />
+                            <motion.div
+                                initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+                                transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                                className="fixed inset-y-0 right-0 w-full md:w-[600px] bg-white shadow-2xl z-50 flex flex-col border-l border-zinc-200"
+                            >
+                                <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                                    <div>
+                                        <h2 className="text-xl font-black text-zinc-900">{editingId ? 'Edit Configuration' : 'Deploy New Service'}</h2>
+                                        <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mt-1">
+                                            {editingId ? `Service Node #${editingId}` : 'Create Local Node'}
+                                        </p>
+                                    </div>
+                                    <button onClick={() => setShowForm(false)} className="p-2 bg-zinc-100 text-zinc-500 hover:text-zinc-900 rounded-full transition-colors">
+                                        <X size={20} />
+                                    </button>
                                 </div>
 
-                                {/* Upstream Providers Config */}
-                                <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h4 className="text-sm font-bold text-gray-900">Upstream API Providers</h4>
-                                        <button type="button" onClick={addUpstream} className="inline-flex items-center gap-1 text-xs font-medium text-brand-green hover:text-brand-green/80">
-                                            <Plus className="h-3.5 w-3.5" /> Add Provider Fallback
-                                        </button>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {form.upstreams.length === 0 ? (
-                                            <p className="text-sm text-gray-500 italic bg-white p-4 rounded-lg border border-gray-200 text-center">No providers mapped. This service will be fulfilled manually.</p>
-                                        ) : (
-                                            form.upstreams.map((upstream: ServiceUpstream, index: number) => (
-                                                <div key={index} className="flex items-center gap-3 bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm">
-                                                    <div className="w-16">
-                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Pri</label>
-                                                        <input type="number" min="1" value={upstream.priority} onChange={e => updateUpstream(index, 'priority', parseInt(e.target.value))} className="w-full bg-white text-gray-900 text-sm rounded-md border border-gray-300 px-2.5 py-1.5 focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 outline-none" />
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Provider</label>
-                                                        <select value={upstream.upstream_provider_id} onChange={e => updateUpstream(index, 'upstream_provider_id', parseInt(e.target.value))} className="w-full bg-white text-gray-900 text-sm rounded-md border border-gray-300 px-2.5 py-1.5 focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 outline-none">
-                                                            {providers.map(p => (
-                                                                <option key={p.id} value={p.id}>{p.name}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Ext ID</label>
-                                                        <input type="text" value={upstream.external_service_id} onChange={e => updateUpstream(index, 'external_service_id', e.target.value)} placeholder="e.g. 1024" className="w-full bg-white text-gray-900 text-sm rounded-md border border-gray-300 px-2.5 py-1.5 focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 outline-none" />
-                                                    </div>
-                                                    <button type="button" onClick={() => removeUpstream(index)} className="mt-5 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Remove upstream">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
+                                <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50/50">
+                                    
+                                    {/* Core Details */}
+                                    <section className="space-y-4">
+                                        <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-zinc-200 text-zinc-600 flex items-center justify-center">1</span> Core Identity
+                                        </h3>
+                                        <div className="bg-white p-5 rounded-3xl border border-zinc-200 shadow-sm space-y-4">
+                                            <div>
+                                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Service Name</label>
+                                                <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Category</label>
+                                                    <input type="text" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" placeholder="e.g. Instagram" />
                                                 </div>
-                                            ))
-                                        )}
-                                        {form.upstreams.length > 0 && (
-                                            <p className="text-xs mt-2 flex items-center gap-1.5 bg-blue-50 text-blue-700 p-2.5 rounded-lg border border-blue-100">
-                                                <span className="font-bold">Info:</span> Orders will route to Priority 1 first. If failed, it tries Priority 2, etc.
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Type</label>
+                                                    <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500">
+                                                        <option value="default">Default</option>
+                                                        <option value="custom_data">Custom Data</option>
+                                                        <option value="package">Package</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
 
-                                <div className="flex flex-wrap gap-5 pt-3">
-                                    {['is_active', 'is_dripfeed', 'is_refill'].map(field => (
-                                        <label key={field} className="flex items-center gap-2.5 text-sm font-medium text-gray-700 cursor-pointer">
-                                            <input type="checkbox" checked={form[field]} onChange={e => setForm({ ...form, [field]: e.target.checked })} className="w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green cursor-pointer" />
-                                            {field.replace(/^is_/, '').charAt(0).toUpperCase() + field.replace(/^is_/, '').slice(1)}
-                                        </label>
-                                    ))}
+                                    {/* Pricing & Limits */}
+                                    <section className="space-y-4">
+                                        <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-zinc-200 text-zinc-600 flex items-center justify-center">2</span> Pricing & Capacity
+                                        </h3>
+                                        <div className="bg-white p-5 rounded-3xl border border-zinc-200 shadow-sm grid grid-cols-2 gap-4">
+                                            <div className="col-span-2">
+                                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Rate per 1000 ($)</label>
+                                                <input type="number" step="0.0001" value={form.rate} onChange={e => setForm({ ...form, rate: e.target.value })} className="w-full bg-emerald-50/50 border-none rounded-xl px-4 py-3 text-lg font-black text-emerald-700 focus:ring-2 focus:ring-emerald-500" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Min Quantity</label>
+                                                <input type="number" value={form.min_qty} onChange={e => setForm({ ...form, min_qty: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Max Quantity</label>
+                                                <input type="number" value={form.max_qty} onChange={e => setForm({ ...form, max_qty: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" />
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    {/* Upstream Routing */}
+                                    <section className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                                                <span className="w-5 h-5 rounded-full bg-zinc-200 text-zinc-600 flex items-center justify-center">3</span> Routing Nodes
+                                            </h3>
+                                            <button type="button" onClick={addUpstream} className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors uppercase tracking-widest">
+                                                + Add Node
+                                            </button>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {form.upstreams.length === 0 ? (
+                                                <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm text-center">
+                                                    <AlertCircle className="w-8 h-8 text-amber-500 mx-auto mb-2 opacity-50" />
+                                                    <p className="text-sm font-bold text-zinc-700">No Routing Nodes Active</p>
+                                                    <p className="text-xs font-medium text-zinc-400 mt-1">Orders for this service will require manual fulfillment.</p>
+                                                </div>
+                                            ) : (
+                                                form.upstreams.map((upstream: ServiceUpstream, index: number) => (
+                                                    <div key={index} className="bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm relative group overflow-hidden">
+                                                        <div className={`absolute top-0 left-0 bottom-0 w-1 ${index === 0 ? 'bg-emerald-500' : 'bg-zinc-300'}`}></div>
+                                                        <div className="flex items-start gap-3 pl-2">
+                                                            <div className="w-16">
+                                                                <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Priority</label>
+                                                                <input type="number" min="1" value={upstream.priority} onChange={e => updateUpstream(index, 'priority', parseInt(e.target.value))} className="w-full bg-zinc-50 border-none rounded-lg px-2 py-2 text-xs font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" />
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Provider ID</label>
+                                                                <select value={upstream.upstream_provider_id} onChange={e => updateUpstream(index, 'upstream_provider_id', parseInt(e.target.value))} className="w-full bg-zinc-50 border-none rounded-lg px-2 py-2 text-xs font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500">
+                                                                    {providers.map(p => (
+                                                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Ext Service ID</label>
+                                                                <input type="text" value={upstream.external_service_id} onChange={e => updateUpstream(index, 'external_service_id', e.target.value)} className="w-full bg-zinc-50 border-none rounded-lg px-2 py-2 text-xs font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" />
+                                                            </div>
+                                                            <button type="button" onClick={() => removeUpstream(index)} className="mt-5 p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </section>
+
+                                    {/* Toggles */}
+                                    <section className="bg-white p-5 rounded-3xl border border-zinc-200 shadow-sm">
+                                        <div className="flex flex-wrap gap-4">
+                                            {['is_active', 'is_dripfeed', 'is_refill'].map(field => (
+                                                <label key={field} className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-2xl border-2 cursor-pointer transition-all ${form[field] ? 'border-emerald-500 bg-emerald-50' : 'border-zinc-100 bg-zinc-50'}`}>
+                                                    <input type="checkbox" checked={form[field]} onChange={e => setForm({ ...form, [field]: e.target.checked })} className="hidden" />
+                                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${form[field] ? 'border-emerald-500 bg-emerald-500' : 'border-zinc-300'}`}>
+                                                        {form[field] && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                                    </div>
+                                                    <span className={`text-xs font-bold uppercase tracking-widest ${form[field] ? 'text-emerald-700' : 'text-zinc-500'}`}>
+                                                        {field.replace(/^is_/, '')}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </section>
                                 </div>
-                            </div>
-                            
-                            <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3 justify-end">
-                                <button onClick={() => setShowForm(false)} className="px-5 py-2.5 text-sm font-medium rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm">Cancel</button>
-                                <button onClick={submitForm} className="px-5 py-2.5 text-sm font-medium rounded-lg bg-brand-green text-white hover:bg-brand-green/90 shadow-sm">Save Service</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                                
+                                <div className="p-6 border-t border-zinc-100 bg-white">
+                                    <button onClick={submitForm} className="w-full py-4 bg-zinc-900 hover:bg-emerald-500 text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl hover:shadow-emerald-500/20 active:scale-95">
+                                        {editingId ? 'Update Node Configuration' : 'Deploy Node Configuration'}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+
             </div>
 
             {pendingDeactivateId !== null && (
                 <ConfirmModal
                     open
-                    title="Deactivate Service"
-                    message="Deactivate this service? It will no longer be visible to users."
-                    confirmLabel="Deactivate"
+                    title="Halt Service"
+                    message="Are you sure you want to take this service offline? Users will no longer be able to place orders for it."
+                    confirmLabel="Take Offline"
                     danger
                     onConfirm={() => { router.delete(route('admin.services.destroy', pendingDeactivateId), { preserveScroll: true }); setPendingDeactivateId(null); }}
                     onCancel={() => setPendingDeactivateId(null)}

@@ -11,6 +11,7 @@ use App\Models\Service;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AI\ServiceRecommendationEngine;
+use App\Services\LeaderboardService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -19,7 +20,7 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index(ServiceRecommendationEngine $recommendations): Response|RedirectResponse
+    public function index(ServiceRecommendationEngine $recommendations, LeaderboardService $leaderboard): Response|RedirectResponse
     {
         /** @var User $user */
         $user = Auth::user();
@@ -134,6 +135,12 @@ class DashboardController extends Controller
                 ->toArray();
         });
 
+        $myLeaderboardRanks = [
+            'referrals' => $leaderboard->getUserRank($userId, 'referrals'),
+            'orders' => $leaderboard->getUserRank($userId, 'orders'),
+            'deposits' => $leaderboard->getUserRank($userId, 'deposits'),
+        ];
+
         return Inertia::render('Dashboard', [
             'stats' => $stats,
             'recent_orders' => $recent_orders,
@@ -143,6 +150,7 @@ class DashboardController extends Controller
             'incoming_contract_applications' => $incoming_contract_applications,
             'contract_stats' => $contract_stats,
             'recommended_services' => $recommendedServices,
+            'myLeaderboardRanks' => $myLeaderboardRanks,
         ]);
     }
 }

@@ -5,6 +5,9 @@ import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import AppErrorBoundary from './Components/AppErrorBoundary';
+import WhatsAppFloatingButton from './Components/WhatsAppFloatingButton';
+import PwaInstallPrompt from './Components/PwaInstallPrompt';
+import { registerServiceWorker } from './registerSW';
 
 const appName = 'Zimbo Socials';
 
@@ -21,10 +24,14 @@ createInertiaApp({
         root.render(
             <AppErrorBoundary>
                 <App {...props} />
+                <WhatsAppFloatingButton />
+                <PwaInstallPrompt />
             </AppErrorBoundary>,
         );
     },
     progress: {
-        color: '#4B5563',
+        color: '#0B3E09',
     },
 });
+
+registerServiceWorker();

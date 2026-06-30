@@ -54,6 +54,17 @@ return [
         'integration_key' => env('PAYNOW_INTEGRATION_KEY'),
     ],
 
+    /*
+     * Shared secret used to authenticate the generic payment webhook
+     * (POST /webhooks/payment). The caller must send an
+     * X-Webhook-Signature: sha256=<hex> header where the hex is
+     * HMAC-SHA256 of the raw request body keyed with this secret.
+     * If unset, the endpoint rejects every request (fail closed).
+     */
+    'payment_webhook' => [
+        'secret' => env('PAYMENT_WEBHOOK_SECRET'),
+    ],
+
     'referral' => [
         'first_deposit_reward' => (float) env('REFERRAL_FIRST_DEPOSIT_REWARD', 1.00),
         'order_commission_percent' => (float) env('REFERRAL_ORDER_COMMISSION_PERCENT', 2.00),

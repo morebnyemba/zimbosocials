@@ -21,6 +21,9 @@ $step = $_GET['step'] ?? 1;
 $error = '';
 $success = '';
 
+$cpanelUser = get_current_user();
+$defaultDbPrefix = $cpanelUser && $cpanelUser !== 'root' ? $cpanelUser . '_' : '';
+
 $existingEnv = [];
 $envExists = false;
 $envPath = $defaultAppPath.'/.env';
@@ -204,16 +207,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php } ?>
         
         <form method="POST">
-            <h2>System Paths</h2>
-            <div class="form-group">
-                <label>App URL</label>
-                <input type="url" name="app_url" value="<?= htmlspecialchars($existingEnv['APP_URL'] ?? 'https://'.$_SERVER['HTTP_HOST']) ?>" required>
-            </div>
-            <div class="form-group">
-                <label>Laravel Core Path (Absolute path)</label>
-                <input type="text" name="app_path" value="<?= htmlspecialchars($defaultAppPath ?: '/home/username/my-app') ?>" required>
-                <div class="note">The folder where you uploaded the main application files (outside public_html).</div>
-            </div>
+            <details>
+                <summary style="cursor:pointer; font-weight:bold; color:#71717a; margin-top:30px; border-bottom: 2px solid #f4f4f5; padding-bottom:8px; text-transform:uppercase; font-size:16px;">Advanced System Paths (Auto-Detected)</summary>
+                <div style="margin-top:15px; background:#f4f4f5; padding:15px; border-radius:8px;">
+                    <div class="form-group">
+                        <label>App URL</label>
+                        <input type="url" name="app_url" value="<?= htmlspecialchars($existingEnv['APP_URL'] ?? 'https://'.$_SERVER['HTTP_HOST']) ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Laravel Core Path (Absolute path)</label>
+                        <input type="text" name="app_path" value="<?= htmlspecialchars($defaultAppPath ?: '/home/username/my-app') ?>" required>
+                        <div class="note">The folder where you uploaded the main application files (outside public_html).</div>
+                    </div>
+                </div>
+            </details>
 
             <h2>Database Credentials</h2>
             <div class="grid">
@@ -228,12 +235,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="form-group">
                 <label>Database Name</label>
-                <input type="text" name="db_name" value="<?= htmlspecialchars($existingEnv['DB_DATABASE'] ?? '') ?>" required placeholder="e.g. user_zimbo">
+                <input type="text" name="db_name" value="<?= htmlspecialchars($existingEnv['DB_DATABASE'] ?? $defaultDbPrefix) ?>" required placeholder="e.g. <?= htmlspecialchars($defaultDbPrefix) ?>zimbosocials">
             </div>
             <div class="grid">
                 <div class="form-group">
                     <label>Database Username</label>
-                    <input type="text" name="db_user" value="<?= htmlspecialchars($existingEnv['DB_USERNAME'] ?? '') ?>" required>
+                    <input type="text" name="db_user" value="<?= htmlspecialchars($existingEnv['DB_USERNAME'] ?? $defaultDbPrefix) ?>" required placeholder="e.g. <?= htmlspecialchars($defaultDbPrefix) ?>admin">
                 </div>
                 <div class="form-group">
                     <label>Database Password</label>

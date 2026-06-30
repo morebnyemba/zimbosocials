@@ -17,6 +17,7 @@ import {
     FaServer,
     FaUsers,
     FaDollarSign,
+    FaCommentDots,
 } from 'react-icons/fa';
 
 export default function SettingsIndex({ settings, providers, referralDefaults, monetizerDefaults }: any) {
@@ -53,6 +54,9 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
             { key: 'api_token', value: getSetting('whatsapp', 'api_token'), group: 'whatsapp' },
             { key: 'phone_number_id', value: getSetting('whatsapp', 'phone_number_id'), group: 'whatsapp' },
             { key: 'waba_id', value: getSetting('whatsapp', 'waba_id'), group: 'whatsapp' },
+            // Tawk
+            { key: 'property_id', value: getSetting('tawk', 'property_id'), group: 'tawk' },
+            { key: 'widget_id', value: getSetting('tawk', 'widget_id'), group: 'tawk' },
             // Referral
             { key: 'first_deposit_reward', value: getReferralSetting('first_deposit_reward', referralDefaults?.first_deposit_reward || '1.00'), group: 'referral' },
             { key: 'order_commission_percent', value: getReferralSetting('order_commission_percent', referralDefaults?.order_commission_percent || '2.00'), group: 'referral' },
@@ -83,6 +87,7 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
         { id: 'whatsapp', label: 'WhatsApp Terminal', icon: FaWhatsapp },
         { id: 'referral', label: 'Referral Program', icon: FaUsers },
         { id: 'monetizer', label: 'Creator Monetizer', icon: FaDollarSign },
+        { id: 'tawk', label: 'Live Chat (Tawk.to)', icon: FaCommentDots },
         { id: 'providers', label: 'API Supply Chain', icon: FaServer },
     ];
 
@@ -167,6 +172,33 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
                                         <SettingInput label="API Token" value={data.settings.find(s => s.key === 'api_token')?.value} onChange={(v: string) => updateSetting('api_token', v)} placeholder="EAAG..." type="password" />
                                         <SettingInput label="Phone Number ID" value={data.settings.find(s => s.key === 'phone_number_id')?.value} onChange={(v: string) => updateSetting('phone_number_id', v)} placeholder="102..." />
                                         <SettingInput label="WABA ID" value={data.settings.find(s => s.key === 'waba_id')?.value} onChange={(v: string) => updateSetting('waba_id', v)} placeholder="105..." />
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'tawk' && (
+                                <div className="space-y-10 max-w-3xl">
+                                    <div className="p-8 rounded-[2rem] bg-indigo-50 border border-indigo-100 mb-8">
+                                        <h3 className="text-indigo-800 font-black text-sm uppercase tracking-widest flex items-center gap-2 mb-2">
+                                            <FaCommentDots /> Tawk.to Live Chat
+                                        </h3>
+                                        <p className="text-indigo-600/80 text-xs font-medium leading-relaxed">
+                                            Enable the live chat widget for customers. You can find these IDs in your Tawk.to dashboard under Administration &gt; Chat Widget &gt; Direct Chat Link.
+                                        </p>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-8">
+                                        <SettingInput
+                                            label="Property ID"
+                                            value={data.settings.find(s => s.key === 'property_id')?.value}
+                                            onChange={(v: string) => updateSetting('property_id', v)}
+                                            placeholder="e.g. 64b3a1..."
+                                        />
+                                        <SettingInput
+                                            label="Widget ID"
+                                            value={data.settings.find(s => s.key === 'widget_id')?.value}
+                                            onChange={(v: string) => updateSetting('widget_id', v)}
+                                            placeholder="e.g. 1h5..."
+                                        />
                                     </div>
                                 </div>
                             )}

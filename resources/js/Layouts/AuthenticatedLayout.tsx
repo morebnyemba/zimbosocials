@@ -28,6 +28,7 @@ import {
     FaCalendarAlt,
     FaDollarSign,
     FaPen,
+    FaTrophy,
 } from 'react-icons/fa';
 
 function LangSwitcher() {
@@ -117,6 +118,7 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
         { href: route('orders.index'), name: 'orders.index', label: 'Orders', icon: FaRocket },
         { href: route('wallet.index'), name: 'wallet.index', label: 'Wallet', icon: FaWallet },
         { href: route('referrals.index'), name: 'referrals.index', label: 'Referrals', icon: FaUsers },
+        { href: route('leaderboard.index'), name: 'leaderboard.index', label: 'Leaderboard', icon: FaTrophy },
         ...(user.account_type !== 'individual' ? [{ href: route('contracts.index'), name: 'contracts.index', label: 'Contracts', icon: FaFileContract }] : []),
         ...(user.role === 'marketer' || user.role === 'reseller' ? [{ href: route('marketer.content-calendar'), name: 'marketer.content-calendar', label: 'AI Content Calendar', icon: FaCalendarAlt }] : []),
         ...(user.role === 'marketer' || user.role === 'reseller' ? [{ href: route('marketer.portfolio-caption'), name: 'marketer.portfolio-caption', label: 'AI Portfolio Caption', icon: FaPen }] : []),

@@ -1,8 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { useTranslation } from '@/lib/i18n';
-import { useState } from 'react';
-import { FaCheckCircle, FaCopy, FaFacebookF, FaGift, FaInstagram, FaLink, FaMoneyBillWave, FaUsers, FaWhatsapp } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaCheckCircle, FaCopy, FaFacebookF, FaGift, FaInstagram, FaLink, FaMoneyBillWave, FaUsers, FaWhatsapp, FaTrophy, FaMedal, FaStar, FaCrown } from 'react-icons/fa';
+import { Link } from '@inertiajs/react';
+import confetti from 'canvas-confetti';
 
 interface ReferralItem {
     id: number;
@@ -23,6 +25,14 @@ interface RewardItem {
     created_at: string | null;
 }
 
+interface GlobalRewardItem {
+    id: number;
+    user_name: string;
+    amount: number;
+    method: string;
+    time_ago: string;
+}
+
 interface Props {
     summary: {
         total_referrals: number;
@@ -34,9 +44,11 @@ interface Props {
     referralLink: string;
     referrals: ReferralItem[];
     rewardHistory: RewardItem[];
+    myRank: { rank: number; score: number } | null;
+    globalRecentRewards: GlobalRewardItem[];
 }
 
-export default function ReferralsIndex({ summary, referralCode, referralLink, referrals, rewardHistory }: Props) {
+export default function ReferralsIndex({ summary, referralCode, referralLink, referrals, rewardHistory, myRank, globalRecentRewards }: Props) {
     const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
     const [shareStatus, setShareStatus] = useState<string | null>(null);
@@ -48,6 +60,12 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
     const copyReferralLink = async () => {
         await navigator.clipboard.writeText(referralLink);
         setCopied(true);
+        confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#10b981', '#f59e0b', '#3b82f6'],
+        });
         setTimeout(() => setCopied(false), 1800);
     };
 
@@ -78,17 +96,77 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
         }
     };
 
+    const getTierInfo = (total: number) => {
+        if (total >= 20) return { name: 'Gold Ambassador', icon: FaCrown, color: 'text-yellow-400', bg: 'bg-yellow-400/20', border: 'border-yellow-400/30', next: null, progress: 100 };
+        if (total >= 5) return { name: 'Silver Influencer', icon: FaStar, color: 'text-slate-300', bg: 'bg-slate-300/20', border: 'border-slate-300/30', next: 20, progress: (total / 20) * 100 };
+        return { name: 'Bronze Promoter', icon: FaMedal, color: 'text-orange-400', bg: 'bg-orange-400/20', border: 'border-orange-400/30', next: 5, progress: (total / 5) * 100 };
+    };
+    
+    const tier = getTierInfo(summary.total_referrals);
+
     return (
         <AuthenticatedLayout>
             <Head title={t('referrals_title')} />
+
+            {/* Marquee Ticker */}
+            {globalRecentRewards?.length > 0 && (
+                <div className="relative flex overflow-x-hidden bg-emerald-950 text-emerald-100 py-2 border-b border-emerald-900/50">
+                    <div className="animate-marquee whitespace-nowrap flex gap-8 px-4 items-center text-sm font-medium">
+                        {globalRecentRewards.map((reward, i) => (
+                            <span key={`${reward.id}-${i}`} className="inline-flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                {reward.user_name} earned ${reward.amount.toFixed(2)} from a referral! <span className="text-emerald-500/70 text-xs">{reward.time_ago}</span>
+                            </span>
+                        ))}
+                    </div>
+                    {/* Duplicate for seamless looping */}
+                    <div className="absolute top-0 py-2 animate-marquee2 whitespace-nowrap flex gap-8 px-4 items-center text-sm font-medium">
+                        {globalRecentRewards.map((reward, i) => (
+                            <span key={`dup-${reward.id}-${i}`} className="inline-flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                {reward.user_name} earned ${reward.amount.toFixed(2)} from a referral! <span className="text-emerald-500/70 text-xs">{reward.time_ago}</span>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
                 <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.2),_transparent_30%),linear-gradient(135deg,#052e16_0%,#0f172a_45%,#14532d_100%)] p-6 text-white shadow-xl shadow-slate-900/10 sm:p-8">
                     <div className="grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
                         <div className="min-w-0 space-y-4">
-                            <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-100">
-                                {t('referrals_program_badge')}
-                            </span>
+                            <div className="flex flex-wrap gap-2">
+                                <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-100">
+                                    {t('referrals_program_badge')}
+                                </span>
+                                {myRank && (
+                                    <Link href={route('leaderboard.index')} className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-yellow-400 hover:bg-yellow-400/20 transition-colors">
+                                        <FaTrophy className="h-3 w-3" />
+                                        Leaderboard Rank: #{myRank.rank}
+                                    </Link>
+                                )}
+                                <span className={`inline-flex items-center gap-1.5 rounded-full border ${tier.border} ${tier.bg} px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] ${tier.color}`}>
+                                    <tier.icon className="h-3 w-3" />
+                                    {tier.name}
+                                </span>
+                            </div>
+                            
+                            {/* Progress to Next Tier */}
+                            {tier.next !== null && (
+                                <div className="mt-4 mb-2 max-w-sm">
+                                    <div className="flex justify-between text-xs font-medium text-slate-300 mb-1.5">
+                                        <span>Progress to next tier</span>
+                                        <span>{summary.total_referrals} / {tier.next} referrals</span>
+                                    </div>
+                                    <div className="h-2 w-full bg-slate-950/40 rounded-full overflow-hidden border border-white/5">
+                                        <div 
+                                            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-300 rounded-full transition-all duration-1000 ease-out"
+                                            style={{ width: `${tier.progress}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
                             <div>
                                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{t('referrals_hero_title')}</h1>
                                 <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 sm:text-base">
