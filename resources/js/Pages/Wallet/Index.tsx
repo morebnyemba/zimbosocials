@@ -222,7 +222,11 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
             attempts++;
             try {
                 const res = await fetch(route('paynow.poll', { transaction: txId }), {
-                    headers: { 'X-CSRF-TOKEN': (document.head.querySelector('meta[name="csrf-token"]') as any)?.content || '' }
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': (document.head.querySelector('meta[name="csrf-token"]') as any)?.content || '',
+                    }
                 });
                 const data = await res.json();
 
@@ -262,18 +266,21 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': (document.head.querySelector('meta[name="csrf-token"]') as any)?.content || '',
                 },
                 body: JSON.stringify({ otp: omariOtp.otp }),
             });
-            const data = await res.json();
-            if (data.success) {
+            const data = await res.json().catch(() => null);
+            if (data?.success) {
                 notify('info', data.message || 'OTP accepted. Waiting for payment…');
                 const txId = omariOtp.txId;
                 setOmariOtp(null);
                 startPolling(txId);
             } else {
-                notify('error', data.message || 'Invalid OTP. Please try again.');
+                const firstError = data?.errors ? Object.values(data.errors)[0] as string[] : null;
+                notify('error', (firstError && firstError[0]) || data?.message || 'Invalid OTP. Please try again.');
                 setOmariOtp(prev => prev ? { ...prev, submitting: false } : null);
             }
         } catch {

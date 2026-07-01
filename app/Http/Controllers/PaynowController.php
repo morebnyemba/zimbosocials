@@ -211,7 +211,9 @@ class PaynowController extends Controller
                     ];
                     $transaction->update($updateFields);
 
-                    $qrUrl = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl='.urlencode($authCode);
+                    // Google's Image Charts API (chart.googleapis.com) was shut down in 2019 —
+                    // this used to render a permanently broken QR image.
+                    $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='.urlencode($authCode);
                     $deepLink = 'com.innbucks.customer://purchase?paymentToken='.$authCode;
 
                     return response()->json([
