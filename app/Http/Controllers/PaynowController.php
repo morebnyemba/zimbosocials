@@ -327,8 +327,13 @@ class PaynowController extends Controller
         }
 
         $integrationId = (string) config('services.paynow.integration_id');
-        $integrationKey = (string) config('services.paynow.integration_key');
-        $otp = (string) $request->input('otp');
+        // The Paynow SDK always lowercases the integration key before hashing for
+        // mobile/express requests (see Paynow::formatInitMobile) — replicate that
+        // here since we build this hash manually rather than via the SDK. Using
+        // the raw-case key produces a hash Paynow's server can't verify, which it
+        // surfaces as a generic "Invalid OTP" regardless of the OTP itself.
+        $integrationKey = strtolower((string) config('services.paynow.integration_key'));
+        $otp = trim((string) $request->input('otp'));
 
         // Hash per Paynow spec: SHA-512( id + otp + "Message" + integrationKey ) → uppercase
         $hash = Hash::make([

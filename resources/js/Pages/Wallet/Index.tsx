@@ -62,6 +62,15 @@ const typeThemes: Record<string, { icon: any; color: string; bg: string }> = {
     refund: { icon: FaArrowDown, color: 'text-blue-600', bg: 'bg-blue-50' },
 };
 
+// Status overrides the type-based theme above — a failed/rejected deposit must
+// never render with the "money in" green just because its type is 'deposit'.
+const statusThemeOverrides: Record<string, { icon: any; color: string; bg: string; badge: string; badgeText: string }> = {
+    pending: { icon: FaClock, color: 'text-amber-600', bg: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700', badgeText: 'Pending' },
+    rejected: { icon: FaClock, color: 'text-red-600', bg: 'bg-red-50', badge: 'bg-red-100 text-red-700', badgeText: 'Failed' },
+    failed: { icon: FaClock, color: 'text-red-600', bg: 'bg-red-50', badge: 'bg-red-100 text-red-700', badgeText: 'Failed' },
+    cancelled: { icon: FaClock, color: 'text-red-600', bg: 'bg-red-50', badge: 'bg-red-100 text-red-700', badgeText: 'Cancelled' },
+};
+
 const methodIcons: Record<string, any> = {
     paynow: FaRegCreditCard,
     ecocash: FaMobileAlt,
@@ -824,18 +833,30 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                             <p className="text-center py-20 text-zinc-400 font-bold italic">No financial activity recorded yet.</p>
                         )}
                         {(transactions.data ?? []).map((t) => {
-                            const theme = typeThemes[t.type] || { icon: FaClock, color: 'text-zinc-400', bg: 'bg-zinc-50' };
+                            const statusOverride = t.status ? statusThemeOverrides[t.status] : undefined;
+                            const theme = statusOverride ?? typeThemes[t.type] ?? { icon: FaClock, color: 'text-zinc-400', bg: 'bg-zinc-50' };
                             const Icon = theme.icon;
+                            // Only unresolved/failed transactions get a badge — a completed one
+                            // is self-evident from its color and doesn't need a label.
+                            const isUnsettled = Boolean(statusOverride);
+                            const amountColor = isUnsettled ? 'text-zinc-400' : (t.amount >= 0 ? 'text-emerald-600' : 'text-zinc-900');
                             return (
                                 <div key={t.id} className="flex items-center gap-6 p-6 rounded-[2rem] border border-zinc-50 hover:bg-zinc-50 transition-all group">
                                     <div className={`h-14 w-14 rounded-2xl flex items-center justify-center text-xl shadow-sm ${theme.bg} ${theme.color}`}>
                                         <Icon />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-black text-zinc-900 truncate group-hover:text-zinc-600 transition-colors uppercase tracking-tight text-sm">{t.description || t.type}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-black text-zinc-900 truncate group-hover:text-zinc-600 transition-colors uppercase tracking-tight text-sm">{t.description || t.type}</p>
+                                            {statusOverride && (
+                                                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${statusOverride.badge}`}>
+                                                    {statusOverride.badgeText}
+                                                </span>
+                                            )}
+                                        </div>
                                         <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">{new Date(t.created_at).toLocaleDateString()} · {t.type.replace('_', ' ')}</p>
                                     </div>
-                                    <div className={`text-xl font-black ${t.amount >= 0 ? 'text-emerald-600' : 'text-zinc-900'}`}>
+                                    <div className={`text-xl font-black ${amountColor} ${isUnsettled ? 'line-through' : ''}`}>
                                         {t.amount >= 0 ? '+' : ''}{Number(t.amount).toFixed(2)}
                                     </div>
                                 </div>
