@@ -71,15 +71,32 @@ class SyncUpstreamOrders extends Command
 
                     $upstreamStatus = strtolower($data['status'] ?? '');
 
-                    // Map upstream status to local status
+                    // Map upstream status to local status. Local enum uses British
+                    // spelling ('cancelled') — matching the American 'canceled' here
+                    // previously produced a value not in the DB enum, silently
+                    // breaking cancellation sync.
                     $localStatus = match ($upstreamStatus) {
                         'pending', 'in progress', 'inprogress' => 'processing',
                         'processing' => 'processing',
                         'completed' => 'completed',
                         'partial' => 'partial',
-                        'canceled', 'cancelled' => 'canceled',
+                        'canceled', 'cancelled' => 'cancelled',
                         default => null,
                     };
+
+                    // Many upstream providers never flip their own status string to
+                    // "Completed" even once delivery is actually finished — the order
+                    // just sits reporting "Processing"/"Pending" forever with
+                    // remains=0. Trust remains=0 (fully delivered) over a stale or
+                    // unrecognized status string, except for explicit terminal states
+                    // where the provider is telling us something more specific.
+                    if (
+                        array_key_exists('remains', $data)
+                        && (int) $data['remains'] === 0
+                        && ! in_array($localStatus, ['partial', 'cancelled', 'refunded'], true)
+                    ) {
+                        $localStatus = 'completed';
+                    }
 
                     if ($localStatus && $localStatus !== $order->status) {
                         $this->processOrderUpdate($order, $localStatus, $data);
