@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\DuplicateOrderException;
 use App\Exceptions\InsufficientBalanceException;
 use App\Models\Order;
 use App\Models\Service;
@@ -11,6 +12,9 @@ use Illuminate\Support\Facades\DB;
 
 class OrderService
 {
+    /** Order statuses considered "still in progress" for the duplicate-link guard. */
+    private const IN_PROGRESS_STATUSES = ['pending', 'processing', 'in_progress'];
+
     /**
      * Atomically validate, create, and charge an order.
      *
@@ -26,6 +30,8 @@ class OrderService
         OrderDispatchService $dispatchService,
         string $notePrefix = 'Order'
     ): array {
+        $link = trim($link);
+
         // --- Validate quantity range ---
         if ($quantity < $service->min_qty || $quantity > $service->max_qty) {
             return [
@@ -39,10 +45,23 @@ class OrderService
 
         // --- Atomically create order and deduct balance ---
         // Balance check is inside the transaction with lockForUpdate to prevent
-        // two concurrent orders from both passing a stale balance check.
+        // two concurrent orders from both passing a stale balance check. The
+        // duplicate-link check rides the same lock, so two rapid clicks by the
+        // same user can't both slip past it.
         try {
             $order = DB::transaction(function () use ($user, $service, $link, $quantity, $charge, $notePrefix): Order {
                 $lockedUser = User::lockForUpdate()->findOrFail($user->id);
+
+                $hasOrderInProgressForLink = Order::where('user_id', $lockedUser->id)
+                    ->where('link', $link)
+                    ->whereIn('status', self::IN_PROGRESS_STATUSES)
+                    ->exists();
+
+                if ($hasOrderInProgressForLink) {
+                    throw new DuplicateOrderException(
+                        'You already have an order in progress for this link. Please wait for it to complete before ordering again.'
+                    );
+                }
 
                 if ((float) $lockedUser->balance < $charge) {
                     throw new InsufficientBalanceException(
@@ -74,6 +93,12 @@ class OrderService
 
                 return $order;
             });
+        } catch (DuplicateOrderException $e) {
+            return [
+                'ok' => false,
+                'error' => $e->getMessage(),
+                'code' => 409,
+            ];
         } catch (InsufficientBalanceException $e) {
             return [
                 'ok' => false,
