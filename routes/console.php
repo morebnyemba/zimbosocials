@@ -19,3 +19,6 @@ Schedule::command('queue:prune-batches --hours=48')->daily();
 
 // Close previous month's leaderboard on the 1st at 00:05 and notify winners
 Schedule::command('leaderboard:close-month --notify')->monthlyOn(1, '00:05')->withoutOverlapping();
+
+// Warn referrers before their ongoing-commission window lapses
+Schedule::command('referral:warn-commission-expiry')->dailyAt('09:00')->withoutOverlapping();
