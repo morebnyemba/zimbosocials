@@ -27,6 +27,7 @@ class AdminSettingsController extends Controller
                 'first_deposit_reward' => (string) config('services.referral.first_deposit_reward', '1.00'),
                 'order_commission_percent' => (string) config('services.referral.order_commission_percent', '2.00'),
                 'order_commission_min_total' => (string) config('services.referral.order_commission_min_total', '20.00'),
+                'referred_first_deposit_bonus_percent' => (string) config('services.referral.referred_first_deposit_bonus_percent', '10.00'),
             ],
             'monetizerDefaults' => [
                 'threshold_usd' => number_format((float) config('services.monetizer.threshold_usd', 100.00), 2, '.', ''),

@@ -75,6 +75,14 @@ return [
         'order_commission_percent' => (float) env('REFERRAL_ORDER_COMMISSION_PERCENT', 2.00),
         'order_commission_min_total' => (float) env('REFERRAL_ORDER_COMMISSION_MIN_TOTAL', 20.00),
         'referred_first_deposit_bonus_percent' => (float) env('REFERRED_FIRST_DEPOSIT_BONUS_PERCENT', 10.00),
+        'min_qualifying_deposit' => (float) env('REFERRAL_MIN_QUALIFYING_DEPOSIT', 5.00),
+        // Ongoing order commissions pause after this many days with no new referral
+        // (0 = never expire). Referrers are warned this many days before.
+        'commission_active_days' => (int) env('REFERRAL_COMMISSION_ACTIVE_DAYS', 60),
+        'commission_warn_days' => (int) env('REFERRAL_COMMISSION_WARN_DAYS', 7),
+        // A referred user permanently stops generating commissions this many
+        // months after they joined (0 = never permanently expires).
+        'lifetime_months' => (int) env('REFERRAL_LIFETIME_MONTHS', 36),
     ],
 
     'monetizer' => [

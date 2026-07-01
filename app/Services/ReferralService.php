@@ -49,6 +49,19 @@ class ReferralService
     }
 
     /**
+     * Minimum deposit (USD) a referred user must make for first-deposit referral
+     * rewards (referrer reward + welcome bonus) to apply. Prevents farming the
+     * flat reward with tiny deposits. Default $5.
+     */
+    public function minQualifyingDeposit(): float
+    {
+        return (float) Setting::get(
+            'referral_min_qualifying_deposit',
+            config('services.referral.min_qualifying_deposit', 5.00)
+        );
+    }
+
+    /**
      * Credit the referred user a percentage bonus (default 10%) on their first
      * completed deposit. Distinct from the referrer's flat reward. Idempotent
      * via the transaction reference, so retried webhooks/polls never double-pay.
@@ -72,18 +85,13 @@ class ReferralService
             return;
         }
 
-        // Only the first completed deposit qualifies.
-        $completedDepositCount = Transaction::query()
-            ->where('user_id', $referredUser->getKey())
-            ->where('type', 'deposit')
-            ->where('status', 'completed')
-            ->count();
-
-        if ($completedDepositCount !== 1) {
+        // Must meet the minimum qualifying deposit (same threshold as the
+        // referrer reward). One-time per user is enforced by the reference below.
+        $amount = (float) $depositTransaction->getAttribute('amount');
+        if ($amount < $this->minQualifyingDeposit()) {
             return;
         }
 
-        $amount = (float) $depositTransaction->getAttribute('amount');
         $bonus = round(($amount * $percent) / 100, 2);
         if ($bonus <= 0) {
             return;
@@ -125,6 +133,95 @@ class ReferralService
         });
     }
 
+    /**
+     * Days a referrer keeps earning ongoing commissions after their most recent
+     * referral. 0 = never expires.
+     */
+    public function commissionActiveDays(): int
+    {
+        return (int) Setting::get('referral_commission_active_days', config('services.referral.commission_active_days', 60));
+    }
+
+    /** Days before the commission window lapses that the referrer is warned. */
+    public function commissionWarnDays(): int
+    {
+        return (int) Setting::get('referral_commission_warn_days', config('services.referral.commission_warn_days', 7));
+    }
+
+    /**
+     * When a referrer's ongoing commissions stay active until, based on their
+     * most recent referral. Null if the feature is disabled or they've never
+     * referred anyone.
+     */
+    public function commissionActiveUntil(int $referrerId): ?\Illuminate\Support\Carbon
+    {
+        if ($this->commissionActiveDays() <= 0) {
+            return null;
+        }
+
+        $latest = User::where('referred_by', $referrerId)->max('created_at');
+
+        return $latest ? \Illuminate\Support\Carbon::parse($latest)->addDays($this->commissionActiveDays()) : null;
+    }
+
+    /**
+     * Whether a referrer is currently eligible for ongoing order commissions
+     * (i.e. has referred someone within the active window).
+     */
+    public function isReferrerCommissionActive(int $referrerId): bool
+    {
+        if ($this->commissionActiveDays() <= 0) {
+            return true;
+        }
+
+        $until = $this->commissionActiveUntil($referrerId);
+
+        return $until !== null && $until->isFuture();
+    }
+
+    /**
+     * Months after a referred user joins before that referral permanently stops
+     * generating commissions (0 = never expires). Distinct from the reversible
+     * activity pause — once past this, no activity brings the referral back.
+     */
+    public function referralLifetimeMonths(): int
+    {
+        return (int) Setting::get('referral_lifetime_months', config('services.referral.lifetime_months', 36));
+    }
+
+    /** When a specific referral permanently expires (null if disabled). */
+    public function referralExpiresAt(User $referredUser): ?\Illuminate\Support\Carbon
+    {
+        $months = $this->referralLifetimeMonths();
+        $joined = $referredUser->getAttribute('created_at');
+
+        return ($months > 0 && $joined) ? \Illuminate\Support\Carbon::parse($joined)->addMonths($months) : null;
+    }
+
+    /** Whether a referral is still within its permanent lifetime window. */
+    public function isReferralWithinLifetime(User $referredUser): bool
+    {
+        $expiresAt = $this->referralExpiresAt($referredUser);
+
+        return $expiresAt === null || $expiresAt->isFuture();
+    }
+
+    /**
+     * Current program rates for display on the referral page (kept in sync with
+     * admin settings so the "How it works" panel never drifts from the payouts).
+     */
+    public function programRates(): array
+    {
+        return [
+            'first_deposit_reward' => $this->firstDepositRewardAmount(),
+            'welcome_bonus_percent' => $this->referredFirstDepositBonusPercent(),
+            'order_commission_percent' => $this->orderCommissionPercent(),
+            'order_commission_min_total' => $this->orderCommissionMinimumTotal(),
+            'min_qualifying_deposit' => $this->minQualifyingDeposit(),
+            'lifetime_months' => $this->referralLifetimeMonths(),
+        ];
+    }
+
     public function rewardReferrerOnFirstDeposit(Transaction $depositTransaction): void
     {
         if ($depositTransaction->getAttribute('type') !== 'deposit') {
@@ -145,17 +242,14 @@ class ReferralService
             return;
         }
 
+        // One-time per referred user (the awarded-at flag is the source of truth).
         if ($referredUser->getAttribute('referred_bonus_awarded_at')) {
             return;
         }
 
-        $completedDepositCount = Transaction::query()
-            ->where('user_id', $referredUser->getKey())
-            ->where('type', 'deposit')
-            ->where('status', 'completed')
-            ->count();
-
-        if ($completedDepositCount !== 1) {
+        // Must meet the minimum qualifying deposit. A below-minimum deposit does
+        // NOT disqualify the user — a later qualifying deposit still triggers it.
+        if ((float) $depositTransaction->getAttribute('amount') < $this->minQualifyingDeposit()) {
             return;
         }
 
@@ -220,6 +314,18 @@ class ReferralService
             return;
         }
 
+        // Ongoing commissions pause if the referrer hasn't referred anyone new
+        // within the active window (they resume once they refer again).
+        if (! $this->isReferrerCommissionActive((int) $referrerId)) {
+            return;
+        }
+
+        // Permanent per-referral expiry: after the lifetime window this referral
+        // never generates commission again, regardless of activity.
+        if (! $this->isReferralWithinLifetime($referredUser)) {
+            return;
+        }
+
         // Commission starts after first order, i.e. from second order onward.
         $ordersCount = Order::query()
             ->where('user_id', $referredUser->getKey())
@@ -230,7 +336,8 @@ class ReferralService
         }
 
         $charge = (float) $order->getAttribute('charge');
-        if ($charge <= $minimumOrderTotal) {
+        // Inclusive minimum: an order exactly at the threshold qualifies.
+        if ($charge < $minimumOrderTotal) {
             return;
         }
 

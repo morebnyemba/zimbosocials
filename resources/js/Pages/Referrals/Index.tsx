@@ -14,6 +14,8 @@ interface ReferralItem {
     first_deposit_rewarded: boolean;
     completed_deposits: number;
     orders_count: number;
+    expires_at: string | null;
+    is_expired: boolean;
 }
 
 interface RewardItem {
@@ -46,15 +48,43 @@ interface Props {
     rewardHistory: RewardItem[];
     myRank: { rank: number; score: number } | null;
     globalRecentRewards: GlobalRewardItem[];
-    welcomeBonusPercent?: number;
+    programRates?: {
+        first_deposit_reward: number;
+        welcome_bonus_percent: number;
+        order_commission_percent: number;
+        order_commission_min_total: number;
+        min_qualifying_deposit: number;
+        lifetime_months: number;
+    };
+    commissionStatus?: {
+        active_days: number;
+        is_active: boolean;
+        active_until: string | null;
+        has_referrals: boolean;
+    };
 }
 
-export default function ReferralsIndex({ summary, referralCode, referralLink, referrals, rewardHistory, myRank, globalRecentRewards, welcomeBonusPercent = 10 }: Props) {
+const DEFAULT_RATES = {
+    first_deposit_reward: 1,
+    welcome_bonus_percent: 10,
+    order_commission_percent: 2,
+    order_commission_min_total: 20,
+    min_qualifying_deposit: 5,
+    lifetime_months: 36,
+};
+
+export default function ReferralsIndex({ summary, referralCode, referralLink, referrals, rewardHistory, myRank, globalRecentRewards, programRates, commissionStatus }: Props) {
     const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
     const [shareStatus, setShareStatus] = useState<string | null>(null);
 
-    const shareText = t('referral_share_message', { link: referralLink, percent: welcomeBonusPercent });
+    const rates = { ...DEFAULT_RATES, ...(programRates ?? {}) };
+    const num = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+
+    // Only surface commission status when the expiry feature is on and the user has referrals.
+    const showCommissionStatus = Boolean(commissionStatus?.has_referrals) && (commissionStatus?.active_days ?? 0) > 0;
+    const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+    const shareText = t('referral_share_message', { link: referralLink, percent: num(rates.welcome_bonus_percent) });
     const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
     const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`;
 
@@ -257,6 +287,68 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
                     </div>
                 </section>
 
+                {/* How referrals work */}
+                <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/70 sm:p-7">
+                    <h2 className="text-lg font-bold text-slate-900">{t('how_referrals_work')}</h2>
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                        <div className="flex gap-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white"><FaGift /></div>
+                            <div>
+                                <p className="font-bold text-slate-900">{t('referral_step_signup_title')}</p>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    {t('referral_step_signup_body', {
+                                        min: num(rates.min_qualifying_deposit),
+                                        reward: num(rates.first_deposit_reward),
+                                        percent: num(rates.welcome_bonus_percent),
+                                    })}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-4 rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white"><FaMoneyBillWave /></div>
+                            <div>
+                                <p className="font-bold text-slate-900">{t('referral_step_orders_title')}</p>
+                                <p className="mt-1 text-sm leading-6 text-slate-600">
+                                    {showCommissionStatus
+                                        ? t('referral_step_orders_body_window', {
+                                            commission: num(rates.order_commission_percent),
+                                            mintotal: num(rates.order_commission_min_total),
+                                            days: String(commissionStatus!.active_days),
+                                        })
+                                        : t('referral_step_orders_body', {
+                                            commission: num(rates.order_commission_percent),
+                                            mintotal: num(rates.order_commission_min_total),
+                                        })}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <p className="mt-4 text-xs text-slate-400">
+                        {t('referral_terms_note', { min: num(rates.min_qualifying_deposit) })}
+                        {rates.lifetime_months > 0 && ' ' + t('referral_lifetime_note', { months: String(rates.lifetime_months) })}
+                    </p>
+
+                    {showCommissionStatus && (
+                        commissionStatus!.is_active ? (
+                            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                                <FaCheckCircle className="mt-0.5 shrink-0 text-emerald-600" />
+                                <div>
+                                    <p className="text-sm font-bold text-emerald-800">{t('commission_active_until', { date: fmtDate(commissionStatus!.active_until) })}</p>
+                                    <p className="mt-0.5 text-xs text-emerald-700">{t('commission_active_hint')}</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                                <FaGift className="mt-0.5 shrink-0 text-amber-600" />
+                                <div>
+                                    <p className="text-sm font-bold text-amber-800">{t('commission_paused')}</p>
+                                    <p className="mt-0.5 text-xs text-amber-700">{t('commission_paused_hint')}</p>
+                                </div>
+                            </div>
+                        )
+                    )}
+                </section>
+
                 <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
                     <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/70">
                         <div className="flex items-center justify-between gap-3">
@@ -289,6 +381,11 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
                                         <span>{t('joined_label')}: {referral.joined_at ? new Date(referral.joined_at).toLocaleDateString() : t('not_available')}</span>
                                         <span>{t('deposits_label')}: {referral.completed_deposits}</span>
                                         <span>{t('orders_label')}: {referral.orders_count}</span>
+                                        {referral.expires_at && (
+                                            referral.is_expired
+                                                ? <span className="font-semibold text-red-500">{t('referral_expired')}</span>
+                                                : <span>{t('referral_expires_label')}: {fmtDate(referral.expires_at)}</span>
+                                        )}
                                     </div>
                                 </div>
                             ))}

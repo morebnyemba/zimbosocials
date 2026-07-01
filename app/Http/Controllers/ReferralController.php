@@ -58,15 +58,21 @@ class ReferralController extends Controller
             ])
             ->latest()
             ->get()
-            ->map(fn (User $referral) => [
-                'id' => $referral->getKey(),
-                'name' => $referral->getAttribute('name'),
-                'email' => $referral->getAttribute('email'),
-                'joined_at' => optional($referral->getAttribute('created_at'))->toISOString(),
-                'first_deposit_rewarded' => (bool) $referral->getAttribute('referred_bonus_awarded_at'),
-                'completed_deposits' => (int) $referral->completed_deposits,
-                'orders_count' => (int) $referral->orders_count,
-            ])
+            ->map(function (User $referral) {
+                $expiresAt = app(\App\Services\ReferralService::class)->referralExpiresAt($referral);
+
+                return [
+                    'id' => $referral->getKey(),
+                    'name' => $referral->getAttribute('name'),
+                    'email' => $referral->getAttribute('email'),
+                    'joined_at' => optional($referral->getAttribute('created_at'))->toISOString(),
+                    'first_deposit_rewarded' => (bool) $referral->getAttribute('referred_bonus_awarded_at'),
+                    'completed_deposits' => (int) $referral->completed_deposits,
+                    'orders_count' => (int) $referral->orders_count,
+                    'expires_at' => optional($expiresAt)->toDateString(),
+                    'is_expired' => $expiresAt !== null && $expiresAt->isPast(),
+                ];
+            })
             ->values();
 
         $rewardTransactions = Transaction::query()
@@ -87,7 +93,7 @@ class ReferralController extends Controller
 
         $summary = [
             'total_referrals' => $referrals->count(),
-            'successful_first_deposits' => $referrals->where('first_deposit_rewarded', true)->count(),
+            'successful_first_deposits' => $referrals->where('completed_deposits', '>', 0)->count(),
             'total_rewards_earned' => round((float) $rewardTransactions->sum('amount'), 4),
             'order_commissions_earned' => round((float) $rewardTransactions->where('method', 'referral_order')->sum('amount'), 4),
         ];
@@ -97,13 +103,13 @@ class ReferralController extends Controller
         $globalRecentRewards = Transaction::query()
             ->where('type', 'bonus')
             ->whereIn('method', ['referral', 'referral_order'])
-            ->with('user:id,name')
+            ->with('user:id,username')
             ->latest()
             ->limit(10)
             ->get(['id', 'user_id', 'amount', 'method', 'created_at'])
             ->map(fn (Transaction $t) => [
                 'id' => $t->id,
-                'user_name' => explode(' ', $t->user->name ?? 'Someone')[0],
+                'user_name' => $t->user->username ?? 'Someone',
                 'amount' => (float) $t->amount,
                 'method' => $t->method,
                 'time_ago' => $t->created_at->diffForHumans(),
@@ -118,7 +124,13 @@ class ReferralController extends Controller
             'rewardHistory' => $rewardTransactions,
             'myRank' => $myRank,
             'globalRecentRewards' => $globalRecentRewards,
-            'welcomeBonusPercent' => (int) round(app(\App\Services\ReferralService::class)->referredFirstDepositBonusPercent()),
+            'programRates' => ($svc = app(\App\Services\ReferralService::class))->programRates(),
+            'commissionStatus' => [
+                'active_days' => $svc->commissionActiveDays(),
+                'is_active' => $svc->isReferrerCommissionActive($user->id),
+                'active_until' => optional($svc->commissionActiveUntil($user->id))->toDateString(),
+                'has_referrals' => $referrals->count() > 0,
+            ],
         ]);
     }
 }
