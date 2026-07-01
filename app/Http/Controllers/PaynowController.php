@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
-use App\Models\ManualPaymentDetail;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\DepositService;
@@ -12,7 +11,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 use Paynow\Payments\Paynow;
 use Paynow\Util\Hash;
 
@@ -61,6 +59,17 @@ class PaynowController extends Controller
         ], $extra);
     }
 
+    /**
+     * The authemail sent to Paynow. In test mode Paynow only accepts the
+     * merchant's own registered email, so PAYNOW_TEST_EMAIL lets us test the
+     * full flow without editing customer accounts. Blank in production (live
+     * mode) → the real customer email is used.
+     */
+    private function authEmail(User $user): string
+    {
+        return (string) (config('services.paynow.test_email') ?: $user->email);
+    }
+
     private function getPaynow(): Paynow
     {
         // Resolve through the container so tests can override with a mock
@@ -80,24 +89,16 @@ class PaynowController extends Controller
 
     public function init(Request $request)
     {
-        // Allowed gateway methods come from admin-configured ManualPaymentDetail with gateway_type='paynow'
-        $gatewayMethods = ManualPaymentDetail::active()
-            ->where('gateway_type', 'paynow')
-            ->pluck('method_key')
-            ->all();
-
-        // Fallback if nothing configured yet
-        if (empty($gatewayMethods)) {
-            $gatewayMethods = ['paynow', 'ecocash', 'onemoney'];
-        }
+        // This endpoint only handles the Paynow web/card flow; mobile money has
+        // its own route. Default the method so the front-end need only send amount.
+        $method = $request->input('method', 'paynow');
 
         $request->validate([
             'amount' => 'required|numeric|min:1',
-            'method' => ['required', Rule::in($gatewayMethods)],
         ]);
 
         // Reject mobile methods — they have a dedicated route
-        if ($request->input('method') !== 'paynow') {
+        if ($method !== 'paynow') {
             return response()->json([
                 'success' => false,
                 'message' => 'Use the provider-specific endpoint for mobile money payments.',
@@ -110,7 +111,7 @@ class PaynowController extends Controller
         $transaction = $this->createPendingTransaction($user, $amount, 'paynow');
 
         $paynow = $this->getPaynow();
-        $payment = $paynow->createPayment((string) $transaction->id, $user->email);
+        $payment = $paynow->createPayment((string) $transaction->id, $this->authEmail($user));
         $payment->add('Account Deposit', $amount);
 
         try {
@@ -188,7 +189,7 @@ class PaynowController extends Controller
         $transaction = $this->createPendingTransaction($user, $amount, $provider);
 
         $paynow = $this->getPaynow();
-        $payment = $paynow->createPayment((string) $transaction->id, $user->email);
+        $payment = $paynow->createPayment((string) $transaction->id, $this->authEmail($user));
         $payment->add('Account Deposit', $amount);
 
         try {

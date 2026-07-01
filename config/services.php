@@ -52,6 +52,10 @@ return [
     'paynow' => [
         'integration_id' => env('PAYNOW_INTEGRATION_ID'),
         'integration_key' => env('PAYNOW_INTEGRATION_KEY'),
+        // While the integration is in TEST MODE, Paynow only accepts the
+        // merchant's own registered email. Set this to that email to test the
+        // full payment flow. Leave blank in production (live mode).
+        'test_email' => env('PAYNOW_TEST_EMAIL'),
     ],
 
     'google_analytics' => [
