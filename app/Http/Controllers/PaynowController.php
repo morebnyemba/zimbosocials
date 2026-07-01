@@ -77,13 +77,14 @@ class PaynowController extends Controller
             return $this->app->make(Paynow::class);
         }
 
-        // Paynow constructor signature is (id, key, resultUrl, returnUrl) — result first.
-        // resultUrl = server-to-server status update (our webhook); returnUrl = browser redirect back.
+        // Paynow SDK v1.0.5 constructor is (id, key, returnUrl, resultUrl):
+        //   returnUrl (3rd) = browser redirect back after payment  -> paynow.return (GET)
+        //   resultUrl (4th) = server-to-server status update (IPN)  -> paynow.update / webhook (POST)
         return new Paynow(
             config('services.paynow.integration_id'),
             config('services.paynow.integration_key'),
-            route('paynow.update'),
-            route('paynow.return')
+            route('paynow.return'),
+            route('paynow.update')
         );
     }
 
