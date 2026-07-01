@@ -66,7 +66,11 @@ class OrderController extends Controller
         );
 
         if (! $result['ok']) {
-            $field = ($result['code'] ?? 0) === 402 ? 'balance' : 'quantity';
+            $field = match ($result['code'] ?? 0) {
+                402 => 'balance',
+                409 => 'link',
+                default => 'quantity',
+            };
 
             return back()->withErrors([$field => $result['error']])->withInput();
         }
