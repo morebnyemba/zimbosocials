@@ -144,13 +144,25 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        // Accept JSON so Laravel returns 422 validation errors as JSON
+                        // instead of a 302 redirect (which the fetch can't parse).
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRF-TOKEN': (document.head.querySelector('meta[name="csrf-token"]') as any)?.content || ''
                     },
                     body: JSON.stringify({
                         amount: depositForm.data.amount,
+                        method: depositForm.data.method,
                         ...(isMobileProvider ? { phone: depositForm.data.phone } : {}),
                     })
                 });
+                if (!response.ok) {
+                    // Surface the real server error instead of a generic message.
+                    const err = await response.json().catch(() => ({}));
+                    const firstError = err?.errors ? Object.values(err.errors)[0] as string[] : null;
+                    notify('error', (firstError && firstError[0]) || err?.message || t('wallet_payment_gateway_error'));
+                    return;
+                }
                 const result = await response.json();
 
                 if (result.success && result.redirect_url) {
