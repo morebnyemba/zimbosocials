@@ -32,7 +32,7 @@ const getCategoryIconAndColor = (category: string) => {
     if (lower.includes('instagram')) return { icon: FaInstagram, color: 'text-pink-500', bg: 'bg-pink-50', border: 'border-pink-200' };
     if (lower.includes('youtube')) return { icon: FaYoutube, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' };
     if (lower.includes('tiktok')) return { icon: FaTiktok, color: 'text-black', bg: 'bg-zinc-100', border: 'border-zinc-300' };
-    if (lower.includes('twitter') || lower.includes('x')) return { icon: FaTwitter, color: 'text-blue-400', bg: 'bg-blue-50', border: 'border-blue-200' };
+    if (lower.includes('twitter') || lower.includes('x /') || lower === 'x') return { icon: FaTwitter, color: 'text-blue-400', bg: 'bg-blue-50', border: 'border-blue-200' };
     if (lower.includes('facebook')) return { icon: FaFacebook, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' };
     if (lower.includes('telegram')) return { icon: FaTelegram, color: 'text-sky-500', bg: 'bg-sky-50', border: 'border-sky-200' };
     if (lower.includes('spotify')) return { icon: FaSpotify, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200' };
