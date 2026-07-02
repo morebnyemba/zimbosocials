@@ -7,7 +7,19 @@ import { Plus, Trash2, Search, Filter, Edit2, X, AlertCircle } from 'lucide-reac
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface UpstreamProvider { id: number; name: string; url: string; }
-interface ServiceUpstream { id?: number; upstream_provider_id: number; external_service_id: string; priority: number; provider?: UpstreamProvider; }
+interface ServiceUpstream { id?: number; upstream_provider_id: number; external_service_id: string; priority: number; external_rate?: string | number | null; provider?: UpstreamProvider; }
+
+/**
+ * Cost of the primary upstream route (lowest priority number wins, matching
+ * dispatch order). A rate of 0 means "cost unknown" — the column defaults to 0
+ * and is refreshed daily by upstream:sync-services.
+ */
+const primaryCost = (upstreams?: ServiceUpstream[]): number | null => {
+    const primary = [...(upstreams ?? [])]
+        .sort((a, b) => a.priority - b.priority)
+        .find(u => Number(u.external_rate) > 0);
+    return primary ? Number(primary.external_rate) : null;
+};
 interface Service { id: number; name: string; name_sn?: string; category: string; type: string; rate: string; min_qty: number; max_qty: number; is_active: boolean; is_dripfeed: boolean; is_refill: boolean; refill_days?: number; avg_time_minutes?: number; display_order?: number; orders_count: number; description?: string; description_sn?: string; upstreams?: ServiceUpstream[]; }
 interface Props { services: { data: Service[]; links: any[]; total: number }; categories: string[]; providers: UpstreamProvider[]; stats: { total: number; active: number; inactive: number }; filters: Record<string, string>; }
 
@@ -155,7 +167,17 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                                         </td>
                                         <td className="py-4 px-6">
                                             <div className="font-black text-emerald-600">${Number(s.rate).toFixed(2)}</div>
-                                            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Per 1k</div>
+                                            {(() => {
+                                                const cost = primaryCost(s.upstreams);
+                                                if (cost === null) return <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Per 1k</div>;
+                                                const sell = Number(s.rate);
+                                                const belowCost = sell < cost;
+                                                return (
+                                                    <div className={`text-[10px] font-bold uppercase tracking-widest ${belowCost ? 'text-red-500' : 'text-zinc-400'}`}>
+                                                        Cost ${cost.toFixed(4)}{cost > 0 && <> · {belowCost ? 'LOSS' : `+${Math.round(((sell - cost) / cost) * 100)}%`}</>}
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="py-4 px-6">
                                             <div className="font-bold text-zinc-700">{Number(s.min_qty).toLocaleString()}</div>
@@ -274,6 +296,35 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                                                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Rate per 1000 ($)</label>
                                                 <input type="number" step="0.0001" value={form.rate} onChange={e => setForm({ ...form, rate: e.target.value })} className="w-full bg-emerald-50/50 border-none rounded-xl px-4 py-3 text-lg font-black text-emerald-700 focus:ring-2 focus:ring-emerald-500" />
                                             </div>
+                                            {(() => {
+                                                const cost = primaryCost(form.upstreams);
+                                                if (cost === null) return null;
+                                                const sell = Number(form.rate) || 0;
+                                                const profit = sell - cost;
+                                                const belowCost = sell > 0 && profit < 0;
+                                                return (
+                                                    <div className={`col-span-2 rounded-2xl border-2 p-4 ${belowCost ? 'border-red-200 bg-red-50' : 'border-zinc-100 bg-zinc-50'}`}>
+                                                        <div className="flex items-center justify-between gap-4 text-sm">
+                                                            <div>
+                                                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Provider Cost / 1k</div>
+                                                                <div className="font-black text-zinc-900">${cost.toFixed(4)}</div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Your Margin</div>
+                                                                <div className={`font-black ${belowCost ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                                    {sell > 0 ? <>{profit >= 0 ? '+' : ''}${profit.toFixed(4)} ({Math.round((profit / cost) * 100)}%)</> : '—'}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {belowCost && (
+                                                            <p className="mt-2 text-xs font-bold text-red-600 flex items-center gap-1.5">
+                                                                <AlertCircle size={14} /> Selling below provider cost — every order loses money.
+                                                            </p>
+                                                        )}
+                                                        <p className="mt-2 text-[10px] font-medium text-zinc-400">Cost from the priority-1 route; auto-refreshed daily at 02:00 by the provider sync.</p>
+                                                    </div>
+                                                );
+                                            })()}
                                             <div>
                                                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Min Quantity</label>
                                                 <input type="number" value={form.min_qty} onChange={e => setForm({ ...form, min_qty: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" />
@@ -327,6 +378,11 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                                                                 <Trash2 size={14} />
                                                             </button>
                                                         </div>
+                                                        {upstream.external_rate !== null && upstream.external_rate !== undefined && (
+                                                            <div className="mt-2 pl-2 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                                                                Provider cost: <span className="text-zinc-700">${Number(upstream.external_rate).toFixed(4)}</span> / 1k
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))
                                             )}
