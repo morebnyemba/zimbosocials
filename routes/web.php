@@ -188,6 +188,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/transactions/{transaction}/approve', [AdminTransactionController::class, 'approveDeposit'])->name('transactions.approve');
         Route::post('/transactions/{transaction}/reject', [AdminTransactionController::class, 'rejectDeposit'])->name('transactions.reject');
         Route::post('/transactions/{transaction}/process-withdrawal', [AdminTransactionController::class, 'processWithdrawal'])->name('transactions.process-withdrawal');
+        Route::post('/transactions/{transaction}/reject-withdrawal', [AdminTransactionController::class, 'rejectWithdrawal'])->name('transactions.reject-withdrawal');
 
         // Revenue analytics
         Route::get('/revenue', [AdminTransactionController::class, 'revenue'])->name('revenue');

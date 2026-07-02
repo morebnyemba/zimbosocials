@@ -23,6 +23,7 @@ class NotificationService
         'deposit_confirmed',
         'deposit_rejected',
         'withdrawal_processed',
+        'withdrawal_rejected',
         'order_refunded',
         'balance_adjusted',
         'role_changed',
@@ -37,6 +38,7 @@ class NotificationService
         'deposit_confirmed',
         'deposit_rejected',
         'withdrawal_processed',
+        'withdrawal_rejected',
         'order_refunded',
         'balance_adjusted',
         'role_changed',
@@ -166,6 +168,10 @@ class NotificationService
                 $user->name,
                 $data['amount'] ?? '—',
                 now()->format('M j, Y'),
+            ],
+            'withdrawal_rejected' => [
+                $user->name,
+                $data['refund_amount'] ?? $data['amount'] ?? '—',
             ],
             'order_status_changed' => [
                 $user->name,

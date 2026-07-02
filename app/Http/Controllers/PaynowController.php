@@ -128,10 +128,13 @@ class PaynowController extends Controller
                 ]);
             }
 
+            $this->depositService->reject($transaction, 'paynow_init_failed', 'Failed to initiate Paynow transaction.');
+
             return response()->json(['success' => false, 'message' => 'Failed to initiate Paynow transaction.'], 400);
 
         } catch (\Throwable $e) {
             Log::error('Paynow Init Error', $this->exceptionContext($e, ['method' => 'paynow', 'transaction_id' => $transaction->id]));
+            $this->depositService->reject($transaction, 'paynow_init_exception', 'Payment gateway error: '.$this->describeException($e));
 
             return response()->json(['success' => false, 'message' => 'Payment gateway error: '.$this->describeException($e)], 500);
         }
@@ -261,13 +264,13 @@ class PaynowController extends Controller
                 ]);
             }
 
-            $transaction->update(['status' => 'rejected', 'notes' => 'Mobile init failed']);
+            $this->depositService->reject($transaction, 'paynow_mobile_init_failed', 'Mobile init failed');
 
             return response()->json(['success' => false, 'message' => 'Could not send the payment request. Please try again.'], 400);
 
         } catch (\Throwable $e) {
             Log::error("Paynow {$config['label']} Init Error", $this->exceptionContext($e, ['provider' => $provider, 'transaction_id' => $transaction->id]));
-            $transaction->update(['status' => 'rejected', 'notes' => 'Exception: '.$this->describeException($e)]);
+            $this->depositService->reject($transaction, 'paynow_mobile_exception', 'Exception: '.$this->describeException($e));
 
             return response()->json(['success' => false, 'message' => 'Payment gateway error. Please try again later.'], 500);
         }

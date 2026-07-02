@@ -95,9 +95,11 @@ class DepositService
     }
 
     /**
-     * Reject a pending deposit transaction.
+     * Reject a pending deposit transaction. Notifies the user — every
+     * rejection path (gateway failure, admin manual reject) should tell the
+     * user their deposit didn't go through, not just credited ones.
      */
-    public function reject(Transaction $transaction, string $source = 'system'): bool
+    public function reject(Transaction $transaction, string $source = 'system', ?string $notes = null): bool
     {
         if ($transaction->status !== 'pending') {
             return false;
@@ -107,7 +109,7 @@ class DepositService
 
         $transaction->update([
             'status' => 'rejected',
-            'notes' => "Rejected via {$source}",
+            'notes' => $notes ?? "Rejected via {$source}",
         ]);
 
         AuditLog::log(
@@ -117,6 +119,14 @@ class DepositService
             modelId: (int) $transaction->getKey(),
             oldValues: ['status' => $oldStatus],
             newValues: ['status' => 'rejected', 'source' => $source],
+        );
+
+        NotificationService::notify(
+            (int) $transaction->user_id,
+            'deposit_rejected',
+            'Deposit Rejected',
+            'Your deposit request has been rejected. No funds were deducted.',
+            ['transaction_id' => $transaction->id]
         );
 
         return true;
