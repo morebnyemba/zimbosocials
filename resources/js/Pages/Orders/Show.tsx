@@ -9,6 +9,7 @@ interface Transaction { id: number; amount: number; type: string; description: s
 interface Order {
     id: number; link: string; quantity: number; charge: number
     status: string; created_at: string; rate_at_order: number
+    start_count?: number | null; remains?: number | null
     service?: Service; transaction?: Transaction
 }
 
@@ -45,14 +46,20 @@ export default function OrderShow({ order }: Props) {
                     </div>
 
                     <dl className="grid grid-cols-2 gap-3 text-sm">
-                        {[
+                        {([
                             ['Category', order.service?.category ?? '—'],
                             ['Quantity', order.quantity.toLocaleString()],
+                            order.start_count !== null && order.start_count !== undefined
+                                ? ['Start Count', order.start_count.toLocaleString()] : null,
+                            order.remains !== null && order.remains !== undefined
+                                ? ['Delivered So Far', Math.max(order.quantity - order.remains, 0).toLocaleString()] : null,
+                            order.remains !== null && order.remains !== undefined
+                                ? ['Remaining', order.remains.toLocaleString()] : null,
                             ['Charge', `$${Number(order.charge).toFixed(4)}`],
                             ['Rate', `$${Number(order.rate_at_order).toFixed(4)}/1k`],
                             ['Date', new Date(order.created_at).toLocaleString()],
-                        ].map(([label, value]) => (
-                            <div key={label as string}>
+                        ] as ([string, string] | null)[]).filter((row): row is [string, string] => row !== null).map(([label, value]) => (
+                            <div key={label}>
                                 <dt className="font-medium text-slate-500">{label}</dt>
                                 <dd className="mt-0.5 text-slate-900">{value}</dd>
                             </div>
@@ -62,6 +69,21 @@ export default function OrderShow({ order }: Props) {
                             <dd className="mt-0.5 break-all text-slate-900">{order.link}</dd>
                         </div>
                     </dl>
+
+                    {order.remains !== null && order.remains !== undefined && order.quantity > 0 && (
+                        <div className="pt-2">
+                            <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-500">
+                                <span>Delivery progress</span>
+                                <span>{Math.round((Math.max(order.quantity - order.remains, 0) / order.quantity) * 100)}%</span>
+                            </div>
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                    className="h-full rounded-full bg-emerald-500 transition-all"
+                                    style={{ width: `${Math.min(100, Math.round((Math.max(order.quantity - order.remains, 0) / order.quantity) * 100))}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {order.status === 'pending' && (
                         <button

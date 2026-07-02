@@ -7,6 +7,7 @@ use App\Models\ServiceUpstream;
 use App\Models\UpstreamProvider;
 use App\Services\AI\ServiceEnricher;
 use App\Services\Upstream\UpstreamProviderClient;
+use App\Support\ServiceCategoryNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -98,7 +99,7 @@ class AdminUpstreamProviderController extends Controller
                     'external_service_id' => $externalServiceId,
                     'name' => (string) ($service['name'] ?? 'Unnamed service'),
                     'description' => (string) ($service['desc'] ?? ''),
-                    'category' => (string) ($service['category'] ?? 'Default'),
+                    'category' => ServiceCategoryNormalizer::normalize((string) ($service['category'] ?? 'Default')),
                     'type' => (string) ($service['type'] ?? 'Default'),
                     'external_rate' => round((float) ($service['rate'] ?? 0), 4),
                     'min_qty' => (int) ($service['min'] ?? 0),
@@ -259,7 +260,7 @@ class AdminUpstreamProviderController extends Controller
             'description' => $description,
             'description_sn' => $enriched['description_sn'] ?? $description,
             'description_nd' => $enriched['description_nd'] ?? $description,
-            'category' => $providerService['category'] ?? 'Default',
+            'category' => ServiceCategoryNormalizer::normalize((string) ($providerService['category'] ?? 'Default')),
             'type' => $providerService['type'] ?? 'Default',
             'rate' => round($localRate, 4),
             'min_qty' => (int) ($providerService['min'] ?? 0),

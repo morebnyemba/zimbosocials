@@ -31,7 +31,7 @@ const getCategoryMeta = (category: string) => {
     if (lower.includes('instagram')) return { label: 'Instagram', icon: FaInstagram, color: 'text-pink-500', bg: 'bg-pink-500/10' };
     if (lower.includes('youtube')) return { label: 'YouTube', icon: FaYoutube, color: 'text-red-500', bg: 'bg-red-500/10' };
     if (lower.includes('tiktok')) return { label: 'TikTok', icon: FaTiktok, color: 'text-zinc-900', bg: 'bg-zinc-900/10' };
-    if (lower.includes('twitter') || lower.includes('x')) return { label: 'Twitter / X', icon: FaTwitter, color: 'text-blue-400', bg: 'bg-blue-400/10' };
+    if (lower.includes('twitter') || lower.includes('x /') || lower === 'x') return { label: 'Twitter / X', icon: FaTwitter, color: 'text-blue-400', bg: 'bg-blue-400/10' };
     if (lower.includes('facebook')) return { label: 'Facebook', icon: FaFacebook, color: 'text-blue-600', bg: 'bg-blue-600/10' };
     if (lower.includes('telegram')) return { label: 'Telegram', icon: FaTelegram, color: 'text-sky-500', bg: 'bg-sky-500/10' };
     if (lower.includes('whatsapp')) return { label: 'WhatsApp', icon: FaWhatsapp, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };

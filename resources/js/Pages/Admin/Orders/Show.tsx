@@ -4,7 +4,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { RefreshCcw, LoaderCircle } from 'lucide-react';
 
-interface Order { id: number; user?: any; service?: any; status: string; charge: string; quantity: number; link: string; external_order_id?: string; push_attempts?: number; pushed_to_upstream?: boolean; upstream_last_error?: string; created_at: string; started_at?: string; completed_at?: string; transaction?: any; }
+interface Order { id: number; user?: any; service?: any; status: string; charge: string; quantity: number; link: string; external_order_id?: string; push_attempts?: number; pushed_to_upstream?: boolean; upstream_last_error?: string; start_count?: number | null; remains?: number | null; created_at: string; started_at?: string; completed_at?: string; transaction?: any; }
 interface Props { order: Order; }
 
 const sC: Record<string, string> = { pending: 'bg-amber-100 text-amber-800 border-amber-200', processing: 'bg-blue-100 text-blue-800 border-blue-200', in_progress: 'bg-indigo-100 text-indigo-800 border-indigo-200', completed: 'bg-brand-green/10 text-brand-green border-brand-green/20', partial: 'bg-orange-100 text-orange-800 border-orange-200', cancelled: 'bg-red-100 text-red-800 border-red-200', refunded: 'bg-gray-100 text-gray-800 border-gray-200' };
@@ -67,6 +67,24 @@ export default function OrderShow({ order }: Props) {
                             <span className="text-gray-500 font-medium">Charge</span>
                             <span className="text-gray-900 font-mono font-bold">${Number(order.charge).toFixed(2)}</span>
                         </div>
+                        {order.start_count !== null && order.start_count !== undefined && (
+                            <div className="flex flex-col space-y-1">
+                                <span className="text-gray-500 font-medium">Start Count</span>
+                                <span className="text-gray-900 font-mono">{order.start_count.toLocaleString()}</span>
+                            </div>
+                        )}
+                        {order.remains !== null && order.remains !== undefined && (
+                            <>
+                                <div className="flex flex-col space-y-1">
+                                    <span className="text-gray-500 font-medium">Delivered So Far</span>
+                                    <span className="text-gray-900 font-mono">{Math.max(order.quantity - order.remains, 0).toLocaleString()}</span>
+                                </div>
+                                <div className="flex flex-col space-y-1">
+                                    <span className="text-gray-500 font-medium">Remaining</span>
+                                    <span className="text-gray-900 font-mono">{order.remains.toLocaleString()}</span>
+                                </div>
+                            </>
+                        )}
                         <div className="flex flex-col space-y-1 md:col-span-2">
                             <span className="text-gray-500 font-medium">Link</span>
                             <a href={order.link} target="_blank" rel="noopener" className="text-brand-green hover:underline truncate block">{order.link}</a>
