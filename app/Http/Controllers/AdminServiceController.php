@@ -160,13 +160,27 @@ class AdminServiceController extends Controller
                 $service->upstreams()->whereNotIn('upstream_provider_id', $newProviderIds)->delete();
 
                 foreach ($data['upstreams'] as $upstream) {
+                    $existing = $service->upstreams()
+                        ->where('upstream_provider_id', $upstream['upstream_provider_id'])
+                        ->first();
+
+                    $values = [
+                        'external_service_id' => $upstream['external_service_id'],
+                        'priority' => $upstream['priority'],
+                        'is_active' => true,
+                    ];
+
+                    // Repointing a route at a different provider service makes the
+                    // cached provider cost belong to the old one — reset it to 0
+                    // ("unknown") so the admin UI doesn't show a wrong cost until
+                    // the nightly service sync fetches the real rate.
+                    if ($existing && (string) $existing->external_service_id !== (string) $upstream['external_service_id']) {
+                        $values['external_rate'] = 0;
+                    }
+
                     $service->upstreams()->updateOrCreate(
                         ['upstream_provider_id' => $upstream['upstream_provider_id']],
-                        [
-                            'external_service_id' => $upstream['external_service_id'],
-                            'priority' => $upstream['priority'],
-                            'is_active' => true,
-                        ]
+                        $values
                     );
                 }
             } else {
