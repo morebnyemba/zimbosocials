@@ -34,6 +34,8 @@ import {
 export default function UserShow({ targetUser, recent_orders, recent_transactions, order_stats, financial_stats, services }: any) {
     const [showBalanceModal, setShowBalanceModal] = useState(false);
     const [balanceForm, setBalanceForm] = useState({ amount: '', reason: '' });
+    const [balanceProcessing, setBalanceProcessing] = useState(false);
+    const [balanceError, setBalanceError] = useState<string | null>(null);
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [roleForm, setRoleForm] = useState({ role: targetUser.role, admin_role: targetUser.admin_role || 'support', account_type: targetUser.account_type || 'individual' });
     const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; danger?: boolean } | null>(null);
@@ -42,11 +44,22 @@ export default function UserShow({ targetUser, recent_orders, recent_transaction
 
     const adjustBalance = () => {
         if (!balanceForm.amount) return;
+        setBalanceError(null);
+        setBalanceProcessing(true);
         router.post(route('admin.users.balance', { user: targetUser.id }), balanceForm, {
+            preserveScroll: true,
             onSuccess: () => {
                 setShowBalanceModal(false);
                 setBalanceForm({ amount: '', reason: '' });
-            }
+            },
+            onError: (errors) => {
+                // Backend validation/authorization failures were previously
+                // silent — the modal would just sit there with no feedback,
+                // looking exactly like a dead button.
+                const first = Object.values(errors)[0];
+                setBalanceError(Array.isArray(first) ? first[0] : (first as string) || 'Could not adjust balance. Please try again.');
+            },
+            onFinish: () => setBalanceProcessing(false),
         });
     };
 
@@ -132,7 +145,7 @@ export default function UserShow({ targetUser, recent_orders, recent_transaction
                                     <p className="text-5xl font-black text-indigo-600 font-mono tracking-tighter">
                                         ${Number(targetUser.balance || 0).toFixed(2)}
                                     </p>
-                                    <button onClick={() => setShowBalanceModal(true)} className="h-12 w-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 transition-all">
+                                    <button onClick={() => { setBalanceError(null); setShowBalanceModal(true); }} className="h-12 w-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 transition-all">
                                         <FaPlus className="w-5 h-5" />
                                     </button>
                                 </div>
@@ -300,11 +313,24 @@ export default function UserShow({ targetUser, recent_orders, recent_transaction
                                     <button onClick={() => setShowBalanceModal(false)} className="text-2xl font-black font-mono">&times;</button>
                                 </div>
                                 <div className="p-10 space-y-8">
-                                    <input type="number" step="0.01" value={balanceForm.amount} onChange={e => setBalanceForm(f => ({...f, amount: e.target.value}))} placeholder="0.00" className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-[1.8rem] px-8 py-8 text-5xl font-black text-zinc-900 font-mono focus:outline-none focus:border-indigo-500" />
-                                    <textarea value={balanceForm.reason} onChange={e => setBalanceForm(f => ({...f, reason: e.target.value}))} placeholder="Reason..." rows={3} className="w-full bg-zinc-50 border border-zinc-200 rounded-[1.5rem] px-8 py-6 text-sm font-bold text-zinc-600 focus:outline-none" />
+                                    {balanceError && (
+                                        <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-4 text-sm font-bold text-red-700">
+                                            {balanceError}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-2">Amount (use a negative number to deduct)</label>
+                                        <input type="number" step="0.01" value={balanceForm.amount} onChange={e => setBalanceForm(f => ({...f, amount: e.target.value}))} placeholder="0.00" className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-[1.8rem] px-8 py-8 text-5xl font-black text-zinc-900 font-mono focus:outline-none focus:border-indigo-500" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-2">Reason (required)</label>
+                                        <textarea value={balanceForm.reason} onChange={e => setBalanceForm(f => ({...f, reason: e.target.value}))} placeholder="Why is this adjustment being made?" rows={3} className="w-full bg-zinc-50 border border-zinc-200 rounded-[1.5rem] px-8 py-6 text-sm font-bold text-zinc-600 focus:outline-none" />
+                                    </div>
                                 </div>
                                 <div className="p-10 bg-zinc-50 border-t border-zinc-100">
-                                    <button onClick={adjustBalance} disabled={!balanceForm.amount || !balanceForm.reason} className="w-full bg-indigo-600 text-white py-6 rounded-[1.8rem] font-black text-sm uppercase tracking-widest">Execute</button>
+                                    <button onClick={adjustBalance} disabled={!balanceForm.amount || !balanceForm.reason || balanceProcessing} className="w-full bg-indigo-600 text-white py-6 rounded-[1.8rem] font-black text-sm uppercase tracking-widest disabled:opacity-50">
+                                        {balanceProcessing ? 'Processing…' : 'Execute'}
+                                    </button>
                                 </div>
                             </motion.div>
                         </div>
