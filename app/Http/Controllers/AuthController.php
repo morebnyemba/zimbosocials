@@ -136,6 +136,13 @@ class AuthController extends Controller
         // Send welcome WhatsApp notification
         NotificationService::sendWelcome($user);
 
+        NotificationService::notifyAdmins(
+            'admin_new_registration',
+            'New User Registered',
+            "{$user->name} ({$user->email}) just signed up as a {$user->role}.",
+            ['user_name' => $user->name, 'user_email' => $user->email, 'role' => $user->role]
+        );
+
         $request->session()->forget('referral_code');
 
         return redirect()->route($this->defaultDashboardRoute($user))

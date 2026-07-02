@@ -29,6 +29,8 @@ class NotificationService
         'role_changed',
         'order_status_changed',
         'contract_application',
+        'admin_new_registration',
+        'admin_new_order',
     ];
 
     /**
@@ -108,6 +110,21 @@ class NotificationService
         }
 
         return $notification;
+    }
+
+    /**
+     * Notify every active admin (in-app always; WhatsApp/email per the same
+     * WHATSAPP_TYPES/EMAIL_TYPES rules as notify()). Used for platform-wide
+     * operational events an admin should stay in the loop on — new
+     * registrations, new orders, orders finishing without anyone clicking
+     * anything (the scheduled sync resolving a stuck/completed order).
+     */
+    public static function notifyAdmins(string $type, string $title, string $body, array $data = []): void
+    {
+        User::where('role', 'admin')
+            ->where('is_active', true)
+            ->pluck('id')
+            ->each(fn (int $adminId) => self::notify($adminId, $type, $title, $body, $data));
     }
 
     /**
@@ -204,6 +221,17 @@ class NotificationService
             'ticket_reply' => [
                 $user->name,
                 $data['ticket_subject'] ?? '—',
+            ],
+            'admin_new_registration' => [
+                $data['user_name'] ?? '—',
+                $data['user_email'] ?? '—',
+                $data['role'] ?? '—',
+            ],
+            'admin_new_order' => [
+                (string) ($data['order_id'] ?? ''),
+                $data['user_name'] ?? '—',
+                $data['service_name'] ?? '—',
+                $data['amount'] ?? '—',
             ],
             default => [$user->name],
         };

@@ -1,10 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    FaBox, FaHistory, FaCheckCircle, FaExclamationTriangle, 
-    FaWallet, FaFileContract, FaUserCircle, FaHeadset, 
-    FaLock, FaBell, FaCheckDouble, FaInbox
+import {
+    FaBox, FaHistory, FaCheckCircle, FaExclamationTriangle,
+    FaWallet, FaFileContract, FaUserCircle, FaHeadset,
+    FaLock, FaBell, FaCheckDouble, FaInbox, FaUserPlus, FaShoppingCart
 } from 'react-icons/fa';
 
 interface Notification { id: string; type: string; title: string; body: string; data?: any; read_at?: string; created_at: string; }
@@ -23,6 +23,9 @@ const getIconForType = (type: string) => {
         case 'balance_adjusted': return <FaWallet className="text-amber-600" />;
         case 'ticket_reply': return <FaHeadset className="text-cyan-500" />;
         case 'ticket_closed': return <FaLock className="text-zinc-500" />;
+        case 'admin_new_registration': return <FaUserPlus className="text-emerald-500" />;
+        case 'admin_new_order': return <FaShoppingCart className="text-blue-500" />;
+        case 'admin_order_completed': return <FaCheckCircle className="text-brand-green" />;
         default: return <FaBell className="text-zinc-400" />;
     }
 };
@@ -40,6 +43,9 @@ const getBgForType = (type: string) => {
         case 'balance_adjusted': return 'bg-amber-50 border-amber-100';
         case 'ticket_reply': return 'bg-cyan-50 border-cyan-100';
         case 'ticket_closed': return 'bg-zinc-100 border-zinc-200';
+        case 'admin_new_registration': return 'bg-emerald-50 border-emerald-100';
+        case 'admin_new_order': return 'bg-blue-50 border-blue-100';
+        case 'admin_order_completed': return 'bg-brand-green/10 border-brand-green/20';
         default: return 'bg-zinc-50 border-zinc-100';
     }
 };
