@@ -85,6 +85,25 @@ return [
             'buttons' => [],
         ],
 
+        // ─── Admin Alerts ────────────────────────────────────────────────────
+        'admin_new_registration' => [
+            'category' => 'UTILITY',
+            'body' => "🆕 *New Registration*\n\n{{1}} ({{2}}) just signed up as a *{{3}}*.",
+            'params' => ['user_name', 'user_email', 'role'],
+            'header' => null,
+            'footer' => 'Zimbo Socials Admin',
+            'buttons' => [],
+        ],
+
+        'admin_new_order' => [
+            'category' => 'UTILITY',
+            'body' => "🛒 *New Order*\n\nOrder *#{{1}}* placed by {{2}}.\n\nService: {{3}}\nAmount: {{4}}",
+            'params' => ['order_id', 'user_name', 'service_name', 'amount'],
+            'header' => null,
+            'footer' => 'Zimbo Socials Admin',
+            'buttons' => [],
+        ],
+
         // ─── Balance ─────────────────────────────────────────────────────────
         'balance_adjusted' => [
             'category' => 'UTILITY',

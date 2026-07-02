@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\NotificationService;
 use App\Services\OrderService;
 use App\Services\ReferralService;
 use App\Services\Upstream\OrderDispatchService;
@@ -77,6 +78,13 @@ class OrderController extends Controller
 
         $order = $result['order'];
         $referralService->rewardReferrerOnReferredOrder($order);
+
+        NotificationService::notifyAdmins(
+            'admin_new_order',
+            'New Order Placed',
+            "Order #{$order->id} placed by {$user->name} — {$service->name} (\${$order->charge}).",
+            ['order_id' => $order->id, 'user_name' => $user->name, 'service_name' => $service->name, 'amount' => "\${$order->charge}"]
+        );
 
         if (! $result['dispatch']['ok']) {
             return redirect()->route('orders.index')

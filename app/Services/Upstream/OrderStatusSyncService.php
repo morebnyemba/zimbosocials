@@ -116,6 +116,21 @@ class OrderStatusSyncService
                 );
             }
 
+            // Admins get an in-app nudge whenever an order reaches a terminal
+            // state through the automated sync — this is exactly the case
+            // where "something finished" but nobody clicked anything, so an
+            // admin watching the dashboard would otherwise never know.
+            // In-app only (not WhatsApp/email) — this can fire per order and
+            // would be too noisy on those channels at any real order volume.
+            if (in_array($newStatus, ['completed', 'partial', 'cancelled', 'refunded'], true)) {
+                NotificationService::notifyAdmins(
+                    'admin_order_completed',
+                    "Order #{$order->id} {$newStatus}",
+                    "Order #{$order->id} ({$order->service->name}) for {$user?->name} is now {$newStatus} via {$source}.",
+                    ['order_id' => $order->id, 'status' => $newStatus, 'source' => $source]
+                );
+            }
+
             Log::info("Order #{$order->id} synced ({$source}): {$oldStatus} -> {$newStatus}. Refund: \${$refundAmount}");
         });
     }
