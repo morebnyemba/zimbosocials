@@ -3,14 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Models\Order;
-use App\Models\Transaction;
 use App\Models\UpstreamProvider;
-use App\Models\User;
-use App\Services\NotificationService;
+use App\Services\Upstream\OrderStatusSyncService;
 use App\Services\Upstream\UpstreamProviderClient;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class SyncUpstreamOrders extends Command
 {
@@ -18,7 +14,7 @@ class SyncUpstreamOrders extends Command
 
     protected $description = 'Syncs status of pending/processing orders from the upstream providers';
 
-    public function handle(UpstreamProviderClient $client): int
+    public function handle(UpstreamProviderClient $client, OrderStatusSyncService $syncService): int
     {
         $orders = Order::where('pushed_to_upstream', true)
             ->whereNotNull('external_order_id')
@@ -69,37 +65,10 @@ class SyncUpstreamOrders extends Command
                         continue;
                     }
 
-                    $upstreamStatus = strtolower($data['status'] ?? '');
-
-                    // Map upstream status to local status. Local enum uses British
-                    // spelling ('cancelled') — matching the American 'canceled' here
-                    // previously produced a value not in the DB enum, silently
-                    // breaking cancellation sync.
-                    $localStatus = match ($upstreamStatus) {
-                        'pending', 'in progress', 'inprogress' => 'processing',
-                        'processing' => 'processing',
-                        'completed' => 'completed',
-                        'partial' => 'partial',
-                        'canceled', 'cancelled' => 'cancelled',
-                        default => null,
-                    };
-
-                    // Many upstream providers never flip their own status string to
-                    // "Completed" even once delivery is actually finished — the order
-                    // just sits reporting "Processing"/"Pending" forever with
-                    // remains=0. Trust remains=0 (fully delivered) over a stale or
-                    // unrecognized status string, except for explicit terminal states
-                    // where the provider is telling us something more specific.
-                    if (
-                        array_key_exists('remains', $data)
-                        && (int) $data['remains'] === 0
-                        && ! in_array($localStatus, ['partial', 'cancelled', 'refunded'], true)
-                    ) {
-                        $localStatus = 'completed';
-                    }
+                    $localStatus = $syncService->resolveLocalStatus($data);
 
                     if ($localStatus && $localStatus !== $order->status) {
-                        $this->processOrderUpdate($order, $localStatus, $data);
+                        $syncService->applyStatusUpdate($order, $localStatus, $data, 'scheduled_sync');
                         $updatedCount++;
                     } elseif ($order->status === 'processing') {
                         // Update start_count and remains silently if no status change
@@ -115,71 +84,5 @@ class SyncUpstreamOrders extends Command
         $this->info("Successfully synced orders. Updated: {$updatedCount}");
 
         return self::SUCCESS;
-    }
-
-    private function processOrderUpdate(Order $order, string $newStatus, array $upstreamData): void
-    {
-        DB::transaction(function () use ($order, $newStatus, $upstreamData) {
-            $oldStatus = $order->status;
-            $user = User::find($order->user_id);
-            $charge = (float) $order->charge;
-            $remains = (int) ($upstreamData['remains'] ?? 0);
-            $startCount = (int) ($upstreamData['start_count'] ?? $order->start_count);
-
-            $refundAmount = 0;
-
-            if (in_array($newStatus, ['canceled', 'cancelled', 'refunded', 'failed'])) {
-                $refundAmount = $charge;
-            } elseif ($newStatus === 'partial') {
-                // Refund proportional to remains
-                if ($order->quantity > 0 && $remains > 0) {
-                    $refundAmount = round(($remains / $order->quantity) * $charge, 4);
-                }
-            }
-
-            // Update order
-            $order->update([
-                'status' => $newStatus,
-                'start_count' => $startCount,
-                'remains' => $remains,
-            ]);
-
-            // Process refund if needed
-            if ($refundAmount > 0 && $user) {
-                $lockedUser = User::lockForUpdate()->findOrFail($user->id);
-                $balanceBefore = (float) $lockedUser->balance;
-                $lockedUser->increment('balance', $refundAmount);
-
-                Transaction::create([
-                    'user_id' => $lockedUser->id,
-                    'order_id' => $order->id,
-                    'type' => 'refund',
-                    'amount' => $refundAmount,
-                    'balance_before' => $balanceBefore,
-                    'balance_after' => $balanceBefore + $refundAmount,
-                    'status' => 'completed',
-                    'notes' => "Auto-refund for order #{$order->id} ({$newStatus})",
-                ]);
-
-                NotificationService::notify(
-                    $user->id,
-                    'order_refunded',
-                    "Order #{$order->id} Refunded",
-                    "Your order #{$order->id} was marked as {$newStatus}. \${$refundAmount} has been refunded to your wallet.",
-                    ['order_id' => $order->id, 'refund_amount' => $refundAmount]
-                );
-            } elseif ($user) {
-                // Just a normal status change notification
-                NotificationService::notify(
-                    $user->id,
-                    'order_status_changed',
-                    "Order #{$order->id} Updated",
-                    "Your order #{$order->id} is now {$newStatus}.",
-                    ['order_id' => $order->id, 'status' => $newStatus, 'service_name' => $order->service->name, 'quantity' => $order->quantity]
-                );
-            }
-
-            Log::info("Order #{$order->id} synced: {$oldStatus} -> {$newStatus}. Refund: \${$refundAmount}");
-        });
     }
 }

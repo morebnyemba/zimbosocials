@@ -180,6 +180,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/orders', [AdminOrderController::class, 'store'])->name('orders.store');
         Route::get('/orders/{order}', [AdminOrderController::class, 'show'])->name('orders.show');
         Route::post('/orders/{order}/status', [AdminOrderController::class, 'updateStatus'])->name('orders.status');
+        Route::post('/orders/{order}/sync', [AdminOrderController::class, 'forceSync'])->middleware('throttle:20,1')->name('orders.sync');
         Route::post('/orders/{order}/refund', [AdminOrderController::class, 'refund'])->name('orders.refund');
 
         // Transaction management
