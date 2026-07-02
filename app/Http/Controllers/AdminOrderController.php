@@ -8,6 +8,8 @@ use App\Models\AuditLog;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Services\Upstream\OrderStatusSyncService;
+use App\Services\Upstream\UpstreamProviderClient;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -121,6 +123,28 @@ class AdminOrderController extends Controller
         );
 
         return back()->with('success', "Order #{$order->id} status changed to {$data['status']}.");
+    }
+
+    /**
+     * Immediately re-check this order's status against its upstream provider
+     * and apply the result — the same resolution logic the scheduled sync
+     * uses (remains=0 is trusted as "fully delivered" even if the provider's
+     * own status string never flips to "Completed").
+     */
+    public function forceSync(Order $order, OrderStatusSyncService $syncService, UpstreamProviderClient $client): RedirectResponse
+    {
+        $result = $syncService->syncSingleOrder($order, $client);
+
+        AuditLog::dispatchLog(
+            'order.force_synced',
+            Auth::id(),
+            Order::class,
+            $order->id,
+            null,
+            ['changed' => $result['changed'], 'message' => $result['message']],
+        );
+
+        return back()->with($result['changed'] ? 'success' : 'info', $result['message']);
     }
 
     /**

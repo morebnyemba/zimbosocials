@@ -3,7 +3,7 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import Modal from '@/Components/Modal';
 import { PageProps } from '@/types';
 import { Head, useForm, router } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Edit2, Plus, Trash2, CheckCircle2, XCircle, RefreshCcw, Download, LoaderCircle, Search } from 'lucide-react';
 
 interface UpstreamProvider {
@@ -49,10 +49,13 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
     const [loadingImportServices, setLoadingImportServices] = useState(false);
     const [importingServices, setImportingServices] = useState(false);
     const [importSearch, setImportSearch] = useState('');
+    const [importCategory, setImportCategory] = useState('');
+    const [hideAlreadyImported, setHideAlreadyImported] = useState(false);
     const [bulkMarkupType, setBulkMarkupType] = useState<'percentage' | 'fixed'>('percentage');
     const [bulkMarkupValue, setBulkMarkupValue] = useState('');
     const [importError, setImportError] = useState('');
     const [enrichWithAi, setEnrichWithAi] = useState(false);
+    const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
     const { data, setData, post, put, delete: destroy, processing, errors, reset } = useForm({
         name: '',
@@ -114,10 +117,13 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
         setLoadingImportServices(false);
         setImportingServices(false);
         setImportSearch('');
+        setImportCategory('');
+        setHideAlreadyImported(false);
         setBulkMarkupType('percentage');
         setBulkMarkupValue('');
         setImportError('');
         setEnrichWithAi(false);
+        setCollapsedCategories({});
     };
 
     const openImportModal = async (provider: UpstreamProvider) => {
@@ -126,9 +132,12 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
         setAvailableServices([]);
         setServiceSelections({});
         setImportSearch('');
+        setImportCategory('');
+        setHideAlreadyImported(false);
         setBulkMarkupType('percentage');
         setBulkMarkupValue('');
         setImportError('');
+        setCollapsedCategories({});
 
         try {
             const response = await fetch(route('admin.upstream-providers.available-services', provider.id), {
@@ -177,20 +186,49 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
         }));
     };
 
+    // Categories present in this provider's catalog, alphabetically, with counts —
+    // drives the category filter dropdown and the grouped table below.
+    const categoryCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        availableServices.forEach(service => {
+            counts[service.category] = (counts[service.category] ?? 0) + 1;
+        });
+        return counts;
+    }, [availableServices]);
+
+    const categories = useMemo(
+        () => Object.keys(categoryCounts).sort((a, b) => a.localeCompare(b)),
+        [categoryCounts]
+    );
+
     const visibleServices = useMemo(() => {
         const query = importSearch.trim().toLowerCase();
 
-        if (!query) {
-            return availableServices;
-        }
+        return availableServices.filter(service => {
+            if (importCategory && service.category !== importCategory) return false;
+            if (hideAlreadyImported && service.already_imported) return false;
+            if (!query) return true;
 
-        return availableServices.filter(service => (
-            service.name.toLowerCase().includes(query)
-            || service.category.toLowerCase().includes(query)
-            || service.type.toLowerCase().includes(query)
-            || service.external_service_id.toLowerCase().includes(query)
-        ));
-    }, [availableServices, importSearch]);
+            return (
+                service.name.toLowerCase().includes(query)
+                || service.category.toLowerCase().includes(query)
+                || service.type.toLowerCase().includes(query)
+                || service.external_service_id.toLowerCase().includes(query)
+            );
+        });
+    }, [availableServices, importSearch, importCategory, hideAlreadyImported]);
+
+    // Visible services grouped by category, in the same alphabetical order as
+    // the category filter, each with its own selectable/selected counts.
+    const groupedVisibleServices = useMemo(() => {
+        const groups = new Map<string, ImportableService[]>();
+        visibleServices.forEach(service => {
+            const list = groups.get(service.category) ?? [];
+            list.push(service);
+            groups.set(service.category, list);
+        });
+        return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+    }, [visibleServices]);
 
     const selectableVisibleServices = visibleServices.filter(service => !service.already_imported);
     const allVisibleSelected = selectableVisibleServices.length > 0
@@ -213,6 +251,27 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
 
             return next;
         });
+    };
+
+    const toggleCategorySelections = (category: string, selected: boolean) => {
+        setServiceSelections(current => {
+            const next = { ...current };
+
+            visibleServices
+                .filter(service => service.category === category && !service.already_imported)
+                .forEach(service => {
+                    next[service.external_service_id] = {
+                        ...next[service.external_service_id],
+                        selected,
+                    };
+                });
+
+            return next;
+        });
+    };
+
+    const toggleCategoryCollapsed = (category: string) => {
+        setCollapsedCategories(current => ({ ...current, [category]: !current[category] }));
     };
 
     const applyBulkMarkup = () => {
@@ -490,7 +549,7 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
                         </div>
                     ) : (
                         <>
-                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px]">
                                 <div className="relative">
                                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                                     <input
@@ -501,6 +560,28 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
                                         className="w-full rounded-xl border border-gray-300 px-10 py-2.5 text-sm text-gray-900 outline-none transition focus:border-brand-green focus:ring-1 focus:ring-brand-green/20"
                                     />
                                 </div>
+                                <select
+                                    value={importCategory}
+                                    onChange={e => setImportCategory(e.target.value)}
+                                    className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-brand-green focus:ring-1 focus:ring-brand-green/20"
+                                >
+                                    <option value="">All categories ({availableServices.length})</option>
+                                    {categories.map(category => (
+                                        <option key={category} value={category}>{category} ({categoryCounts[category]})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
+                                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                                    <input
+                                        type="checkbox"
+                                        checked={hideAlreadyImported}
+                                        onChange={e => setHideAlreadyImported(e.target.checked)}
+                                        className="rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                                    />
+                                    Hide already-imported services
+                                </label>
                                 <div className="flex items-center rounded-xl border border-gray-300 bg-white overflow-hidden focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green/20">
                                     <select
                                         value={bulkMarkupType}
@@ -570,77 +651,114 @@ export default function UpstreamProvidersIndex({ auth, providers, aiEnrichmentEn
                                                 </td>
                                             </tr>
                                         ) : (
-                                            visibleServices.map(service => {
-                                                const selection = serviceSelections[service.external_service_id] ?? {
-                                                    selected: false,
-                                                    markup_type: service.default_markup_type || 'percentage',
-                                                    markup_value: String(service.default_markup_value || 0),
-                                                };
-                                                const markupType = selection.markup_type || 'percentage';
-                                                const markupVal = Number(selection.markup_value || 0);
-                                                const localRate = markupType === 'percentage'
-                                                    ? service.external_rate * (1 + (markupVal / 100))
-                                                    : service.external_rate + markupVal;
+                                            groupedVisibleServices.map(([category, servicesInCategory]) => {
+                                                const selectableInCategory = servicesInCategory.filter(s => !s.already_imported);
+                                                const allCategorySelected = selectableInCategory.length > 0
+                                                    && selectableInCategory.every(s => serviceSelections[s.external_service_id]?.selected);
+                                                const selectedInCategory = selectableInCategory.filter(s => serviceSelections[s.external_service_id]?.selected).length;
+                                                const isCollapsed = Boolean(collapsedCategories[category]);
 
                                                 return (
-                                                    <tr key={service.external_service_id} className={service.already_imported ? 'bg-gray-50/80' : ''}>
-                                                        <td className="px-4 py-4 align-top">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={service.already_imported ? true : selection.selected}
-                                                                disabled={service.already_imported}
-                                                                onChange={e => updateServiceSelection(service.external_service_id, { selected: e.target.checked })}
-                                                                className="mt-1 rounded border-gray-300 text-brand-green focus:ring-brand-green"
-                                                            />
-                                                        </td>
-                                                        <td className="px-4 py-4 align-top">
-                                                            <div className="font-semibold text-gray-900">{service.name}</div>
-                                                            <div className="mt-1 text-xs text-gray-500">
-                                                                ID {service.external_service_id} • {service.category} • {service.type}
-                                                            </div>
-                                                            <div className="mt-1 text-xs text-gray-500">
-                                                                Qty {service.min_qty} - {service.max_qty}
-                                                                {service.is_refill ? ' • Refill' : ''}
-                                                                {service.is_dripfeed ? ' • Dripfeed' : ''}
-                                                            </div>
-                                                            {service.description && (
-                                                                <p className="mt-2 line-clamp-2 text-xs text-gray-500">{service.description}</p>
-                                                            )}
-                                                            {service.already_imported && (
-                                                                <p className="mt-2 text-xs font-medium text-amber-700">
-                                                                    Already linked{service.existing_service_name ? ` to ${service.existing_service_name}` : ''}.
-                                                                </p>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-4 align-top font-mono text-gray-900">
-                                                            ${service.external_rate.toFixed(4)}
-                                                        </td>
-                                                        <td className="px-4 py-4 align-top">
-                                                            <div className="flex items-center rounded-lg border border-gray-300 bg-white focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green/20 overflow-hidden w-max">
-                                                                <select
-                                                                    value={markupType}
-                                                                    disabled={service.already_imported || !selection.selected}
-                                                                    onChange={e => updateServiceSelection(service.external_service_id, { markup_type: e.target.value as 'percentage' | 'fixed' })}
-                                                                    className="border-none bg-gray-50 px-2 py-2 text-sm text-gray-700 outline-none focus:ring-0 disabled:bg-gray-100 disabled:text-gray-400"
-                                                                >
-                                                                    <option value="percentage">%</option>
-                                                                    <option value="fixed">$</option>
-                                                                </select>
+                                                    <Fragment key={category}>
+                                                        <tr className="bg-gray-100/80">
+                                                            <td className="px-4 py-2.5 align-middle">
                                                                 <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    step="0.01"
-                                                                    value={selection.markup_value}
-                                                                    disabled={service.already_imported || !selection.selected}
-                                                                    onChange={e => updateServiceSelection(service.external_service_id, { markup_value: e.target.value })}
-                                                                    className="w-20 border-none px-2 py-2 text-sm text-gray-900 outline-none focus:ring-0 disabled:bg-gray-100 disabled:text-gray-400"
+                                                                    type="checkbox"
+                                                                    checked={allCategorySelected}
+                                                                    disabled={selectableInCategory.length === 0}
+                                                                    onChange={e => toggleCategorySelections(category, e.target.checked)}
+                                                                    className="rounded border-gray-300 text-brand-green focus:ring-brand-green"
                                                                 />
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-4 align-top font-mono text-gray-900">
-                                                            ${localRate.toFixed(4)}
-                                                        </td>
-                                                    </tr>
+                                                            </td>
+                                                            <td colSpan={4} className="px-4 py-2.5 align-middle">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => toggleCategoryCollapsed(category)}
+                                                                    className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:text-gray-900"
+                                                                >
+                                                                    <span className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▾</span>
+                                                                    {category}
+                                                                    <span className="font-normal normal-case text-gray-500">
+                                                                        {servicesInCategory.length} service{servicesInCategory.length === 1 ? '' : 's'}
+                                                                        {selectedInCategory > 0 ? ` • ${selectedInCategory} selected` : ''}
+                                                                    </span>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                        {!isCollapsed && servicesInCategory.map(service => {
+                                                            const selection = serviceSelections[service.external_service_id] ?? {
+                                                                selected: false,
+                                                                markup_type: service.default_markup_type || 'percentage',
+                                                                markup_value: String(service.default_markup_value || 0),
+                                                            };
+                                                            const markupType = selection.markup_type || 'percentage';
+                                                            const markupVal = Number(selection.markup_value || 0);
+                                                            const localRate = markupType === 'percentage'
+                                                                ? service.external_rate * (1 + (markupVal / 100))
+                                                                : service.external_rate + markupVal;
+
+                                                            return (
+                                                                <tr key={service.external_service_id} className={service.already_imported ? 'bg-gray-50/80' : ''}>
+                                                                    <td className="px-4 py-4 align-top">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={service.already_imported ? true : selection.selected}
+                                                                            disabled={service.already_imported}
+                                                                            onChange={e => updateServiceSelection(service.external_service_id, { selected: e.target.checked })}
+                                                                            className="mt-1 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                                                                        />
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top">
+                                                                        <div className="font-semibold text-gray-900">{service.name}</div>
+                                                                        <div className="mt-1 text-xs text-gray-500">
+                                                                            ID {service.external_service_id} • {service.type}
+                                                                        </div>
+                                                                        <div className="mt-1 text-xs text-gray-500">
+                                                                            Qty {service.min_qty} - {service.max_qty}
+                                                                            {service.is_refill ? ' • Refill' : ''}
+                                                                            {service.is_dripfeed ? ' • Dripfeed' : ''}
+                                                                        </div>
+                                                                        {service.description && (
+                                                                            <p className="mt-2 line-clamp-2 text-xs text-gray-500">{service.description}</p>
+                                                                        )}
+                                                                        {service.already_imported && (
+                                                                            <p className="mt-2 text-xs font-medium text-amber-700">
+                                                                                Already linked{service.existing_service_name ? ` to ${service.existing_service_name}` : ''}.
+                                                                            </p>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top font-mono text-gray-900">
+                                                                        ${service.external_rate.toFixed(4)}
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top">
+                                                                        <div className="flex items-center rounded-lg border border-gray-300 bg-white focus-within:border-brand-green focus-within:ring-1 focus-within:ring-brand-green/20 overflow-hidden w-max">
+                                                                            <select
+                                                                                value={markupType}
+                                                                                disabled={service.already_imported || !selection.selected}
+                                                                                onChange={e => updateServiceSelection(service.external_service_id, { markup_type: e.target.value as 'percentage' | 'fixed' })}
+                                                                                className="border-none bg-gray-50 px-2 py-2 text-sm text-gray-700 outline-none focus:ring-0 disabled:bg-gray-100 disabled:text-gray-400"
+                                                                            >
+                                                                                <option value="percentage">%</option>
+                                                                                <option value="fixed">$</option>
+                                                                            </select>
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                step="0.01"
+                                                                                value={selection.markup_value}
+                                                                                disabled={service.already_imported || !selection.selected}
+                                                                                onChange={e => updateServiceSelection(service.external_service_id, { markup_value: e.target.value })}
+                                                                                className="w-20 border-none px-2 py-2 text-sm text-gray-900 outline-none focus:ring-0 disabled:bg-gray-100 disabled:text-gray-400"
+                                                                            />
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top font-mono text-gray-900">
+                                                                        ${localRate.toFixed(4)}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </Fragment>
                                                 );
                                             })
                                         )}
