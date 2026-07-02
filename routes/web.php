@@ -154,7 +154,6 @@ Route::middleware('auth')->group(function () {
         Route::post('/users/{user}/balance', [AdminUserController::class, 'adjustBalance'])->name('users.balance');
         Route::post('/users/{user}/impersonate', [AdminUserController::class, 'impersonate'])->name('users.impersonate');
         Route::post('/users/{user}/reset-password', [AdminUserController::class, 'sendPasswordReset'])->name('users.reset-password');
-        Route::post('/users/{user}/ban', [AdminUserController::class, 'ban'])->name('users.ban');
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy'])->name('users.destroy');
 
         // Community translation review
