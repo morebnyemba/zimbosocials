@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -332,29 +333,47 @@ class AdminUserController extends Controller
 
     public function sendPasswordReset(User $user): RedirectResponse
     {
-        // For simplicity in this environment, we'll just log it and show a success message
-        // In production, this would trigger Password::sendResetLink()
+        $status = Password::sendResetLink(['email' => $user->email]);
 
-        AuditLog::log('user.password_reset_sent', Auth::id(), User::class, $user->id);
+        AuditLog::log('user.password_reset_sent', Auth::id(), User::class, $user->id, null, ['status' => $status]);
 
-        return back()->with('success', "Password reset instructions have been queued for {$user->email}.");
+        if ($status !== Password::RESET_LINK_SENT) {
+            return back()->with('error', "Could not send reset link: ".__($status));
+        }
+
+        return back()->with('success', "Password reset email sent to {$user->email}.");
     }
 
-    public function ban(User $user): RedirectResponse
-    {
-        $user->update(['is_active' => false]);
-
-        AuditLog::log('user.banned', Auth::id(), User::class, $user->id);
-
-        return back()->with('success', "User {$user->name} has been banned.");
-    }
-
+    /**
+     * Permanently delete a user account.
+     *
+     * orders.user_id and transactions.user_id both cascadeOnDelete, so this
+     * irreversibly wipes the user's entire order and financial history —
+     * not just the account. Guarded against the three ways this goes wrong
+     * by accident or automation: deleting yourself, deleting the last admin
+     * (locking everyone out), and deleting a wallet with money still in it
+     * (the balance would simply vanish with no transaction record left to
+     * explain where it went).
+     */
     public function destroy(User $user): RedirectResponse
     {
+        if ($user->id === Auth::id()) {
+            return back()->with('error', 'You cannot delete your own account.');
+        }
+
+        if ($user->isAdmin() && User::where('role', 'admin')->where('id', '!=', $user->id)->doesntExist()) {
+            return back()->with('error', 'Cannot delete the last remaining admin account.');
+        }
+
+        if ((float) $user->balance !== 0.0) {
+            return back()->with('error', "Cannot delete: this account still has a wallet balance of \${$user->balance}. Adjust it to $0 first.");
+        }
+
         $name = $user->name;
+        $userId = $user->id;
         $user->delete();
 
-        AuditLog::log('user.terminated', Auth::id(), User::class, $user->id);
+        AuditLog::log('user.terminated', Auth::id(), User::class, $userId);
 
         return redirect()->route('admin.users.index')->with('success', "User account for {$name} has been terminated.");
     }
