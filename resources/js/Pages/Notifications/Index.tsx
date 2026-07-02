@@ -17,6 +17,7 @@ const getIconForType = (type: string) => {
         case 'deposit_confirmed': return <FaCheckCircle className="text-emerald-500" />;
         case 'deposit_rejected': return <FaExclamationTriangle className="text-red-500" />;
         case 'withdrawal_processed': return <FaWallet className="text-emerald-600" />;
+        case 'withdrawal_rejected': return <FaExclamationTriangle className="text-red-500" />;
         case 'contract_application': return <FaFileContract className="text-indigo-500" />;
         case 'role_changed': return <FaUserCircle className="text-violet-500" />;
         case 'balance_adjusted': return <FaWallet className="text-amber-600" />;
@@ -33,6 +34,7 @@ const getBgForType = (type: string) => {
         case 'deposit_confirmed': return 'bg-emerald-50 border-emerald-100';
         case 'deposit_rejected': return 'bg-red-50 border-red-100';
         case 'withdrawal_processed': return 'bg-emerald-50 border-emerald-100';
+        case 'withdrawal_rejected': return 'bg-red-50 border-red-100';
         case 'contract_application': return 'bg-indigo-50 border-indigo-100';
         case 'role_changed': return 'bg-violet-50 border-violet-100';
         case 'balance_adjusted': return 'bg-amber-50 border-amber-100';

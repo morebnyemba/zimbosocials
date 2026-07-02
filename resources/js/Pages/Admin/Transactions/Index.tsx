@@ -6,17 +6,19 @@ import { useState } from 'react';
 interface Tx { id: number; user?: { id: number; name: string; email: string }; type: string; amount: string; status: string; method?: string; reference?: string; notes?: string; created_at: string; }
 interface Props { transactions: { data: Tx[]; links: any[]; total: number }; filters: Record<string, string>; pending_deposits: number; pending_withdrawals: number; }
 
-const sC: Record<string, string> = { pending: 'bg-amber-100 text-amber-800 border-amber-200', completed: 'bg-brand-green/10 text-brand-green border-brand-green/20', failed: 'bg-red-100 text-red-800 border-red-200' };
+const sC: Record<string, string> = { pending: 'bg-amber-100 text-amber-800 border-amber-200', completed: 'bg-brand-green/10 text-brand-green border-brand-green/20', failed: 'bg-red-100 text-red-800 border-red-200', rejected: 'bg-red-100 text-red-800 border-red-200' };
 
 export default function TransactionsIndex({ transactions, filters, pending_deposits, pending_withdrawals }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [pendingRejectId, setPendingRejectId] = useState<number | null>(null);
+    const [pendingRejectWithdrawalId, setPendingRejectWithdrawalId] = useState<number | null>(null);
     const applySearch = () => router.get(route('admin.transactions.index'), { ...filters, search }, { preserveState: true });
     const setFilter = (k: string, v: string) => router.get(route('admin.transactions.index'), { ...filters, [k]: v || undefined }, { preserveState: true });
 
     const approve = (id: number) => router.post(route('admin.transactions.approve', id), {}, { preserveScroll: true });
     const reject = (id: number) => { setPendingRejectId(id); };
     const processW = (id: number) => router.post(route('admin.transactions.process-withdrawal', id), {}, { preserveScroll: true });
+    const rejectW = (id: number) => { setPendingRejectWithdrawalId(id); };
 
     return (
         <AdminLayout>
@@ -82,9 +84,10 @@ export default function TransactionsIndex({ transactions, filters, pending_depos
                                                 <button onClick={() => approve(tx.id)} className="px-3 py-1 text-xs font-medium rounded-lg bg-brand-green/10 text-brand-green border border-brand-green/20 hover:bg-brand-green/20">Approve</button>
                                                 <button onClick={() => reject(tx.id)} className="px-3 py-1 text-xs font-medium rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">Reject</button>
                                             </>)}
-                                            {tx.type === 'withdrawal' && tx.status === 'pending' && (
+                                            {tx.type === 'withdrawal' && tx.status === 'pending' && (<>
                                                 <button onClick={() => processW(tx.id)} className="px-3 py-1 text-xs font-medium rounded-lg bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100">Process</button>
-                                            )}
+                                                <button onClick={() => rejectW(tx.id)} className="px-3 py-1 text-xs font-medium rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">Reject</button>
+                                            </>)}
                                         </td>
                                     </tr>
                                 ))}
@@ -105,6 +108,18 @@ export default function TransactionsIndex({ transactions, filters, pending_depos
                     danger
                     onConfirm={() => { router.post(route('admin.transactions.reject', pendingRejectId)); setPendingRejectId(null); }}
                     onCancel={() => setPendingRejectId(null)}
+                />
+            )}
+
+            {pendingRejectWithdrawalId !== null && (
+                <ConfirmModal
+                    open
+                    title="Reject Withdrawal"
+                    message="Reject this withdrawal? The reserved funds will be returned to the user's wallet balance immediately."
+                    confirmLabel="Reject & Refund"
+                    danger
+                    onConfirm={() => { router.post(route('admin.transactions.reject-withdrawal', pendingRejectWithdrawalId)); setPendingRejectWithdrawalId(null); }}
+                    onCancel={() => setPendingRejectWithdrawalId(null)}
                 />
             )}
         </AdminLayout>

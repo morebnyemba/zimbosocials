@@ -57,6 +57,15 @@ return [
             'buttons' => [],
         ],
 
+        'withdrawal_rejected' => [
+            'category' => 'UTILITY',
+            'body' => "❌ *Withdrawal Rejected*\n\nHi {{1}}, your withdrawal request of *{{2}}* was rejected.\n\n💰 The funds have been returned to your wallet balance. Contact support if you need assistance.",
+            'params' => ['user_name', 'amount'],
+            'header' => null,
+            'footer' => 'Zimbo Socials',
+            'buttons' => [],
+        ],
+
         // ─── Orders ──────────────────────────────────────────────────────────
         'order_status_changed' => [
             'category' => 'UTILITY',

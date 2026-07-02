@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -93,24 +94,21 @@ class AdminTransactionController extends Controller
             return back()->with('error', 'Cannot reject this transaction.');
         }
 
-        $oldStatus = (string) $transaction->status;
+        // Route through the shared service so every rejection path (gateway
+        // failure, admin manual reject) lands on the same 'rejected' status
+        // and notifies the user — this used to write 'failed' here while
+        // every other path wrote 'rejected', a silent data inconsistency.
+        $rejected = $this->depositService->reject($transaction, 'admin_rejection');
+
+        if (! $rejected) {
+            return back()->with('error', 'Transaction was already processed.');
+        }
 
         $transaction->update([
-            'status' => 'failed', 'processed_by' => Auth::id(),
-            'processed_at' => now(), 'admin_notes' => 'Rejected by admin',
+            'processed_by' => Auth::id(),
+            'processed_at' => now(),
+            'admin_notes' => 'Rejected by admin',
         ]);
-
-        AuditLog::dispatchLog(
-            action: 'transaction.deposit_rejected',
-            userId: (int) Auth::id(),
-            modelType: Transaction::class,
-            modelId: (int) $transaction->id,
-            oldValues: ['status' => $oldStatus],
-            newValues: ['status' => 'failed'],
-        );
-
-        NotificationService::notify($transaction->user_id, 'deposit_rejected', 'Deposit Rejected',
-            'Your deposit request has been rejected.');
 
         // Bust admin dashboard caches
         Cache::forget('admin:pending_deposits');
@@ -146,6 +144,71 @@ class AdminTransactionController extends Controller
         Cache::forget('admin:pending_withdrawals');
 
         return back()->with('success', 'Withdrawal processed.');
+    }
+
+    /**
+     * Reject a pending withdrawal and refund the reserved balance.
+     *
+     * The withdrawal request flow debits the user's balance immediately
+     * ("funds reserved") and only processWithdrawal() existed to resolve it —
+     * there was no way to decline an invalid/unfulfillable request, so a
+     * rejected withdrawal's funds had no way back to the user's spendable
+     * balance.
+     */
+    public function rejectWithdrawal(Request $request, Transaction $transaction): RedirectResponse
+    {
+        if ($transaction->type !== 'withdrawal' || $transaction->status !== 'pending') {
+            return back()->with('error', 'Cannot reject this withdrawal.');
+        }
+
+        $notes = (string) $request->input('notes', 'Rejected by admin');
+
+        try {
+            DB::transaction(function () use ($transaction, $notes): void {
+                $lockedTransaction = Transaction::lockForUpdate()->findOrFail($transaction->id);
+
+                if ($lockedTransaction->status !== 'pending') {
+                    throw new \RuntimeException('Withdrawal was already processed.');
+                }
+
+                $refundAmount = abs((float) $lockedTransaction->amount);
+                $oldStatus = (string) $lockedTransaction->status;
+
+                $lockedUser = User::lockForUpdate()->findOrFail($lockedTransaction->user_id);
+                $lockedUser->increment('balance', $refundAmount);
+
+                $lockedTransaction->update([
+                    'status' => 'rejected',
+                    'processed_by' => Auth::id(),
+                    'processed_at' => now(),
+                    'admin_notes' => $notes,
+                ]);
+
+                AuditLog::dispatchLog(
+                    action: 'transaction.withdrawal_rejected',
+                    userId: (int) Auth::id(),
+                    modelType: Transaction::class,
+                    modelId: (int) $lockedTransaction->id,
+                    oldValues: ['status' => $oldStatus],
+                    newValues: ['status' => 'rejected', 'refund_amount' => $refundAmount],
+                );
+
+                NotificationService::notify(
+                    $lockedTransaction->user_id,
+                    'withdrawal_rejected',
+                    'Withdrawal Rejected',
+                    "Your withdrawal request of \${$refundAmount} was rejected and the funds have been returned to your wallet.",
+                    ['transaction_id' => $lockedTransaction->id, 'refund_amount' => $refundAmount]
+                );
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        // Bust admin dashboard caches
+        Cache::forget('admin:pending_withdrawals');
+
+        return back()->with('success', 'Withdrawal rejected and funds returned to the user.');
     }
 
     public function revenue(Request $request): Response
