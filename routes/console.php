@@ -11,6 +11,12 @@ Artisan::command('inspire', function () {
 Schedule::command('upstream:sync-orders')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('upstream:sync-services')->dailyAt('02:00')->withoutOverlapping();
 
+// Process queued jobs (WhatsApp/email notifications, etc). QUEUE_CONNECTION=database
+// has no persistent worker on shared hosting, so this is the standard
+// cron-driven substitute: process whatever's queued, then exit — self-limited
+// to 50s so it never runs into (or blocks) the next minute's scheduler tick.
+Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=3')->everyMinute()->withoutOverlapping();
+
 // Expire stale pending transactions older than 24 hours
 Schedule::command('transactions:cleanup-stale --hours=24')->hourly()->withoutOverlapping();
 
