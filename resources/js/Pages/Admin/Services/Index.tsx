@@ -31,6 +31,8 @@ export default function ServicesIndex({ services, categories, providers, stats, 
     const [editingId, setEditingId] = useState<number | null>(null);
     const [form, setForm] = useState<any>(emptyForm);
     const [pendingDeactivateId, setPendingDeactivateId] = useState<number | null>(null);
+    const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
     const [activeToast, setActiveToast] = useState<{ kind: ToastKind; message: string } | null>(null);
 
     const showToast = (kind: ToastKind, message: string) => {
@@ -86,6 +88,15 @@ export default function ServicesIndex({ services, categories, providers, stats, 
         setForm({ ...form, upstreams: newUpstreams });
     };
 
+    const bulkDeleteInactive = () => {
+        if (bulkDeleting) return;
+        setBulkDeleting(true);
+        router.delete(route('admin.services.bulk-delete-inactive'), {
+            preserveScroll: true,
+            onFinish: () => { setBulkDeleting(false); setShowBulkDeleteConfirm(false); },
+        });
+    };
+
     return (
         <AdminLayout>
             <Head title="Service Management" />
@@ -96,7 +107,12 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                         <h1 className="text-3xl font-black text-zinc-900 tracking-tight">Service Catalog</h1>
                         <p className="text-zinc-500 font-medium text-sm mt-1">{stats.active} Active Services · {stats.inactive} Inactive</p>
                     </div>
-                    <div>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        {stats.inactive > 0 && (
+                            <button onClick={() => setShowBulkDeleteConfirm(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-all active:scale-95">
+                                <Trash2 size={18} /> Delete {stats.inactive} Inactive
+                            </button>
+                        )}
                         <button onClick={openCreate} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-zinc-900 text-white hover:bg-emerald-500 transition-all shadow-xl hover:shadow-emerald-500/20 active:scale-95">
                             <Plus size={18} /> Deploy New Service
                         </button>
@@ -428,6 +444,17 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                     danger
                     onConfirm={() => { router.delete(route('admin.services.destroy', pendingDeactivateId), { preserveScroll: true }); setPendingDeactivateId(null); }}
                     onCancel={() => setPendingDeactivateId(null)}
+                />
+            )}
+            {showBulkDeleteConfirm && (
+                <ConfirmModal
+                    open
+                    title="Delete Inactive Services"
+                    message={`Permanently delete all ${stats.inactive} inactive service(s)? Services that have order history are kept automatically (deactivated, not deletable) — only inactive services with zero orders ever placed are removed. This cannot be undone.`}
+                    confirmLabel={bulkDeleting ? 'Deleting…' : 'Delete Inactive Services'}
+                    danger
+                    onConfirm={bulkDeleteInactive}
+                    onCancel={() => setShowBulkDeleteConfirm(false)}
                 />
             )}
             <ToastContainer toast={activeToast} onClose={() => setActiveToast(null)} />

@@ -204,4 +204,46 @@ class AdminServiceController extends Controller
 
         return back()->with('success', "Service \"{$name}\" has been deactivated.");
     }
+
+    /**
+     * Permanently delete every inactive service that has never had an order
+     * placed against it. orders.service_id is restrictOnDelete, so a service
+     * with order history is physically undeletable regardless — we still
+     * pre-filter on orders_count so the admin gets a clear summary instead
+     * of a DB constraint exception mid-batch, and so a partial failure can't
+     * leave some services deleted and others not (single transaction).
+     */
+    public function bulkDeleteInactive(): RedirectResponse
+    {
+        $candidates = Service::withCount('orders')
+            ->where('is_active', false)
+            ->get();
+
+        $deletable = $candidates->where('orders_count', 0);
+        $keptForHistory = $candidates->count() - $deletable->count();
+
+        if ($deletable->isEmpty()) {
+            $message = $candidates->isEmpty()
+                ? 'No inactive services to delete.'
+                : "All {$candidates->count()} inactive service(s) have order history and were kept — nothing was deleted.";
+
+            return back()->with('info', $message);
+        }
+
+        DB::transaction(function () use ($deletable): void {
+            foreach ($deletable as $service) {
+                $old = $service->toArray();
+                $service->delete();
+
+                AuditLog::log('service.bulk_deleted', Auth::id(), Service::class, $service->id, $old, null);
+            }
+        });
+
+        $message = "Permanently deleted {$deletable->count()} inactive service(s) with no order history.";
+        if ($keptForHistory > 0) {
+            $message .= " {$keptForHistory} other inactive service(s) have order history and were kept (deactivated only).";
+        }
+
+        return back()->with('success', $message);
+    }
 }

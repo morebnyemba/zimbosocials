@@ -171,6 +171,9 @@ Route::middleware('auth')->group(function () {
         // Service management
         Route::get('/services', [AdminServiceController::class, 'index'])->name('services.index');
         Route::post('/services', [AdminServiceController::class, 'store'])->name('services.store');
+        // Static path registered before the {service} wildcard so it can't be
+        // mistaken for a route-model-bound service id.
+        Route::delete('/services/inactive', [AdminServiceController::class, 'bulkDeleteInactive'])->name('services.bulk-delete-inactive');
         Route::put('/services/{service}', [AdminServiceController::class, 'update'])->name('services.update');
         Route::delete('/services/{service}', [AdminServiceController::class, 'destroy'])->name('services.destroy');
 
