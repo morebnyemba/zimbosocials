@@ -174,6 +174,7 @@ Route::middleware('auth')->group(function () {
         // Static path registered before the {service} wildcard so it can't be
         // mistaken for a route-model-bound service id.
         Route::delete('/services/inactive', [AdminServiceController::class, 'bulkDeleteInactive'])->name('services.bulk-delete-inactive');
+        Route::post('/services/merge-categories', [AdminServiceController::class, 'mergeCategories'])->name('services.merge-categories');
         Route::put('/services/{service}', [AdminServiceController::class, 'update'])->name('services.update');
         Route::delete('/services/{service}', [AdminServiceController::class, 'destroy'])->name('services.destroy');
 
