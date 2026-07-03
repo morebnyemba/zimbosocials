@@ -3,7 +3,7 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import ToastContainer, { ToastKind } from '@/Components/Toast';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Plus, Trash2, Search, Filter, Edit2, X, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Search, Filter, Edit2, X, AlertCircle, Merge } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface UpstreamProvider { id: number; name: string; url: string; }
@@ -21,11 +21,11 @@ const primaryCost = (upstreams?: ServiceUpstream[]): number | null => {
     return primary ? Number(primary.external_rate) : null;
 };
 interface Service { id: number; name: string; name_sn?: string; category: string; type: string; rate: string; min_qty: number; max_qty: number; is_active: boolean; is_dripfeed: boolean; is_refill: boolean; refill_days?: number; avg_time_minutes?: number; display_order?: number; orders_count: number; description?: string; description_sn?: string; upstreams?: ServiceUpstream[]; }
-interface Props { services: { data: Service[]; links: any[]; total: number }; categories: string[]; providers: UpstreamProvider[]; stats: { total: number; active: number; inactive: number }; filters: Record<string, string>; }
+interface Props { services: { data: Service[]; links: any[]; total: number }; categories: string[]; categoryCounts: Record<string, number>; providers: UpstreamProvider[]; stats: { total: number; active: number; inactive: number }; filters: Record<string, string>; }
 
 const emptyForm = { name: '', name_sn: '', description: '', description_sn: '', category: '', type: 'default', rate: '', min_qty: '100', max_qty: '10000', is_active: true, is_dripfeed: false, is_refill: false, refill_days: '', avg_time_minutes: '', display_order: '0', upstreams: [] as ServiceUpstream[] };
 
-export default function ServicesIndex({ services, categories, providers, stats, filters }: Props) {
+export default function ServicesIndex({ services, categories, categoryCounts, providers, stats, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -33,6 +33,10 @@ export default function ServicesIndex({ services, categories, providers, stats, 
     const [pendingDeactivateId, setPendingDeactivateId] = useState<number | null>(null);
     const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
     const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [mergeTarget, setMergeTarget] = useState('');
+    const [merging, setMerging] = useState(false);
     const [activeToast, setActiveToast] = useState<{ kind: ToastKind; message: string } | null>(null);
 
     const showToast = (kind: ToastKind, message: string) => {
@@ -97,6 +101,32 @@ export default function ServicesIndex({ services, categories, providers, stats, 
         });
     };
 
+    const openCategoryModal = () => {
+        setSelectedCategories([]);
+        setMergeTarget('');
+        setShowCategoryModal(true);
+    };
+
+    const toggleCategorySelection = (cat: string) => {
+        setSelectedCategories(current => {
+            const next = current.includes(cat) ? current.filter(c => c !== cat) : [...current, cat];
+            // Default the target name to the first-selected category so a
+            // 2-way merge is a single click; admin can still overwrite it.
+            if (!mergeTarget && next.length > 0) setMergeTarget(next[0]);
+            return next;
+        });
+    };
+
+    const mergeCategories = () => {
+        if (merging || selectedCategories.length < 2 || !mergeTarget.trim()) return;
+        setMerging(true);
+        router.post(route('admin.services.merge-categories'), { categories: selectedCategories, target: mergeTarget.trim() }, {
+            preserveScroll: true,
+            onSuccess: () => setShowCategoryModal(false),
+            onFinish: () => setMerging(false),
+        });
+    };
+
     return (
         <AdminLayout>
             <Head title="Service Management" />
@@ -108,6 +138,9 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                         <p className="text-zinc-500 font-medium text-sm mt-1">{stats.active} Active Services · {stats.inactive} Inactive</p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3">
+                        <button onClick={openCategoryModal} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition-all active:scale-95">
+                            <Merge size={18} /> Merge Categories
+                        </button>
                         {stats.inactive > 0 && (
                             <button onClick={() => setShowBulkDeleteConfirm(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-all active:scale-95">
                                 <Trash2 size={18} /> Delete {stats.inactive} Inactive
@@ -457,6 +490,74 @@ export default function ServicesIndex({ services, categories, providers, stats, 
                     onCancel={() => setShowBulkDeleteConfirm(false)}
                 />
             )}
+            {/* Merge Categories */}
+            <AnimatePresence>
+                {showCategoryModal && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm z-40"
+                            onClick={() => setShowCategoryModal(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-6"
+                        >
+                            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+                                <div className="p-6 border-b border-zinc-100 flex justify-between items-start">
+                                    <div>
+                                        <h3 className="text-xl font-black text-zinc-900">Merge Categories</h3>
+                                        <p className="text-xs font-medium text-zinc-500 mt-1">
+                                            Select 2 or more categories that represent the same platform, then choose the name they should all become.
+                                        </p>
+                                    </div>
+                                    <button onClick={() => setShowCategoryModal(false)} className="p-2 bg-zinc-100 text-zinc-500 hover:text-zinc-900 rounded-full transition-colors">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6 space-y-2">
+                                    {categories.map(cat => (
+                                        <label key={cat} className={`flex items-center justify-between gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedCategories.includes(cat) ? 'border-indigo-400 bg-indigo-50' : 'border-zinc-100 bg-zinc-50 hover:border-zinc-200'}`}>
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedCategories.includes(cat)}
+                                                    onChange={() => toggleCategorySelection(cat)}
+                                                    className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 shrink-0"
+                                                />
+                                                <span className="text-sm font-bold text-zinc-900 truncate">{cat}</span>
+                                            </div>
+                                            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest shrink-0">{categoryCounts[cat] ?? 0} services</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div className="p-6 bg-zinc-50 border-t border-zinc-100 space-y-3">
+                                    <div>
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Merge into category name</label>
+                                        <input
+                                            type="text"
+                                            value={mergeTarget}
+                                            onChange={e => setMergeTarget(e.target.value)}
+                                            placeholder="e.g. Instagram"
+                                            className="w-full bg-white border-2 border-zinc-200 rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:outline-none focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={mergeCategories}
+                                        disabled={merging || selectedCategories.length < 2 || !mergeTarget.trim()}
+                                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        {merging ? 'Merging…' : selectedCategories.length >= 2 ? `Merge ${selectedCategories.length} Categories` : 'Select at least 2 categories'}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
             <ToastContainer toast={activeToast} onClose={() => setActiveToast(null)} />
         </AdminLayout>
     );

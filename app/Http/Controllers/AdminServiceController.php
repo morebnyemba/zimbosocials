@@ -49,6 +49,18 @@ class AdminServiceController extends Controller
             ->orderBy('category')
             ->pluck('category');
 
+        // Category -> service count, for the "Merge Categories" tool — lets an
+        // admin see at a glance which raw category strings likely represent
+        // the same platform (e.g. "Instagram" (40) and "instagram" (3)) and
+        // unify them, independent of the automatic keyword-based normalizer
+        // (which only recognizes a fixed list of platforms and can't handle
+        // arbitrary/custom categories the admin wants merged).
+        $categoryCounts = Service::selectRaw('category, COUNT(*) as cnt')
+            ->groupBy('category')
+            ->orderBy('category')
+            ->get()
+            ->mapWithKeys(fn ($row) => [$row->category => $row->cnt]);
+
         // Consolidated: 1 GROUP BY instead of 3 separate counts
         $rawCounts = Service::selectRaw('is_active, COUNT(*) as cnt')
             ->groupBy('is_active')
@@ -63,6 +75,7 @@ class AdminServiceController extends Controller
         return Inertia::render('Admin/Services/Index', [
             'services' => $services,
             'categories' => $categories,
+            'categoryCounts' => $categoryCounts,
             'stats' => $stats,
             'providers' => UpstreamProvider::where('is_active', true)->get(),
             'filters' => $request->only(['search', 'category', 'active']),
@@ -191,6 +204,49 @@ class AdminServiceController extends Controller
         });
 
         return back()->with('success', "Service \"{$service->name}\" updated.");
+    }
+
+    /**
+     * Merge two or more raw category strings into one canonical category —
+     * for cases the automatic import-time normalizer can't handle (custom,
+     * non-platform categories), or to clean up data imported before that
+     * normalizer existed without needing shell access to run the CLI backfill.
+     */
+    public function mergeCategories(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'categories' => ['required', 'array', 'min:1'],
+            'categories.*' => ['required', 'string'],
+            'target' => ['required', 'string', 'max:100'],
+        ]);
+
+        $target = trim($data['target']);
+        // Merging into a category that isn't itself one of the selected
+        // sources still counts as a rename of every selected source.
+        $sources = array_unique($data['categories']);
+
+        $affected = Service::whereIn('category', $sources)->count();
+
+        if ($affected === 0) {
+            return back()->with('info', 'No services matched the selected categories.');
+        }
+
+        DB::transaction(function () use ($sources, $target): void {
+            Service::whereIn('category', $sources)->update(['category' => $target]);
+        });
+
+        AuditLog::log(
+            'service.categories_merged',
+            Auth::id(),
+            Service::class,
+            null,
+            ['categories' => $sources],
+            ['target' => $target, 'services_affected' => $affected],
+        );
+
+        $sourceList = implode(', ', $sources);
+
+        return back()->with('success', "Merged {$affected} service(s) from [{$sourceList}] into \"{$target}\".");
     }
 
     public function destroy(Service $service): RedirectResponse
