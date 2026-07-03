@@ -16,10 +16,15 @@ class SyncUpstreamOrders extends Command
 
     public function handle(UpstreamProviderClient $client, OrderStatusSyncService $syncService): int
     {
+        // 'in_progress' (with underscore) is the real orders.status enum value —
+        // this previously filtered on 'inprogress' (no underscore), a typo that
+        // never matched, silently excluding any order sitting at in_progress
+        // from the scheduled sync forever (Force Sync worked on the same order
+        // because it has no status pre-filter at all).
         $orders = Order::where('pushed_to_upstream', true)
             ->whereNotNull('external_order_id')
             ->whereNotNull('upstream_provider_id')
-            ->whereIn('status', ['pending', 'processing', 'inprogress'])
+            ->whereIn('status', ['pending', 'processing', 'in_progress'])
             ->get();
 
         if ($orders->isEmpty()) {
