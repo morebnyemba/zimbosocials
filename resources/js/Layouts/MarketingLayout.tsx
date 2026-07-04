@@ -390,6 +390,7 @@ export default function MarketingLayout({
                   <li><Link href="/our-services" className="hover:text-emerald-600 transition">{t('browse_services')}</Link></li>
                   <li><Link href="/contact" className="hover:text-emerald-600 transition">{t('contact')}</Link></li>
                   <li><Link href="/about" className="hover:text-emerald-600 transition">{t('about')}</Link></li>
+                  <li><Link href={route("marketing.referral-program")} className="hover:text-emerald-600 transition">{t('referral_program')}</Link></li>
                 </ul>
               </div>
 
