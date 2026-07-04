@@ -3,7 +3,7 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import ToastContainer, { ToastKind } from '@/Components/Toast';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Plus, Trash2, Search, Filter, Edit2, X, AlertCircle, Merge } from 'lucide-react';
+import { Plus, Trash2, Search, Filter, Edit2, X, AlertCircle, Merge, MessageCircle, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface UpstreamProvider { id: number; name: string; url: string; }
@@ -37,6 +37,10 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [mergeTarget, setMergeTarget] = useState('');
     const [merging, setMerging] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [exportCategory, setExportCategory] = useState('');
+    const [exportText, setExportText] = useState('');
+    const [exportLoading, setExportLoading] = useState(false);
     const [activeToast, setActiveToast] = useState<{ kind: ToastKind; message: string } | null>(null);
 
     const showToast = (kind: ToastKind, message: string) => {
@@ -127,6 +131,25 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
         });
     };
 
+    const fetchExportList = (category: string) => {
+        setExportLoading(true);
+        fetch(route('admin.services.export-list', category ? { category } : {}), { headers: { Accept: 'application/json' } })
+            .then(r => r.json())
+            .then(data => setExportText(data.text))
+            .finally(() => setExportLoading(false));
+    };
+
+    const openExportModal = () => {
+        setExportCategory('');
+        setShowExportModal(true);
+        fetchExportList('');
+    };
+
+    const copyExportList = () => {
+        navigator.clipboard.writeText(exportText);
+        showToast('success', 'Copied to clipboard — ready to paste into WhatsApp.');
+    };
+
     return (
         <AdminLayout>
             <Head title="Service Management" />
@@ -138,6 +161,9 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                         <p className="text-zinc-500 font-medium text-sm mt-1">{stats.active} Active Services · {stats.inactive} Inactive</p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3">
+                        <button onClick={openExportModal} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 transition-all active:scale-95">
+                            <MessageCircle size={18} /> Export List
+                        </button>
                         <button onClick={openCategoryModal} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition-all active:scale-95">
                             <Merge size={18} /> Merge Categories
                         </button>
@@ -490,6 +516,69 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                     onCancel={() => setShowBulkDeleteConfirm(false)}
                 />
             )}
+            {/* Export List (WhatsApp-ready plain text) */}
+            <AnimatePresence>
+                {showExportModal && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm z-40"
+                            onClick={() => setShowExportModal(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-6"
+                        >
+                            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+                                <div className="p-6 border-b border-zinc-100 flex justify-between items-start">
+                                    <div>
+                                        <h3 className="text-xl font-black text-zinc-900">Export Service List</h3>
+                                        <p className="text-xs font-medium text-zinc-500 mt-1">
+                                            Clean, WhatsApp-ready text — service name, price per 1000, and minimum order.
+                                        </p>
+                                    </div>
+                                    <button onClick={() => setShowExportModal(false)} className="p-2 bg-zinc-100 text-zinc-500 hover:text-zinc-900 rounded-full transition-colors">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                <div className="p-6 border-b border-zinc-100">
+                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Category (optional)</label>
+                                    <select
+                                        value={exportCategory}
+                                        onChange={e => { setExportCategory(e.target.value); fetchExportList(e.target.value); }}
+                                        className="w-full pl-4 pr-4 py-3 rounded-2xl bg-zinc-50 border-none font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer appearance-none"
+                                    >
+                                        <option value="">All Categories</option>
+                                        {categories.map(c => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    <textarea
+                                        readOnly
+                                        value={exportLoading ? 'Loading…' : exportText}
+                                        className="w-full h-64 bg-zinc-50 border-none rounded-2xl p-4 text-xs font-mono text-zinc-800 focus:ring-2 focus:ring-emerald-500 resize-none"
+                                    />
+                                </div>
+
+                                <div className="p-6 bg-zinc-50 border-t border-zinc-100">
+                                    <button
+                                        onClick={copyExportList}
+                                        disabled={exportLoading || !exportText}
+                                        className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        <Copy size={16} /> Copy to Clipboard
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
             {/* Merge Categories */}
             <AnimatePresence>
                 {showCategoryModal && (
