@@ -39,8 +39,10 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
     const [merging, setMerging] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportCategory, setExportCategory] = useState('');
+    const [exportPlatform, setExportPlatform] = useState('plain');
     const [exportText, setExportText] = useState('');
     const [exportLoading, setExportLoading] = useState(false);
+    const [exportAiUsed, setExportAiUsed] = useState<boolean | null>(null);
     const [activeToast, setActiveToast] = useState<{ kind: ToastKind; message: string } | null>(null);
 
     const showToast = (kind: ToastKind, message: string) => {
@@ -131,18 +133,46 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
         });
     };
 
-    const fetchExportList = (category: string) => {
+    const fetchExportList = (category: string, platform: string) => {
         setExportLoading(true);
-        fetch(route('admin.services.export-list', category ? { category } : {}), { headers: { Accept: 'application/json' } })
+        setExportAiUsed(null);
+
+        // Plain (mechanical) list: simple GET, no AI involved.
+        if (platform === 'plain') {
+            fetch(route('admin.services.export-list', category ? { category } : {}), { headers: { Accept: 'application/json' } })
+                .then(r => r.json())
+                .then(data => setExportText(data.text))
+                .finally(() => setExportLoading(false));
+            return;
+        }
+
+        // Platform-specific: POST so we can pass platform/category, Gemini-backed
+        // with graceful fallback to the plain list if AI is unavailable/fails.
+        fetch(route('admin.services.export-list-ai'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+            },
+            body: JSON.stringify({ platform, category: category || undefined }),
+        })
             .then(r => r.json())
-            .then(data => setExportText(data.text))
+            .then(data => {
+                setExportText(data.text);
+                setExportAiUsed(data.ai_used ?? false);
+                if (data.ai_used === false) {
+                    showToast('warn', 'AI enhancement unavailable — showing the plain list instead.');
+                }
+            })
             .finally(() => setExportLoading(false));
     };
 
     const openExportModal = () => {
         setExportCategory('');
+        setExportPlatform('plain');
         setShowExportModal(true);
-        fetchExportList('');
+        fetchExportList('', 'plain');
     };
 
     const copyExportList = () => {
@@ -542,21 +572,43 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                     </button>
                                 </div>
 
-                                <div className="p-6 border-b border-zinc-100">
-                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Category (optional)</label>
-                                    <select
-                                        value={exportCategory}
-                                        onChange={e => { setExportCategory(e.target.value); fetchExportList(e.target.value); }}
-                                        className="w-full pl-4 pr-4 py-3 rounded-2xl bg-zinc-50 border-none font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer appearance-none"
-                                    >
-                                        <option value="">All Categories</option>
-                                        {categories.map(c => (
-                                            <option key={c} value={c}>{c}</option>
-                                        ))}
-                                    </select>
+                                <div className="p-6 border-b border-zinc-100 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Category (optional)</label>
+                                        <select
+                                            value={exportCategory}
+                                            onChange={e => { setExportCategory(e.target.value); fetchExportList(e.target.value, exportPlatform); }}
+                                            className="w-full pl-4 pr-4 py-3 rounded-2xl bg-zinc-50 border-none font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer appearance-none"
+                                        >
+                                            <option value="">All Categories</option>
+                                            {categories.map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Platform</label>
+                                        <select
+                                            value={exportPlatform}
+                                            onChange={e => { setExportPlatform(e.target.value); fetchExportList(exportCategory, e.target.value); }}
+                                            className="w-full pl-4 pr-4 py-3 rounded-2xl bg-zinc-50 border-none font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer appearance-none"
+                                        >
+                                            <option value="plain">Plain Text</option>
+                                            <option value="WhatsApp">WhatsApp</option>
+                                            <option value="Telegram">Telegram</option>
+                                            <option value="Twitter/X">Twitter / X</option>
+                                            <option value="Instagram">Instagram</option>
+                                            <option value="Facebook">Facebook</option>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-6">
+                                    {exportPlatform !== 'plain' && exportAiUsed !== null && (
+                                        <p className={`mb-2 text-[10px] font-black uppercase tracking-widest ${exportAiUsed ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                            {exportAiUsed ? '✨ AI-enhanced — double check before sending' : 'AI unavailable — showing plain list'}
+                                        </p>
+                                    )}
                                     <textarea
                                         readOnly
                                         value={exportLoading ? 'Loading…' : exportText}

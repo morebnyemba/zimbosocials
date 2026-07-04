@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\Service;
 use App\Models\UpstreamProvider;
+use App\Services\AI\ServiceListFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -313,9 +314,41 @@ class AdminServiceController extends Controller
      */
     public function exportList(Request $request): JsonResponse
     {
+        return response()->json(['text' => $this->buildPlainServiceList($request->query('category'))]);
+    }
+
+    /**
+     * Same data as exportList(), restyled for a specific platform by
+     * ServiceListFormatter. The mechanical list is always built here (never
+     * trusted from the client) and handed to Gemini as fixed source-of-truth
+     * text — the model only changes tone/formatting, never the figures.
+     */
+    public function exportListAi(Request $request, ServiceListFormatter $formatter): JsonResponse
+    {
+        $data = $request->validate([
+            'platform' => ['required', 'string', 'max:40'],
+            'category' => ['nullable', 'string'],
+        ]);
+
+        $raw = $this->buildPlainServiceList($data['category'] ?? null);
+
+        if (! $formatter->isAvailable()) {
+            return response()->json(['text' => $raw, 'ai_used' => false]);
+        }
+
+        $enhanced = $formatter->format($raw, $data['platform']);
+
+        return response()->json([
+            'text' => $enhanced ?? $raw,
+            'ai_used' => $enhanced !== null,
+        ]);
+    }
+
+    private function buildPlainServiceList(?string $category): string
+    {
         $query = Service::active()->orderBy('category')->orderBy('name');
 
-        if ($category = $request->query('category')) {
+        if ($category) {
             $query->where('category', $category);
         }
 
@@ -323,8 +356,8 @@ class AdminServiceController extends Controller
 
         $lines = ['*Zimbo Socials — Service List*', ''];
 
-        foreach ($services->groupBy('category') as $category => $items) {
-            $lines[] = "*{$category}*";
+        foreach ($services->groupBy('category') as $groupCategory => $items) {
+            $lines[] = "*{$groupCategory}*";
             foreach ($items as $service) {
                 $rate = number_format((float) $service->rate, 2);
                 $lines[] = "• {$service->name} — \${$rate}/1000 (min: {$service->min_qty})";
@@ -332,6 +365,6 @@ class AdminServiceController extends Controller
             $lines[] = '';
         }
 
-        return response()->json(['text' => trim(implode("\n", $lines))]);
+        return trim(implode("\n", $lines));
     }
 }
