@@ -57,13 +57,13 @@ class Transaction extends Model
      * a distinct display code here needed no migration, no backfill, and
      * works retroactively for every transaction that already exists.
      *
-     * Format: ZSD-YYYYMMDD-{user_id}-{transaction_id}
+     * Format: ZSD-YYYYMMDD-HHMMSS-{user_id}-{transaction_id}
      */
     public function getReferenceCodeAttribute(): string
     {
-        $date = $this->created_at?->format('Ymd') ?? now()->format('Ymd');
+        $timestamp = ($this->created_at ?? now())->format('Ymd-His');
 
-        return "ZSD-{$date}-{$this->user_id}-{$this->id}";
+        return "ZSD-{$timestamp}-{$this->user_id}-{$this->id}";
     }
 
     public function getTypeLabelSn(): string
