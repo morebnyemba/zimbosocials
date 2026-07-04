@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\Service;
 use App\Models\UpstreamProvider;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -301,5 +302,36 @@ class AdminServiceController extends Controller
         }
 
         return back()->with('success', $message);
+    }
+
+    /**
+     * Plain-text, WhatsApp-ready service catalog (name, price per 1000, minimum
+     * order), grouped by category. Deliberately mechanical rather than AI-
+     * generated — rate/min_qty are financial data pulled straight from the
+     * services table, so there's nothing for an LLM to "clean up" and every
+     * reason not to risk it paraphrasing a price.
+     */
+    public function exportList(Request $request): JsonResponse
+    {
+        $query = Service::active()->orderBy('category')->orderBy('name');
+
+        if ($category = $request->query('category')) {
+            $query->where('category', $category);
+        }
+
+        $services = $query->get(['name', 'category', 'rate', 'min_qty']);
+
+        $lines = ['*Zimbo Socials — Service List*', ''];
+
+        foreach ($services->groupBy('category') as $category => $items) {
+            $lines[] = "*{$category}*";
+            foreach ($items as $service) {
+                $rate = number_format((float) $service->rate, 2);
+                $lines[] = "• {$service->name} — \${$rate}/1000 (min: {$service->min_qty})";
+            }
+            $lines[] = '';
+        }
+
+        return response()->json(['text' => trim(implode("\n", $lines))]);
     }
 }
