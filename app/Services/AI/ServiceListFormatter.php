@@ -34,7 +34,7 @@ class ServiceListFormatter
 You are reformatting a service price list so it can be shared on {$platform}.
 
 STRICT RULES:
-- Do NOT invent, omit, reorder within a category, or alter any service name, price, minimum order value, or link. Copy every name, number, and URL EXACTLY as given below, character for character.
+- Do NOT invent, omit, reorder within a category, or alter any service name, price, minimum order value, percentage, or link. Copy every name, number, percentage, and URL EXACTLY as given below, character for character.
 - You may only change formatting, section headers, emojis, line breaks, a short intro line, and a short closing call-to-action — nothing that touches the actual data.
 - Match the formatting conventions and tone typical of {$platform} (e.g. WhatsApp: bold with single *asterisks*, short lines, emojis; Telegram: channel-post style; Twitter/X: compact, punchy, thread-friendly; Instagram: caption style, can include hashtags at the end; Facebook: friendly post style).{$extra}
 
