@@ -84,6 +84,7 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
     const [aiLoading, setAiLoading] = useState(false);
     const [aiUsed, setAiUsed] = useState<boolean | null>(null);
     const [aiError, setAiError] = useState<string | null>(null);
+    const [showAiShare, setShowAiShare] = useState(false);
 
     const rates = { ...DEFAULT_RATES, ...(programRates ?? {}) };
     const num = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
@@ -317,10 +318,19 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
                                     <p className="mt-2 whitespace-pre-wrap break-words">{shareText}</p>
                                 </div>
 
-                                {/* AI-enhanced, service-list share message */}
-                                <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-300">{t('share_ai_title')}</p>
-                                    <p className="mt-1 text-xs leading-5 text-slate-300">{t('share_ai_hint')}</p>
+                                {/* AI-enhanced, service-list share message — secondary/optional, collapsed by default so the quick-share buttons above stay primary */}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAiShare((v) => !v)}
+                                    className="mt-4 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 transition hover:bg-white/10"
+                                >
+                                    {t('share_ai_title')}
+                                    <span className="text-slate-400">{showAiShare ? '−' : '+'}</span>
+                                </button>
+
+                                {showAiShare && (
+                                <div className="mt-2 rounded-2xl border border-white/10 bg-white/5 p-4">
+                                    <p className="text-xs leading-5 text-slate-300">{t('share_ai_hint')}</p>
 
                                     <div className="mt-3 grid grid-cols-2 gap-3">
                                         <select
@@ -375,6 +385,7 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
                                         </div>
                                     )}
                                 </div>
+                                )}
                             </div>
                         </div>
 
