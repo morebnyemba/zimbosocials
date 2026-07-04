@@ -62,6 +62,7 @@ interface Props {
         active_until: string | null;
         has_referrals: boolean;
     };
+    serviceCategories?: string[];
 }
 
 const DEFAULT_RATES = {
@@ -73,10 +74,16 @@ const DEFAULT_RATES = {
     lifetime_months: 36,
 };
 
-export default function ReferralsIndex({ summary, referralCode, referralLink, referrals, rewardHistory, myRank, globalRecentRewards, programRates, commissionStatus }: Props) {
+export default function ReferralsIndex({ summary, referralCode, referralLink, referrals, rewardHistory, myRank, globalRecentRewards, programRates, commissionStatus, serviceCategories }: Props) {
     const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
     const [shareStatus, setShareStatus] = useState<string | null>(null);
+    const [aiPlatform, setAiPlatform] = useState('WhatsApp');
+    const [aiCategory, setAiCategory] = useState('');
+    const [aiText, setAiText] = useState<string | null>(null);
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiUsed, setAiUsed] = useState<boolean | null>(null);
+    const [aiError, setAiError] = useState<string | null>(null);
 
     const rates = { ...DEFAULT_RATES, ...(programRates ?? {}) };
     const num = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
@@ -125,6 +132,40 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
         } catch {
             setShareStatus(t('share_copy_failed'));
         }
+    };
+
+    const generateAiShare = () => {
+        setAiLoading(true);
+        setAiError(null);
+        fetch(route('referrals.share-message'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+            },
+            body: JSON.stringify({ platform: aiPlatform, category: aiCategory || undefined }),
+        })
+            .then(async (r) => {
+                if (r.status === 429) {
+                    setAiError(t('share_ai_rate_limited'));
+                    return null;
+                }
+                return r.json();
+            })
+            .then((data) => {
+                if (!data) return;
+                setAiText(data.text);
+                setAiUsed(data.ai_used ?? false);
+            })
+            .catch(() => setAiError(t('share_copy_failed')))
+            .finally(() => setAiLoading(false));
+    };
+
+    const copyAiShare = async () => {
+        if (!aiText) return;
+        await navigator.clipboard.writeText(aiText);
+        setShareStatus(t('share_instagram_ready'));
     };
 
     const getTierInfo = (total: number) => {
@@ -274,6 +315,65 @@ export default function ReferralsIndex({ summary, referralCode, referralLink, re
                                 <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/20 p-4 text-sm text-slate-200">
                                     <span className="block text-xs uppercase tracking-[0.2em] text-slate-400">{t('share_preview_label')}</span>
                                     <p className="mt-2 whitespace-pre-wrap break-words">{shareText}</p>
+                                </div>
+
+                                {/* AI-enhanced, service-list share message */}
+                                <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-300">{t('share_ai_title')}</p>
+                                    <p className="mt-1 text-xs leading-5 text-slate-300">{t('share_ai_hint')}</p>
+
+                                    <div className="mt-3 grid grid-cols-2 gap-3">
+                                        <select
+                                            value={aiCategory}
+                                            onChange={(e) => setAiCategory(e.target.value)}
+                                            className="w-full rounded-xl border-none bg-slate-950/30 px-3 py-2.5 text-sm font-medium text-white focus:ring-2 focus:ring-emerald-500"
+                                        >
+                                            <option value="">{t('all_categories')}</option>
+                                            {(serviceCategories ?? []).map((c) => (
+                                                <option key={c} value={c} className="text-slate-900">{c}</option>
+                                            ))}
+                                        </select>
+                                        <select
+                                            value={aiPlatform}
+                                            onChange={(e) => setAiPlatform(e.target.value)}
+                                            className="w-full rounded-xl border-none bg-slate-950/30 px-3 py-2.5 text-sm font-medium text-white focus:ring-2 focus:ring-emerald-500"
+                                        >
+                                            <option value="WhatsApp" className="text-slate-900">WhatsApp</option>
+                                            <option value="Telegram" className="text-slate-900">Telegram</option>
+                                            <option value="Twitter/X" className="text-slate-900">Twitter / X</option>
+                                            <option value="Instagram" className="text-slate-900">Instagram</option>
+                                            <option value="Facebook" className="text-slate-900">Facebook</option>
+                                        </select>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={generateAiShare}
+                                        disabled={aiLoading}
+                                        className="mt-3 w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {aiLoading ? t('share_ai_generating') : t('share_ai_generate')}
+                                    </button>
+
+                                    {aiError && <p className="mt-2 text-xs font-medium text-red-300">{aiError}</p>}
+
+                                    {aiText && (
+                                        <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4 text-sm text-slate-200">
+                                            {aiUsed !== null && (
+                                                <p className={`mb-2 text-[10px] font-bold uppercase tracking-widest ${aiUsed ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                                    {aiUsed ? t('share_ai_enhanced_badge') : t('share_ai_unavailable')}
+                                                </p>
+                                            )}
+                                            <p className="whitespace-pre-wrap break-words">{aiText}</p>
+                                            <button
+                                                type="button"
+                                                onClick={copyAiShare}
+                                                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-slate-900 transition hover:bg-emerald-50"
+                                            >
+                                                <FaCopy /> {t('share_copy_message')}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
