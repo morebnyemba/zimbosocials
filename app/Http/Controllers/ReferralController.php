@@ -164,6 +164,15 @@ class ReferralController extends Controller
         }
 
         $link = $this->referralLink((string) $user->getAttribute('referral_code'));
+        $rates = app(\App\Services\ReferralService::class)->programRates();
+
+        // The original referral pitch (same wording used by the one-click
+        // WhatsApp/Facebook/Instagram buttons) is the primary message here —
+        // the service list is a supplementary addition, not a replacement.
+        $pitch = __('messages.referral_share_message', [
+            'percent' => rtrim(rtrim(number_format((float) $rates['welcome_bonus_percent'], 2), '0'), '.'),
+            'link' => $link,
+        ]);
 
         $query = Service::active()->orderBy('name')->limit(5);
         if ($data['category'] ?? null) {
@@ -171,13 +180,16 @@ class ReferralController extends Controller
         }
         $services = $query->get(['name', 'rate', 'min_qty']);
 
-        $lines = ['*Zimbo Socials*', ''];
-        foreach ($services as $service) {
-            $rate = number_format((float) $service->rate, 2);
-            $lines[] = "• {$service->name} — \${$rate}/1000 (min: {$service->min_qty})";
+        $lines = [$pitch];
+
+        if ($services->isNotEmpty()) {
+            $lines[] = '';
+            $lines[] = 'A few services you can try:';
+            foreach ($services as $service) {
+                $rate = number_format((float) $service->rate, 2);
+                $lines[] = "• {$service->name} — \${$rate}/1000 (min: {$service->min_qty})";
+            }
         }
-        $lines[] = '';
-        $lines[] = "Sign up with my link and let's grow together: {$link}";
 
         $raw = implode("\n", $lines);
 
