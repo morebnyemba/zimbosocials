@@ -515,6 +515,7 @@ return [
     'contact' => 'Taura Nesu',
     'about' => 'Nezvedu',
     'help' => 'Rubatsiro',
+    'referral_program' => 'Ma-Referral & Leaderboard',
     'legal' => 'Mitemo',
     'privacy' => 'Chakavanzika',
     'terms' => 'Mirairo',

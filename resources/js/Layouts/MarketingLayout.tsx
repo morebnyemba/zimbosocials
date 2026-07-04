@@ -173,6 +173,7 @@ export default function MarketingLayout({
   const primaryLinks = [
     { href: route("marketing.home"), name: "marketing.home", label: t('home') },
     { href: route("marketing.services"), name: "marketing.services", label: t('services') },
+    { href: route("marketing.referral-program"), name: "marketing.referral-program", label: t('referral_program') },
     { href: route("marketing.contact"), name: "marketing.contact", label: t('contact') },
     { href: route("marketing.about"), name: "marketing.about", label: t('about') },
     { href: route("marketing.help"), name: "marketing.help", label: t('help') },
