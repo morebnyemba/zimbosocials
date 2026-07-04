@@ -296,6 +296,8 @@ Route::middleware('auth')->group(function () {
 
     // Referrals
     Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');
+    Route::post('/referrals/share-message', [ReferralController::class, 'shareMessage'])
+        ->middleware('throttle:referral-share-draft')->name('referrals.share-message');
 
     // Leaderboard
     Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');

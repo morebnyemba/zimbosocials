@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Service;
 use App\Models\Setting;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\AI\ServiceListFormatter;
 use App\Services\LeaderboardService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -131,6 +135,65 @@ class ReferralController extends Controller
                 'active_until' => optional($svc->commissionActiveUntil($user->id))->toDateString(),
                 'has_referrals' => $referrals->count() > 0,
             ],
+            'serviceCategories' => Service::active()->distinct()->orderBy('category')->pluck('category'),
+        ]);
+    }
+
+    /**
+     * WhatsApp/Telegram/Twitter/Instagram/Facebook-ready message combining a
+     * short service list with the user's own referral link, restyled by
+     * ServiceListFormatter (Gemini). The mechanical text — including the
+     * referral link — is built server-side and handed to the model as fixed
+     * source-of-truth text; the prompt forbids altering names, prices, or the
+     * link itself, so a hallucination can only mangle tone, never money or
+     * the tracking code.
+     */
+    public function shareMessage(Request $request, ServiceListFormatter $formatter): JsonResponse
+    {
+        $data = $request->validate([
+            'platform' => ['required', 'string', 'max:40'],
+            'category' => ['nullable', 'string'],
+        ]);
+
+        /** @var User $user */
+        $user = Auth::user();
+
+        if (! $user->getAttribute('referral_code')) {
+            $user->update(['referral_code' => User::generateReferralCode()]);
+            $user->refresh();
+        }
+
+        $link = $this->referralLink((string) $user->getAttribute('referral_code'));
+
+        $query = Service::active()->orderBy('name')->limit(5);
+        if ($data['category'] ?? null) {
+            $query->where('category', $data['category']);
+        }
+        $services = $query->get(['name', 'rate', 'min_qty']);
+
+        $lines = ['*Zimbo Socials*', ''];
+        foreach ($services as $service) {
+            $rate = number_format((float) $service->rate, 2);
+            $lines[] = "• {$service->name} — \${$rate}/1000 (min: {$service->min_qty})";
+        }
+        $lines[] = '';
+        $lines[] = "Sign up with my link and let's grow together: {$link}";
+
+        $raw = implode("\n", $lines);
+
+        if (! $formatter->isAvailable()) {
+            return response()->json(['text' => $raw, 'ai_used' => false]);
+        }
+
+        $extraInstructions = $data['platform'] === 'Twitter/X'
+            ? 'Keep the whole thing under 280 characters total — mention at most one or two services and keep the referral link intact.'
+            : null;
+
+        $enhanced = $formatter->format($raw, $data['platform'], $extraInstructions);
+
+        return response()->json([
+            'text' => $enhanced ?? $raw,
+            'ai_used' => $enhanced !== null,
         ]);
     }
 }

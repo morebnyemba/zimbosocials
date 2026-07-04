@@ -90,6 +90,17 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(10)->by('ai:'.$key),
             ];
         });
+
+        // Regular-user-facing AI generation (referral share message) — tighter
+        // than ai-drafts, which is scoped to a handful of admins/marketers.
+        // This is reachable by every user, so cost control matters more.
+        RateLimiter::for('referral-share-draft', function (Request $request) {
+            $key = (string) ($request->user()?->id ?? $request->ip());
+
+            return [
+                Limit::perDay(5)->by('referral-share:'.$key),
+            ];
+        });
     }
 
     protected function loadSettings(): void
