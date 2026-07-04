@@ -29,6 +29,7 @@ interface Transaction {
     created_at: string;
     status?: string;
     method?: string;
+    reference_code?: string;
 }
 
 interface ManualPaymentDetail {
@@ -855,6 +856,9 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                             )}
                                         </div>
                                         <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">{new Date(t.created_at).toLocaleDateString()} · {t.type.replace('_', ' ')}</p>
+                                        {t.reference_code && (
+                                            <p className="text-[10px] font-mono text-zinc-300 mt-0.5 select-all">{t.reference_code}</p>
+                                        )}
                                     </div>
                                     <div className={`text-xl font-black ${amountColor} ${isUnsettled ? 'line-through' : ''}`}>
                                         {t.amount >= 0 ? '+' : ''}{Number(t.amount).toFixed(2)}

@@ -3,7 +3,7 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
-interface Tx { id: number; user?: { id: number; name: string; email: string }; type: string; amount: string; status: string; method?: string; reference?: string; notes?: string; created_at: string; }
+interface Tx { id: number; user?: { id: number; name: string; email: string }; type: string; amount: string; status: string; method?: string; reference?: string; reference_code?: string; notes?: string; created_at: string; }
 interface Props { transactions: { data: Tx[]; links: any[]; total: number }; filters: Record<string, string>; pending_deposits: number; pending_withdrawals: number; }
 
 const sC: Record<string, string> = { pending: 'bg-amber-100 text-amber-800 border-amber-200', completed: 'bg-brand-green/10 text-brand-green border-brand-green/20', failed: 'bg-red-100 text-red-800 border-red-200', rejected: 'bg-red-100 text-red-800 border-red-200' };
@@ -72,7 +72,12 @@ export default function TransactionsIndex({ transactions, filters, pending_depos
                             <tbody className="divide-y divide-gray-100">
                                 {transactions.data.map(tx => (
                                     <tr key={tx.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                                        <td className="py-3 px-5 font-medium text-gray-500">#{tx.id}</td>
+                                        <td className="py-3 px-5">
+                                            <div className="font-medium text-gray-500">#{tx.id}</div>
+                                            {tx.reference_code && (
+                                                <div className="text-[10px] font-mono text-gray-300 select-all">{tx.reference_code}</div>
+                                            )}
+                                        </td>
                                         <td className="py-3 px-5">{tx.user ? <Link href={route('admin.users.show', tx.user.id)} className="text-gray-900 hover:text-brand-green font-medium">{tx.user.name}</Link> : '—'}</td>
                                         <td className="py-3 px-5"><span className="px-2.5 py-1 text-xs font-medium rounded-md bg-gray-100 text-gray-600 capitalize tracking-wide border border-gray-200">{tx.type.replace('_', ' ')}</span></td>
                                         <td className={`py-3 px-5 text-right font-mono font-bold ${Number(tx.amount) >= 0 ? 'text-brand-green' : 'text-red-600'}`}>{Number(tx.amount) >= 0 ? '+' : ''}${Number(tx.amount).toFixed(2)}</td>

@@ -80,7 +80,7 @@ class ReferralController extends Controller
             ->where('type', 'bonus')
             ->whereIn('method', ['referral', 'referral_order'])
             ->latest()
-            ->get(['id', 'amount', 'method', 'reference', 'created_at', 'notes'])
+            ->get(['id', 'user_id', 'amount', 'method', 'reference', 'created_at', 'notes'])
             ->map(fn (Transaction $transaction) => [
                 'id' => $transaction->getKey(),
                 'amount' => (float) $transaction->getAttribute('amount'),
