@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Com
 import MarketingLayout from "@/Layouts/MarketingLayout"
 import { motion } from "framer-motion"
 import { Link } from "@inertiajs/react"
-import { FiArrowRight, FiBriefcase, FiLayers, FiTarget, FiUsers } from "react-icons/fi"
+import { FiArrowRight, FiBriefcase, FiLayers, FiShare2, FiTarget, FiUsers } from "react-icons/fi"
 
 const sectionViewport = { once: true, amount: 0.2 }
 
@@ -94,6 +94,30 @@ export default function AboutPage() {
               </Card>
             </motion.div>
           ))}
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={sectionViewport} transition={{ duration: 0.6 }} className="mt-12">
+          <Card className="border-zinc-950 bg-gradient-to-br from-zinc-950 via-zinc-900 to-emerald-950 text-white shadow-xl">
+            <CardContent className="flex flex-col items-start gap-4 py-8 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <FiShare2 className="mt-1 h-6 w-6 text-emerald-400" />
+                <div>
+                  <h3 className="text-lg font-bold text-white">Earn by sharing Zimbo Socials</h3>
+                  <p className="mt-1 max-w-xl text-sm text-zinc-300">
+                    Our referral program rewards you for every friend who joins and deposits — plus a monthly leaderboard for top referrers, order volume, and depositors.
+                  </p>
+                </div>
+              </div>
+              <Button
+                render={<Link href={route("marketing.referral-program")} />}
+                nativeButton={false}
+                className="shrink-0 gap-2 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 text-white"
+              >
+                See Referral Program
+                <FiArrowRight className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
         </motion.div>
       </section>
     </MarketingLayout>
