@@ -514,6 +514,7 @@ return [
     'contact' => 'Xhumana Lathi',
     'about' => 'Ngathi',
     'help' => 'Usizo',
+    'referral_program' => 'Ama-Referral & Leaderboard',
     'legal' => 'Imithetho',
     'privacy' => 'Imfihlo',
     'terms' => 'Imibandela',

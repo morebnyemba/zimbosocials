@@ -515,6 +515,7 @@ return [
     'contact' => 'Contact',
     'about' => 'About',
     'help' => 'Help',
+    'referral_program' => 'Referrals & Leaderboard',
     'legal' => 'Legal',
     'privacy' => 'Privacy',
     'terms' => 'Terms',

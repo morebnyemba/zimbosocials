@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ManualPaymentDetail;
 use App\Models\Service;
+use App\Services\ReferralService;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -67,6 +68,18 @@ class MarketingController extends Controller
     public function about(): Response
     {
         return Inertia::render('Marketing/About');
+    }
+
+    /**
+     * Public explainer for the referral program + leaderboard. Pulls live
+     * rates from ReferralService rather than hardcoding numbers in the page,
+     * so it never drifts out of sync when an admin changes a setting.
+     */
+    public function referralProgram(ReferralService $referralService): Response
+    {
+        return Inertia::render('Marketing/ReferralProgram', [
+            'rates' => $referralService->programRates(),
+        ]);
     }
 
     public function help(): Response

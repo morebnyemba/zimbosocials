@@ -69,6 +69,7 @@ Route::get('/contact', [MarketingController::class, 'contact'])->name('marketing
 // Static marketing pages — 5-minute public cache
 Route::middleware('cache.headers:public;max_age=300;etag')->group(function () {
     Route::get('/our-services', [MarketingController::class, 'services'])->name('marketing.services');
+    Route::get('/referral-program', [MarketingController::class, 'referralProgram'])->name('marketing.referral-program');
     Route::get('/about', [MarketingController::class, 'about'])->name('marketing.about');
     Route::get('/help-center', [MarketingController::class, 'help'])->name('marketing.help');
     Route::get('/privacy-policy', [MarketingController::class, 'privacy'])->name('marketing.privacy');
