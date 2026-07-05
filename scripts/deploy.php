@@ -48,19 +48,52 @@ if (is_dir($tempDir)) {
 }
 
 // 1. Extract ZIP
+//
+// Deliberately not using ZipArchive::extractTo() here. Some upload paths
+// (Windows tools re-zipping the archive, certain FTP clients) can produce
+// entries with backslash-separated names instead of the ZIP-spec-mandated
+// forward slash. extractTo() then creates one flat file per entry with a
+// literal backslash in its filename instead of the intended directory
+// tree. Extracting entries manually and normalizing both slash styles
+// makes this immune to whichever tool mangled the archive on its way here.
 echo "<p>Extracting release.zip...</p>";
 $zip = new ZipArchive;
 $openResult = $zip->open($zipFile);
 if ($openResult === TRUE) {
     mkdir($tempDir, 0755, true);
     $entryCount = $zip->numFiles;
-    $extractOk = $zip->extractTo($tempDir);
-    $zipStatus = $zip->status;
-    $zip->close();
 
-    if (!$extractOk || $zipStatus !== ZipArchive::ER_OK) {
-        die("❌ extractTo() reported a failure (zip status: {$zipStatus}). The archive likely didn't upload completely — re-upload release.zip (in binary/FTP mode, not ASCII) and try again. Archive claimed {$entryCount} entries.");
+    for ($i = 0; $i < $entryCount; $i++) {
+        $name = $zip->getNameIndex($i);
+        if ($name === false) {
+            continue;
+        }
+
+        $normalized = str_replace('\\', '/', $name);
+        $targetPath = $tempDir . '/' . ltrim($normalized, '/');
+
+        if (substr($normalized, -1) === '/') {
+            if (!is_dir($targetPath)) {
+                mkdir($targetPath, 0755, true);
+            }
+            continue;
+        }
+
+        $parentDir = dirname($targetPath);
+        if (!is_dir($parentDir)) {
+            mkdir($parentDir, 0755, true);
+        }
+
+        $contents = $zip->getFromIndex($i);
+        if ($contents === false) {
+            $zip->close();
+            die("❌ Failed to read entry '{$name}' from release.zip — the archive is likely corrupted or incomplete. Re-upload it and try again.");
+        }
+
+        file_put_contents($targetPath, $contents);
     }
+
+    $zip->close();
     echo "<p>✅ Extracted successfully ({$entryCount} entries).</p>";
 } else {
     die("❌ Failed to open release.zip (ZipArchive error code: {$openResult}). The file is likely corrupted or incomplete — re-upload it and try again.");
