@@ -291,6 +291,7 @@ return [
     'revenue_analytics' => 'Revenue Analytics',
     'no_recent_orders' => 'No recent orders.',
     'no_new_users' => 'No new users.',
+    'new_users_trend' => 'New Users (Last 14 Days)',
     'review' => 'Review',
     'referrals_title' => 'Referrals',
     'referrals_program_badge' => 'Referral Program',

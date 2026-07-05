@@ -290,6 +290,7 @@ return [
     'revenue_analytics' => 'Ukuhlaziya Imali Engenayo',
     'no_recent_orders' => 'Akula ma-odha akamuva.',
     'no_new_users' => 'Akula basebenzisi abatsha.',
+    'new_users_trend' => 'Abasebenzisi Abatsha (Insuku Ezingu-14 Ezedlule)',
     'review' => 'Hlola',
     'referrals_title' => 'AmaReferral',
     'referrals_program_badge' => 'Uhlelo lweReferral',

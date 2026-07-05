@@ -292,6 +292,7 @@ return [
     'revenue_analytics' => 'Revenue Analytics',
     'no_recent_orders' => 'Hakuna maodha achangobva.',
     'no_new_users' => 'Hakuna vashandisi vatsva.',
+    'new_users_trend' => 'Vashandisi Vatsva (Mazuva 14 Apfuura)',
     'review' => 'Ongorora',
     'referrals_title' => 'Mareferensi',
     'referrals_program_badge' => 'Chirongwa cheReferral',
