@@ -28,14 +28,31 @@ if (!class_exists('ZipArchive')) {
 echo "<h2>🚀 Zimbo Socials Auto-Extractor</h2>";
 echo "<p>Starting deployment process...</p>";
 
+$deleteDir = function ($dir) use (&$deleteDir) {
+    if (!is_dir($dir)) {
+        return;
+    }
+    $files = array_diff(scandir($dir), ['.', '..']);
+    foreach ($files as $file) {
+        is_dir("$dir/$file") ? $deleteDir("$dir/$file") : unlink("$dir/$file");
+    }
+    rmdir($dir);
+};
+
+// A prior run that died before reaching cleanup leaves stale files behind;
+// starting from a clean directory every time keeps failures self-contained
+// instead of accumulating debris across retries that confuses diagnostics.
+if (is_dir($tempDir)) {
+    echo "<p>Clearing leftover files from a previous attempt...</p>";
+    $deleteDir($tempDir);
+}
+
 // 1. Extract ZIP
 echo "<p>Extracting release.zip...</p>";
 $zip = new ZipArchive;
 $openResult = $zip->open($zipFile);
 if ($openResult === TRUE) {
-    if (!is_dir($tempDir)) {
-        mkdir($tempDir, 0755, true);
-    }
+    mkdir($tempDir, 0755, true);
     $entryCount = $zip->numFiles;
     $extractOk = $zip->extractTo($tempDir);
     $zipStatus = $zip->status;
@@ -110,14 +127,6 @@ if (is_dir($sourcePublic)) {
 
 // 4. Cleanup temp dir
 echo "<p>Cleaning up temporary files...</p>";
-$deleteDir = function($dir) use (&$deleteDir) {
-    if (!is_dir($dir)) return;
-    $files = array_diff(scandir($dir), array('.','..'));
-    foreach ($files as $file) {
-        (is_dir("$dir/$file")) ? $deleteDir("$dir/$file") : unlink("$dir/$file");
-    }
-    return rmdir($dir);
-};
 $deleteDir($tempDir);
 
 // 5. Delete release.zip
