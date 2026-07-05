@@ -31,45 +31,58 @@ echo "<p>Starting deployment process...</p>";
 // 1. Extract ZIP
 echo "<p>Extracting release.zip...</p>";
 $zip = new ZipArchive;
-if ($zip->open($zipFile) === TRUE) {
+$openResult = $zip->open($zipFile);
+if ($openResult === TRUE) {
     if (!is_dir($tempDir)) {
         mkdir($tempDir, 0755, true);
     }
-    $zip->extractTo($tempDir);
+    $entryCount = $zip->numFiles;
+    $extractOk = $zip->extractTo($tempDir);
+    $zipStatus = $zip->status;
     $zip->close();
-    echo "<p>✅ Extracted successfully.</p>";
+
+    if (!$extractOk || $zipStatus !== ZipArchive::ER_OK) {
+        die("❌ extractTo() reported a failure (zip status: {$zipStatus}). The archive likely didn't upload completely — re-upload release.zip (in binary/FTP mode, not ASCII) and try again. Archive claimed {$entryCount} entries.");
+    }
+    echo "<p>✅ Extracted successfully ({$entryCount} entries).</p>";
 } else {
-    die("❌ Failed to extract release.zip");
+    die("❌ Failed to open release.zip (ZipArchive error code: {$openResult}). The file is likely corrupted or incomplete — re-upload it and try again.");
 }
 
 // 2. Move my-app folder to /home/user/my-app
 echo "<p>Moving application core files to {$appTarget}...</p>";
 $sourceApp = $tempDir . '/my-app';
-if (is_dir($sourceApp)) {
-    if (is_dir($appTarget)) {
-        // If my-app already exists, we could delete it or merge it. For safety, let's merge/overwrite.
-        // A simple rename won't work if target exists, so we copy then delete.
-        echo "<p>Warning: my-app folder already exists, merging new files...</p>";
-        // Copy recursive
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($sourceApp, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
-        );
-        foreach ($iterator as $item) {
-            $targetPath = $appTarget . DIRECTORY_SEPARATOR . $iterator->getSubPathname();
-            if ($item->isDir()) {
-                if (!is_dir($targetPath)) mkdir($targetPath, 0755, true);
-            } else {
-                copy($item, $targetPath);
-            }
-        }
-    } else {
-        rename($sourceApp, $appTarget);
-    }
-    echo "<p>✅ Core files secured.</p>";
-} else {
-    die("❌ my-app directory not found in archive.");
+if (!is_dir($sourceApp)) {
+    $topLevel = is_dir($tempDir) ? array_diff(scandir($tempDir), ['.', '..']) : [];
+    $freeSpace = @disk_free_space(__DIR__);
+    $freeMb = $freeSpace !== false ? round($freeSpace / 1024 / 1024, 1) : 'unknown';
+    $found = $topLevel ? implode(', ', $topLevel) : '(nothing — extraction directory is empty)';
+    die("❌ my-app directory not found in archive. Extracted top-level contents instead: {$found}. Free disk space on this account: {$freeMb} MB. "
+        . "This usually means the extraction was cut short by a disk quota or inode limit — check your cPanel disk usage, free up space, and re-run the deploy. "
+        . "If the account has plenty of space, the uploaded release.zip is likely corrupted/incomplete — re-upload it and try again.");
 }
+
+if (is_dir($appTarget)) {
+    // If my-app already exists, we could delete it or merge it. For safety, let's merge/overwrite.
+    // A simple rename won't work if target exists, so we copy then delete.
+    echo "<p>Warning: my-app folder already exists, merging new files...</p>";
+    // Copy recursive
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($sourceApp, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+    foreach ($iterator as $item) {
+        $targetPath = $appTarget . DIRECTORY_SEPARATOR . $iterator->getSubPathname();
+        if ($item->isDir()) {
+            if (!is_dir($targetPath)) mkdir($targetPath, 0755, true);
+        } else {
+            copy($item, $targetPath);
+        }
+    }
+} else {
+    rename($sourceApp, $appTarget);
+}
+echo "<p>✅ Core files secured.</p>";
 
 // 3. Move public_html files to current directory
 echo "<p>Moving public assets...</p>";
