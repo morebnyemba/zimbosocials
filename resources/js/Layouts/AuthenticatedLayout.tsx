@@ -379,10 +379,10 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
             </AnimatePresence>
 
             {/* Main Content Area */}
-            <main className="pt-28 md:pt-36 pb-12">
+            <main className="pt-28 md:pt-36 pb-24 lg:pb-12">
                 {header && (
                     <div className="max-w-7xl mx-auto px-6 lg:px-12 mb-10">
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
                         >
@@ -394,6 +394,40 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                     {children}
                 </div>
             </main>
+
+            {/* Mobile Bottom Tab Bar — quick one-tap access without opening the drawer */}
+            <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-zinc-200 bg-white/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] lg:hidden">
+                {[
+                    { href: route('dashboard'), name: 'dashboard', label: 'Home', icon: FaChartPie },
+                    { href: route('services.index'), name: 'services.index', label: 'Services', icon: FaBox },
+                    { href: route('orders.index'), name: 'orders.index', label: 'Orders', icon: FaRocket },
+                    { href: route('wallet.index'), name: 'wallet.index', label: 'Wallet', icon: FaWallet },
+                ].map((link) => {
+                    const active = route().current(link.name);
+                    return (
+                        <Link
+                            key={link.name}
+                            href={link.href}
+                            className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-black uppercase tracking-wide transition-colors ${active ? 'text-emerald-600' : 'text-zinc-400'}`}
+                        >
+                            <span className={`flex h-8 w-11 items-center justify-center rounded-xl ${active ? 'bg-emerald-50' : ''}`}>
+                                <link.icon className="text-base" />
+                            </span>
+                            {link.label}
+                        </Link>
+                    );
+                })}
+                <button
+                    type="button"
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-black uppercase tracking-wide text-zinc-400 transition-colors"
+                >
+                    <span className="flex h-8 w-11 items-center justify-center rounded-xl">
+                        <FaBars className="text-base" />
+                    </span>
+                    More
+                </button>
+            </nav>
 
             {/* Global Footer */}
             <footer className="bg-white border-t border-zinc-200 pt-16 pb-12">
