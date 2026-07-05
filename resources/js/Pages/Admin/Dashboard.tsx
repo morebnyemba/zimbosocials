@@ -2,6 +2,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { Users, ShoppingCart, Activity, DollarSign, Ticket, CreditCard, Box, PieChart, UserCheck, FileText, Sparkles, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTranslation } from '@/lib/i18n';
 
 interface Stats {
@@ -51,27 +52,56 @@ function StatCard({ label, value, icon: Icon, href, colorClass = 'text-emerald-6
     return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
-function MiniBarChart({ data, maxHeight = 60 }: { data: { label: string; value: number }[]; maxHeight?: number }) {
-    const max = Math.max(...data.map(d => d.value), 1);
+const fmtChartDate = (d: any): string => {
+    const date = new Date(String(d));
+    return Number.isNaN(date.getTime()) ? String(d) : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+function RevenueChart({ data }: { data: { date: string; total: number }[] }) {
     return (
-        <div className="flex items-end gap-1.5 h-16 w-full">
-            {data.map((d, i) => (
-                <div key={i} className="flex-1 group relative">
-                    <div
-                        className="w-full rounded-t bg-emerald-500 transition-all group-hover:bg-emerald-400"
-                        style={{ height: `${Math.max((d.value / max) * maxHeight, 4)}px` }}
-                    />
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-zinc-900 text-xs text-white px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
-                        {d.label}: ${Number(d.value).toFixed(2)}
-                    </div>
-                </div>
-            ))}
-        </div>
+        <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs>
+                    <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f4" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={fmtChartDate} tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} width={48} />
+                <Tooltip
+                    formatter={(value: any) => [`$${Number(value).toFixed(2)}`, 'Revenue']}
+                    labelFormatter={fmtChartDate}
+                    contentStyle={{ borderRadius: 12, border: '1px solid #e4e4e7', fontSize: 12 }}
+                />
+                <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2} fill="url(#revenueFill)" />
+            </AreaChart>
+        </ResponsiveContainer>
     );
 }
 
-export default function AdminDashboard({ stats, recent_orders, pending_proofs, daily_revenue, orders_by_status, recent_users }: Props) {
-    const revenueChartData = daily_revenue.map(d => ({ label: d.date, value: Number(d.total) }));
+function NewUsersChart({ data }: { data: { date: string; count: number }[] }) {
+    return (
+        <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f4" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={fmtChartDate} tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} width={28} />
+                <Tooltip
+                    formatter={(value: any) => [value, 'New Users']}
+                    labelFormatter={fmtChartDate}
+                    contentStyle={{ borderRadius: 12, border: '1px solid #e4e4e7', fontSize: 12 }}
+                />
+                <Line type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
+        </ResponsiveContainer>
+    );
+}
+
+export default function AdminDashboard({ stats, recent_orders, pending_proofs, daily_revenue, orders_by_status, new_users_weekly, recent_users }: Props) {
+    const revenueChartData = daily_revenue.map(d => ({ date: d.date, total: Number(d.total) }));
+    const newUsersChartData = (new_users_weekly ?? []).map(d => ({ date: d.date, count: Number(d.count) }));
     const { t } = useTranslation();
     const [moderationResults, setModerationResults] = useState<Record<number, { flagged: boolean; reason: string; severity: string }>>({});
     const [moderating, setModerating] = useState<number | null>(null);
@@ -201,7 +231,7 @@ export default function AdminDashboard({ stats, recent_orders, pending_proofs, d
                     <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
                             <h2 className="text-base font-semibold text-zinc-900 mb-6">{t('month_revenue')}</h2>
                         {revenueChartData.length > 0 ? (
-                            <MiniBarChart data={revenueChartData} />
+                            <RevenueChart data={revenueChartData} />
                         ) : (
                                 <p className="text-zinc-500 text-sm">{t('no_orders')}</p>
                         )}
@@ -227,6 +257,16 @@ export default function AdminDashboard({ stats, recent_orders, pending_proofs, d
                                 );
                             })}
                         </div>
+                    </div>
+
+                    {/* New Users Trend (previously fetched but unused) */}
+                    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm lg:col-span-2">
+                        <h2 className="text-base font-semibold text-zinc-900 mb-4">{t('new_users_trend')}</h2>
+                        {newUsersChartData.length > 0 ? (
+                            <NewUsersChart data={newUsersChartData} />
+                        ) : (
+                            <p className="text-zinc-500 text-sm">{t('no_new_users')}</p>
+                        )}
                     </div>
                 </div>
 
