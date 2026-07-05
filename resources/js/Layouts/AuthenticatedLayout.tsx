@@ -60,7 +60,7 @@ function LangSwitcher() {
     };
 
     return (
-        <div ref={ref} className="relative hidden md:flex">
+        <div ref={ref} className="relative flex">
             <button
                 onClick={() => setOpen((v) => !v)}
                 className="flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 shadow-sm hover:border-zinc-300 focus:outline-none"
@@ -187,8 +187,16 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
 
                     {/* Right Actions */}
                     <div className="flex shrink-0 items-center gap-3 md:gap-4 xl:gap-6">
-                        {/* Wallet Badge */}
-                        <Link href={route('wallet.index')} className="hidden sm:flex items-center gap-3 bg-zinc-950 px-5 py-2.5 rounded-2xl border border-zinc-800 shadow-xl group relative overflow-hidden">
+                        {/* Compact Balance (mobile/tablet — the bottom tab bar covers Wallet nav) */}
+                        <Link href={route('wallet.index')} className="flex lg:hidden items-center gap-1.5 bg-zinc-950 px-3 py-2 rounded-xl">
+                            <FaWallet className="text-amber-400 text-[10px]" />
+                            <span className="text-white font-mono font-black text-xs tracking-tighter">
+                                ${Number(user.balance || 0).toFixed(2)}
+                            </span>
+                        </Link>
+
+                        {/* Wallet Badge (desktop) */}
+                        <Link href={route('wallet.index')} className="hidden lg:flex items-center gap-3 bg-zinc-950 px-5 py-2.5 rounded-2xl border border-zinc-800 shadow-xl group relative overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 opacity-10 group-hover:opacity-20 transition-opacity" />
                             <FaWallet className="text-amber-400 text-xs relative z-10" />
                             <span className="text-white font-mono font-black text-sm tracking-tighter relative z-10">
@@ -199,8 +207,8 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                             </div>
                         </Link>
 
-                        {/* Notifications */}
-                        <Link href={route('notifications.index')} className="relative h-12 w-12 rounded-2xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-500 hover:text-emerald-500 hover:border-emerald-200 transition-all shadow-sm">
+                        {/* Notifications (desktop — mobile reaches this via the avatar dropdown) */}
+                        <Link href={route('notifications.index')} className="hidden lg:flex relative h-12 w-12 rounded-2xl bg-white border border-zinc-200 items-center justify-center text-zinc-500 hover:text-emerald-500 hover:border-emerald-200 transition-all shadow-sm">
                                 <FaBell className="text-sm" />
                             {notificationsCount > 0 && (
                                 <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-emerald-500 text-white text-[10px] font-black border-4 border-white flex items-center justify-center animate-bounce">
@@ -214,9 +222,9 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
 
                         {/* User Profile Dropdown */}
                         <div className="relative">
-                            <button 
+                            <button
                                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                                className="h-12 w-12 rounded-2xl bg-zinc-100 border border-zinc-200 overflow-hidden hover:border-emerald-300 transition-all ring-offset-2 hover:ring-2 ring-emerald-500/20"
+                                className="relative h-12 w-12 rounded-2xl bg-zinc-100 border border-zinc-200 overflow-hidden hover:border-emerald-300 transition-all ring-offset-2 hover:ring-2 ring-emerald-500/20"
                             >
                                 {user.profile_image_url ? (
                                     <img src={user.profile_image_url} alt="" className="h-full w-full object-cover" />
@@ -225,13 +233,16 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                                         {(user.name?.[0] ?? 'U').toUpperCase()}
                                     </div>
                                 )}
+                                {notificationsCount > 0 && (
+                                    <span className="lg:hidden absolute top-0.5 right-0.5 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white" />
+                                )}
                             </button>
 
                             <AnimatePresence>
                                 {userDropdownOpen && (
                                     <>
                                         <div className="fixed inset-0 z-10" onClick={() => setUserDropdownOpen(false)} />
-                                        <motion.div 
+                                        <motion.div
                                             initial={{ opacity: 0, scale: 0.95, y: 10 }}
                                             animate={{ opacity: 1, scale: 1, y: 0 }}
                                             exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -242,6 +253,14 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                                                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest truncate">{user.email}</p>
                                             </div>
                                             <div className="px-3 space-y-1">
+                                                <Link href={route('notifications.index')} className="lg:hidden flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-xs font-black text-zinc-600 hover:bg-zinc-50 transition-all">
+                                                    <span className="flex items-center gap-3"><FaBell className="text-zinc-300" /> Notifications</span>
+                                                    {notificationsCount > 0 && (
+                                                        <span className="h-5 w-5 rounded-full bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center">
+                                                            {notificationsCount > 9 ? '9+' : notificationsCount}
+                                                        </span>
+                                                    )}
+                                                </Link>
                                                 <Link href={route('settings.index')} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black text-zinc-600 hover:bg-zinc-50 transition-all">
                                                     <FaCog className="text-zinc-300" /> Account Settings
                                                 </Link>
@@ -265,14 +284,6 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                                 )}
                             </AnimatePresence>
                         </div>
-
-                        {/* Mobile Toggle */}
-                        <button 
-                            onClick={() => setIsMobileMenuOpen(true)}
-                            className="lg:hidden h-12 w-12 rounded-2xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-600"
-                        >
-                            <FaBars />
-                        </button>
                     </div>
                 </div>
             </nav>
