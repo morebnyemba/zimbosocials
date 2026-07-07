@@ -85,6 +85,11 @@ Route::middleware('guest')->group(function () {
     Route::get('/home', [MarketingController::class, 'home'])->name('home');
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+
+    // Admin second factor (emailed code)
+    Route::get('/login/verify', [AuthController::class, 'show2fa'])->name('2fa.show');
+    Route::post('/login/verify', [AuthController::class, 'verify2fa'])->middleware('throttle:10,1')->name('2fa.verify');
+    Route::post('/login/verify/resend', [AuthController::class, 'resend2fa'])->middleware('throttle:3,1')->name('2fa.resend');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
     Route::get('/username-available', [AuthController::class, 'checkUsername'])
