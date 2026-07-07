@@ -28,7 +28,9 @@ export default function WhatsAppFloatingButton() {
 
     return (
         <>
-            <div className="fixed bottom-6 left-6 z-[9990]">
+            {/* .whatsapp-float lifts above the mobile bottom tab bar when
+                body.has-mobile-tabbar is set (see app.css) */}
+            <div className="whatsapp-float fixed bottom-6 left-6 z-[9990]">
                 <div 
                     className="relative flex items-center"
                     onMouseEnter={() => setIsHovered(true)}
