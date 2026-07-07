@@ -37,6 +37,12 @@ Schedule::command('contracts:close-expired')->dailyAt('01:00')->withoutOverlappi
 // Safety net: verify every wallet balance against the transaction ledger
 Schedule::command('wallet:reconcile')->dailyAt('03:00')->withoutOverlapping();
 
+// Flag active orders with no status movement for 5+ days
+Schedule::command('orders:flag-stuck')->dailyAt('08:00')->withoutOverlapping();
+
+// Nightly database dump to storage/app/backups (keeps the last 14)
+Schedule::command('db:backup')->dailyAt('03:30')->withoutOverlapping();
+
 // Prune completed queue jobs older than 48 hours
 Schedule::command('queue:prune-batches --hours=48')->daily();
 

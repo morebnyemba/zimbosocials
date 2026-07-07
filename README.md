@@ -1,84 +1,102 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Zimbo Socials
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A social-media marketing platform for Zimbabwe: users fund a wallet (Paynow
+gateway or manual proof-of-payment deposits), buy social media services
+delivered through upstream SMM providers, and businesses hire vetted marketers
+through an escrow-backed contract marketplace. Includes a referral program,
+monthly leaderboard with wallet prizes, multi-channel notifications (in-app,
+WhatsApp, email), AI-assisted tooling (Gemini), an admin panel, and a reseller
+REST API.
 
-## About Laravel
+**Stack:** Laravel 12 · Inertia.js + React (TypeScript) · Tailwind · Vite (PWA)
+· MySQL · shared-hosting-friendly (no persistent daemons required).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
-
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Local Development (This Project)
-
-Run the project with one command:
+## Local development
 
 ```bash
-npm run dev:all
+composer install
+npm install
+cp .env.example .env && php artisan key:generate
+php artisan migrate
+npm run dev:all       # Laravel at :8000 + Vite HMR at :5174
 ```
 
-This starts:
+Open the app via the Laravel URL: `http://127.0.0.1:8000`.
 
-- Laravel app server at `http://127.0.0.1:8000`
-- Vite HMR server at `http://127.0.0.1:5174`
+Run the test suite with `php artisan test`.
 
-Open the app via Laravel URL (not the Vite URL):
+## Production requirements
 
-`http://127.0.0.1:8000`
+### 1. Cron (critical)
 
-If you need to start them separately:
+**Nothing time-based works without this.** Order status syncing, queued
+WhatsApp/email notifications, deposit cleanup, contract deadlines, backups and
+the monthly leaderboard all run through Laravel's scheduler, which must be
+invoked every minute by the host's cron:
 
-```bash
-npm run serve
-npm run dev
+```
+* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-If Vite reports port conflicts, stop the previous process using that port and restart `npm run dev`.
+The admin dashboard shows a red warning banner whenever this cron stops
+running (scheduler heartbeat older than 10 minutes).
 
-## Learning Laravel
+### 2. Queue
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+`QUEUE_CONNECTION=database`. There is no persistent worker — the scheduler
+drains the queue every minute (`queue:work --stop-when-empty --max-time=50`),
+which is the standard shared-hosting pattern.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Scheduled jobs
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+| Command | Schedule | Purpose |
+|---|---|---|
+| `upstream:sync-orders` | every 5 min | Pull order statuses from providers; auto-refund cancelled/partial |
+| `queue:work --stop-when-empty` | every minute | Drain queued notifications/jobs |
+| `transactions:cleanup-stale` | hourly | Expire unpaid deposits (final-polls Paynow first; never touches withdrawals) |
+| `contracts:close-expired` | daily 01:00 | Close contracts past deadline, refund unused escrow |
+| `upstream:sync-services` | daily 02:00 | Refresh provider service catalogues |
+| `wallet:reconcile` | daily 03:00 | Verify every balance against the transaction ledger; alert on drift |
+| `db:backup` | daily 03:30 | Dump the database to `storage/app/backups` (keeps 14) |
+| `orders:flag-stuck` | daily 08:00 | Alert admins about active orders with no movement for 5+ days |
+| `referral:warn-commission-expiry` | daily 09:00 | Warn referrers before their commission window lapses |
+| `leaderboard:close-month --notify` | monthly | Snapshot rankings, credit prizes, notify winners |
 
-## Agentic Development
+## Money model
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+- `users.balance` is the wallet; every movement writes a `transactions` row
+  (`deposit`, `order_charge`, `refund`, `withdrawal`, `bonus`,
+  `contract_payout`, `contract_earning`).
+- All balance mutations run inside DB transactions with row locks.
+- Refunds are capped at *charged minus already refunded* per order, so double
+  refunds are structurally impossible.
+- Manual (non-gateway) deposits earn an instant bonus
+  (`manual_deposit_bonus_percent` setting, default 5%); referred users get a
+  welcome bonus on their first qualifying deposit (default 10%) and their
+  referrer earns per-order commission, paid on order **completion**.
+- `wallet:reconcile` is the safety net: any code path that drifts balance from
+  ledger is reported per-user within a day.
 
-```bash
-composer require laravel/boost --dev
+## Security notes
 
-php artisan boost:install
-```
+- Admin logins require an emailed 6-digit code (second factor). Emergency
+  disable from SSH/cron: `php artisan admin:2fa off` (setting:
+  `admin_2fa_enabled`).
+- Reseller API keys are stored as SHA-256 hashes; the plaintext is shown once
+  at generation. Authenticate with `Authorization: Bearer <key>` against
+  `/api/v1` (see the in-app Developer → API Docs page).
+- Payment webhooks: Paynow is verified by the SDK's hash check;
+  `/webhooks/payment` requires an HMAC-SHA256 `X-Webhook-Signature` and fails
+  closed when unconfigured.
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Key configuration
 
-## Contributing
+Environment (see `.env.example`): Paynow (`PAYNOW_INTEGRATION_ID/KEY`),
+WhatsApp Business API (Meta or Twilio), SMTP mail, Tawk.to
+(`TAWK_PROPERTY_ID/WIDGET_ID`), Gemini (`GEMINI_API_KEY`).
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Runtime settings live in the `settings` table (admin → Settings): deposit
+bonus percent, referral program rates and windows, monetizer thresholds,
+admin 2FA toggle, and more.
 
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+See `ARCHITECTURE_ANALYSIS.md` for a deeper architecture walkthrough.

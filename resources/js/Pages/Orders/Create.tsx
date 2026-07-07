@@ -53,7 +53,10 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
     const chosenService = services.find((s) => s.id === Number(data.service_id));
     const serviceRate = chosenService ? Number(chosenService.rate) : 0;
     const rawCharge = chosenService ? ((Number(data.quantity) / 1000) * serviceRate) : 0;
-    const charge = rawCharge.toFixed(4);
+    // Money shows 2dp; fall back to 4dp only when 2dp would round a real
+    // amount down to $0.00 (tiny quantities on cheap services).
+    const money = (n: number) => (n > 0 && n < 0.01 ? n.toFixed(4) : n.toFixed(2));
+    const charge = money(rawCharge);
     
     const userBalance = auth.user?.balance !== undefined ? Number(auth.user.balance) : 0;
     const balanceAfter = userBalance - rawCharge;
@@ -247,7 +250,7 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                                     <div className="space-y-4 pt-4 border-t border-white/10">
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-zinc-400 font-medium">{t('service_rate')}</span>
-                                            <span className="font-bold">${serviceRate.toFixed(4)} <span className="text-zinc-500 font-normal">/ 1k</span></span>
+                                            <span className="font-bold">${money(serviceRate)} <span className="text-zinc-500 font-normal">/ 1k</span></span>
                                         </div>
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-zinc-400 font-medium">{t('quantity')}</span>

@@ -66,7 +66,7 @@ class OrderController extends Controller
         );
 
         if (! $result['ok']) {
-            $field = match ($result['code'] ?? 0) {
+            $field = $result['field'] ?? match ($result['code'] ?? 0) {
                 402 => 'balance',
                 409 => 'link',
                 default => 'quantity',
