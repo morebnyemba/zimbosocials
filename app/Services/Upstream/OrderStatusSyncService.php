@@ -100,6 +100,12 @@ class OrderStatusSyncService
                 $this->referralService->rewardReferrerOnReferredOrder($order);
             }
 
+            // Money going back to the customer takes the referrer's cut with
+            // it (only fires if this order ever generated a commission).
+            if ($refundAmount > 0) {
+                $this->referralService->clawbackOrderCommission($order);
+            }
+
             if ($refundAmount > 0 && $user) {
                 $lockedUser = User::lockForUpdate()->findOrFail($user->id);
                 $balanceBefore = (float) $lockedUser->balance;

@@ -74,6 +74,27 @@ class OrderDispatchService
 
                 return $result;
             }
+
+            // Connection lost mid-request: the provider may have accepted the
+            // order, so failing over to another provider (or retrying) could
+            // buy the same delivery twice. Stop and hand it to a human.
+            if ($result['unknown'] ?? false) {
+                $order->update([
+                    'push_attempts' => $attempts,
+                    'pushed_to_upstream' => false,
+                    'upstream_provider_id' => $provider->id,
+                    'upstream_last_error' => 'UNKNOWN OUTCOME: '.$result['message'],
+                ]);
+
+                NotificationService::notifyAdmins(
+                    'admin_order_dispatch_unknown',
+                    "Order #{$order->id} needs manual verification",
+                    "The connection to {$provider->name} dropped while submitting order #{$order->id} — it may or may not exist upstream. Check the provider panel before retrying or refunding.",
+                    ['order_id' => $order->id, 'provider_id' => $provider->id]
+                );
+
+                return $result;
+            }
         }
 
         // If we reach here, all providers failed

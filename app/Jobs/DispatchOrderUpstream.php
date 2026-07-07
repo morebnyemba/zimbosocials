@@ -59,6 +59,13 @@ class DispatchOrderUpstream implements ShouldQueue
             return;
         }
 
+        // Unknown outcome (connection lost mid-request): the provider may
+        // have the order — retrying could buy the delivery twice. Admins were
+        // alerted by the dispatch service; stop retrying quietly.
+        if ($result['unknown'] ?? false) {
+            return;
+        }
+
         // Throw so the queue retries with backoff; failed() handles the
         // refund once every attempt is exhausted.
         throw new \RuntimeException(

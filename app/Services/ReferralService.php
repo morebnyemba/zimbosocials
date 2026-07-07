@@ -296,6 +296,74 @@ class ReferralService
         });
     }
 
+    /**
+     * Reverse the order commission when a commissioned order is refunded.
+     * Commission pays on completion, but an admin can still refund a
+     * completed order (or a force sync can pull it back to cancelled) — the
+     * referrer must not keep a cut of money that went back to the customer.
+     * Idempotent via the clawback reference.
+     */
+    public function clawbackOrderCommission(Order $order): void
+    {
+        $reference = 'REF-ORDER-'.$order->getKey();
+        $clawbackReference = 'REF-ORDER-CLAWBACK-'.$order->getKey();
+
+        $commission = Transaction::query()
+            ->where('type', 'bonus')
+            ->where('reference', $reference)
+            ->where('status', 'completed')
+            ->first();
+
+        if (! $commission) {
+            return; // order never generated a commission
+        }
+
+        DB::transaction(function () use ($commission, $clawbackReference, $order): void {
+            $referrer = User::lockForUpdate()->find($commission->user_id);
+            if (! $referrer) {
+                return;
+            }
+
+            $already = Transaction::query()
+                ->where('user_id', $referrer->getKey())
+                ->where('reference', $clawbackReference)
+                ->exists();
+
+            if ($already) {
+                return;
+            }
+
+            $amount = (float) $commission->amount;
+            $balanceBefore = (float) $referrer->balance;
+            $referrer->decrement('balance', $amount);
+
+            $clawbackTx = Transaction::create([
+                'user_id' => (int) $referrer->getKey(),
+                'order_id' => null,
+                'type' => 'bonus',
+                'amount' => -$amount,
+                'balance_before' => $balanceBefore,
+                'balance_after' => $balanceBefore - $amount,
+                'method' => 'referral_clawback',
+                'reference' => $clawbackReference,
+                'status' => 'completed',
+                'notes' => "Commission reversed — order #{$order->getKey()} was refunded.",
+            ]);
+
+            AuditLog::log(
+                action: 'referral.order_commission_clawed_back',
+                userId: null,
+                modelType: Transaction::class,
+                modelId: (int) $clawbackTx->getKey(),
+                newValues: [
+                    'referrer_id' => (int) $referrer->getKey(),
+                    'source_order_id' => (int) $order->getKey(),
+                    'clawback_amount' => $amount,
+                ]
+            );
+        });
+    }
+
     public function rewardReferrerOnReferredOrder(Order $order): void
     {
         $commissionPercent = $this->orderCommissionPercent();

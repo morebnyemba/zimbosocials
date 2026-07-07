@@ -86,6 +86,17 @@ class UpstreamProviderClient
                 'raw' => $body,
                 'external_order_id' => null,
             ];
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            // The connection died mid-request (timeout, reset). The provider
+            // MAY have accepted the order before we lost them — retrying or
+            // failing over blindly could purchase the same delivery twice.
+            return [
+                'ok' => false,
+                'unknown' => true,
+                'message' => 'Connection lost mid-request — the provider may have received the order. Manual verification required before any retry.',
+                'raw' => null,
+                'external_order_id' => null,
+            ];
         } catch (\Throwable $e) {
             return [
                 'ok' => false,
