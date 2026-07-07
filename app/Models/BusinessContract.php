@@ -51,4 +51,10 @@ class BusinessContract extends Model
     {
         return $query->where('status', self::STATUS_OPEN);
     }
+
+    /** Whether the contract's deadline (if any) has passed. */
+    public function isPastDeadline(): bool
+    {
+        return $this->deadline_at !== null && $this->deadline_at->endOfDay()->isPast();
+    }
 }

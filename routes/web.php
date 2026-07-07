@@ -340,6 +340,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/contracts/{contract}', [ContractController::class, 'closeContract'])->name('contracts.destroy');
     Route::post('/contracts/{contract}/apply', [ContractController::class, 'apply'])->name('contracts.apply');
     Route::post('/contracts/{contract}/applications/{application}/decision', [ContractController::class, 'decide'])->name('contracts.applications.decision');
+    Route::post('/contracts/{contract}/applications/{application}/revoke', [ContractController::class, 'revoke'])->name('contracts.applications.revoke');
 
     // Marketer social links
     Route::post('/social-links', [MarketerSocialLinkController::class, 'store'])->name('social-links.store');

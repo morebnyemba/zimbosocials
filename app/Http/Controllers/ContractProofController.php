@@ -91,6 +91,13 @@ class ContractProofController extends Controller
                         throw new \RuntimeException('This proof has already been reviewed.');
                     }
 
+                    // The slot must still be live — a revoked/denied application
+                    // must not be able to collect the escrow through a stale proof.
+                    $lockedApplication = ContractApplication::lockForUpdate()->findOrFail($application->getKey());
+                    if ($lockedApplication->status !== ContractApplication::STATUS_APPROVED) {
+                        throw new \RuntimeException('This application is no longer approved — payout is not available.');
+                    }
+
                     $budget = (float) ($contract->budget ?? 0);
                     $marketer = $application->marketer;
 
@@ -126,7 +133,18 @@ class ContractProofController extends Controller
                         'reviewed_at' => now(),
                     ]);
 
-                    $application->update(['status' => ContractApplication::STATUS_COMPLETED]);
+                    $lockedApplication->update(['status' => ContractApplication::STATUS_COMPLETED]);
+
+                    // Draw the released budget down from the contract's escrow
+                    // so funded_amount always reflects what's still held.
+                    if ($budget > 0) {
+                        $lockedBusinessContract = \App\Models\BusinessContract::lockForUpdate()->find($contract->getKey());
+                        if ($lockedBusinessContract) {
+                            $lockedBusinessContract->update([
+                                'funded_amount' => max(0, round((float) $lockedBusinessContract->funded_amount - $budget, 2)),
+                            ]);
+                        }
+                    }
                 });
             } catch (\RuntimeException $e) {
                 return back()->with('error', $e->getMessage());
