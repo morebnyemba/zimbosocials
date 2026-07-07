@@ -25,7 +25,8 @@ class ApiController extends Controller
             return null;
         }
 
-        return User::where('api_key', $key)->where('is_active', true)->first();
+        // Keys are stored hashed — never compared in plaintext.
+        return User::findByApiKey($key);
     }
 
     private function unauthorized(): JsonResponse

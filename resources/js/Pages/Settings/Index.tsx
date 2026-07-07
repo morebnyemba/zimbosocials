@@ -7,6 +7,11 @@ import { useState } from 'react'
 export default function SettingsIndex({ auth }: PageProps) {
     const user = auth.user
     const notifPrefs = (user as any).notification_prefs ?? { email: true, whatsapp: true }
+    // Freshly generated key, flashed by the server exactly once. After any
+    // other navigation only the masked last-4 form is available.
+    const newApiKey = (usePage().props as any).flash?.new_api_key as string | undefined
+    const apiKeyLast4 = (user as any).api_key_last4 as string | undefined
+    const displayedKey = newApiKey ?? (apiKeyLast4 ? `zvk_live_••••••••••••${apiKeyLast4}` : null)
 
     const profileForm = useForm({
         name: user.name,
@@ -33,8 +38,9 @@ export default function SettingsIndex({ auth }: PageProps) {
     const [showKeyConfirm, setShowKeyConfirm] = useState(false)
 
     function copyApiKey() {
-        if (user.api_key) {
-            navigator.clipboard.writeText(user.api_key)
+        // Only the one-time revealed key is copyable — the masked form is useless.
+        if (newApiKey) {
+            navigator.clipboard.writeText(newApiKey)
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
         }
@@ -171,25 +177,33 @@ export default function SettingsIndex({ auth }: PageProps) {
                 </div>
 
                 {/* API Key */}
-                {user.api_key !== undefined && (
-                    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h3 className="mb-2 font-semibold text-slate-900">API Key</h3>
-                        <p className="mb-3 text-sm text-slate-500">Use this key to access the API. Keep it secret.</p>
-                        <div className="flex items-center gap-2">
-                            <code className="flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700 break-all">
-                                {user.api_key ?? '—'}
-                            </code>
+                <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 className="mb-2 font-semibold text-slate-900">API Key</h3>
+                    <p className="mb-3 text-sm text-slate-500">
+                        Use this key to access the API. For your security the full key is shown
+                        <strong> only once</strong>, right after it is generated — copy it then.
+                    </p>
+                    {newApiKey && (
+                        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                            Copy your new key now — it will not be shown again after you leave this page.
+                        </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                        <code className="flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700 break-all">
+                            {displayedKey ?? 'No API key yet — generate one below.'}
+                        </code>
+                        {newApiKey && (
                             <button onClick={copyApiKey}
                                 className="shrink-0 rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50">
                                 {copied ? 'Copied!' : 'Copy'}
                             </button>
-                        </div>
-                        <button onClick={regenerateKey}
-                            className="mt-3 text-xs text-red-600 underline hover:text-red-800">
-                            Regenerate key
-                        </button>
+                        )}
                     </div>
-                )}
+                    <button onClick={regenerateKey}
+                        className="mt-3 text-xs text-red-600 underline hover:text-red-800">
+                        {apiKeyLast4 || newApiKey ? 'Regenerate key' : 'Generate key'}
+                    </button>
+                </div>
             </div>
             
             <ConfirmModal
