@@ -17,8 +17,15 @@ Schedule::command('upstream:sync-services')->dailyAt('02:00')->withoutOverlappin
 // to 50s so it never runs into (or blocks) the next minute's scheduler tick.
 Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=3')->everyMinute()->withoutOverlapping();
 
-// Expire stale pending transactions older than 24 hours
+// Expire stale pending deposits older than 24 hours (final-polls Paynow
+// first; skips proof-submitted deposits; never touches withdrawals)
 Schedule::command('transactions:cleanup-stale --hours=24')->hourly()->withoutOverlapping();
+
+// Close contracts past their deadline and refund unused-slot escrow
+Schedule::command('contracts:close-expired')->dailyAt('01:00')->withoutOverlapping();
+
+// Safety net: verify every wallet balance against the transaction ledger
+Schedule::command('wallet:reconcile')->dailyAt('03:00')->withoutOverlapping();
 
 // Prune completed queue jobs older than 48 hours
 Schedule::command('queue:prune-batches --hours=48')->daily();
