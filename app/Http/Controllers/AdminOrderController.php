@@ -86,12 +86,19 @@ class AdminOrderController extends Controller
         ]);
     }
 
-    public function updateStatus(Order $order, Request $request): RedirectResponse
+    public function updateStatus(Order $order, Request $request, \App\Services\ReferralService $referralService): RedirectResponse
     {
         $data = $request->validate([
             'status' => ['required', 'in:pending,processing,in_progress,completed,partial,cancelled,refunded'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
+
+        // 'refunded' set through here never credits the wallet — the order
+        // would claim refunded while the user's money stayed gone. Force the
+        // dedicated refund action, which pays the un-refunded remainder.
+        if ($data['status'] === 'refunded') {
+            return back()->with('error', 'Use the Refund action to refund an order — it credits the wallet and sets the status together.');
+        }
 
         $oldStatus = $order->status;
         $updates = ['status' => $data['status']];
@@ -104,6 +111,11 @@ class AdminOrderController extends Controller
         }
 
         $order->update($updates);
+
+        // Same completion-time referral commission as the automated sync path.
+        if ($data['status'] === 'completed') {
+            $referralService->rewardReferrerOnReferredOrder($order);
+        }
 
         AuditLog::dispatchLog(
             'order.status_changed',
@@ -148,57 +160,70 @@ class AdminOrderController extends Controller
     }
 
     /**
-     * Refund an order — atomic with row locking to prevent double-refunds.
+     * Refund an order — atomic with row locking, and capped at the amount not
+     * already refunded. An order that was auto-refunded (cancelled/partial by
+     * the upstream sync) or whose status was set to 'refunded' without a
+     * wallet credit is handled correctly: only the remainder is paid out.
      */
     public function refund(Order $order): RedirectResponse
     {
-        if ($order->status === 'refunded') {
-            return back()->with('error', 'Order is already refunded.');
-        }
+        $refunded = 0.0;
 
         try {
-            DB::transaction(function () use ($order): void {
+            DB::transaction(function () use ($order, &$refunded): void {
                 $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
 
-                if ($lockedOrder->status === 'refunded') {
-                    throw new \RuntimeException('Order is already refunded.');
+                $remaining = $lockedOrder->remainingRefundable();
+
+                if ($remaining <= 0) {
+                    throw new \RuntimeException('Order has already been fully refunded.');
                 }
 
+                $oldStatus = (string) $lockedOrder->status;
                 $lockedOrder->update(['status' => 'refunded']);
 
                 $user = User::lockForUpdate()->findOrFail($lockedOrder->user_id);
-                $charge = (float) $lockedOrder->charge;
 
-                $user->creditBalance($charge, 'refund', "Admin refund for order #{$lockedOrder->id}", 'refund');
+                $user->creditBalance($remaining, 'refund', "Admin refund for order #{$lockedOrder->id}", 'refund', $lockedOrder);
+                $refunded = $remaining;
+
+                // If this order paid a referral commission, reverse it —
+                // the referrer keeps no cut of refunded money.
+                app(\App\Services\ReferralService::class)->clawbackOrderCommission($lockedOrder);
 
                 AuditLog::log(
                     'order.refunded',
                     Auth::id(),
                     Order::class,
                     $lockedOrder->id,
-                    ['status' => $lockedOrder->getOriginal('status')],
-                    ['status' => 'refunded', 'refund_amount' => $charge],
+                    ['status' => $oldStatus],
+                    ['status' => 'refunded', 'refund_amount' => $remaining],
                 );
 
                 NotificationService::notify(
                     $user->id,
                     'order_refunded',
                     'Order #'.$lockedOrder->id.' Refunded',
-                    "Your order has been refunded. \${$charge} has been credited to your account.",
-                    ['order_id' => $lockedOrder->id, 'amount' => $charge]
+                    "Your order has been refunded. \${$remaining} has been credited to your account.",
+                    ['order_id' => $lockedOrder->id, 'amount' => $remaining]
                 );
             });
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        $charge = (float) $order->charge;
         $user = $order->user;
 
-        return back()->with('success', "Order #{$order->id} refunded. \${$charge} credited to {$user->name}.");
+        return back()->with('success', "Order #{$order->id} refunded. \${$refunded} credited to {$user->name}.");
     }
 
-    public function store(Request $request): RedirectResponse
+    /**
+     * Place a manual order on a user's behalf. By default the user's wallet
+     * is charged like any normal order (with a balance check + transaction);
+     * unticking charge_user creates an explicit comp order, which is never
+     * refundable because nothing was ever charged.
+     */
+    public function store(Request $request, \App\Services\Upstream\OrderDispatchService $dispatchService): RedirectResponse
     {
         $data = $request->validate([
             'user_id' => ['required', 'exists:users,id'],
@@ -206,16 +231,45 @@ class AdminOrderController extends Controller
             'link' => ['required', 'string', 'max:500'],
             'quantity' => ['required', 'integer', 'min:1'],
             'charge' => ['required', 'numeric', 'min:0'],
+            'charge_user' => ['nullable', 'boolean'],
         ]);
 
-        $order = Order::create([
-            'user_id' => $data['user_id'],
-            'service_id' => $data['service_id'],
-            'link' => $data['link'],
-            'quantity' => $data['quantity'],
-            'charge' => $data['charge'],
-            'status' => 'pending',
-        ]);
+        $chargeUser = $request->boolean('charge_user', true);
+        $service = \App\Models\Service::findOrFail($data['service_id']);
+
+        try {
+            $order = DB::transaction(function () use ($data, $chargeUser, $service): Order {
+                $user = User::lockForUpdate()->findOrFail($data['user_id']);
+                $charge = round((float) $data['charge'], 4);
+
+                if ($chargeUser && (float) $user->balance < $charge) {
+                    throw new \RuntimeException(
+                        "Insufficient balance: {$user->name} has \$".number_format((float) $user->balance, 2)
+                        .' but the order costs $'.number_format($charge, 2)
+                        .'. Top up their wallet first or place it as a comp order.'
+                    );
+                }
+
+                $order = Order::create([
+                    'user_id' => $user->id,
+                    'service_id' => $service->id,
+                    'link' => trim($data['link']),
+                    'quantity' => (int) $data['quantity'],
+                    'charge' => $charge,
+                    'rate_at_order' => $service->rate,
+                    'status' => 'pending',
+                    'notes' => $chargeUser ? 'Placed by admin' : 'Placed by admin (comp — no charge)',
+                ]);
+
+                if ($chargeUser && $charge > 0) {
+                    $user->deductBalance($charge, $order, "Manual order #{$order->id} placed by admin — {$service->name}");
+                }
+
+                return $order;
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         AuditLog::dispatchLog(
             'order.created_by_admin',
@@ -223,16 +277,23 @@ class AdminOrderController extends Controller
             Order::class,
             $order->id,
             null,
-            $data
+            $data + ['charged_user' => $chargeUser]
         );
 
         NotificationService::notify(
-            $data['user_id'],
+            (int) $data['user_id'],
             'order_placed',
             'Manual Order Placed',
             "An admin has placed an order (#{$order->id}) on your behalf."
         );
 
-        return back()->with('success', "Order #{$order->id} created successfully.");
+        // Push upstream like any normal order; failed pushes get queued
+        // retries with backoff (skipped on the sync driver, which can't defer).
+        $dispatch = $dispatchService->dispatch($order);
+        if (! $dispatch['ok'] && config('queue.default') !== 'sync') {
+            \App\Jobs\DispatchOrderUpstream::dispatch($order->id)->delay(now()->addSeconds(15));
+        }
+
+        return back()->with('success', "Order #{$order->id} created".($chargeUser ? ' and charged to the user.' : ' as a comp (no charge).'));
     }
 }

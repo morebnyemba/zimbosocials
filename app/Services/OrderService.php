@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\DuplicateOrderException;
 use App\Exceptions\InsufficientBalanceException;
+use App\Jobs\DispatchOrderUpstream;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\User;
@@ -14,6 +15,55 @@ class OrderService
 {
     /** Order statuses considered "still in progress" for the duplicate-link guard. */
     private const IN_PROGRESS_STATUSES = ['pending', 'processing', 'in_progress'];
+
+    /**
+     * Platform keyword → allowed link hosts. Catches the classic mistake of
+     * pasting a TikTok link into an Instagram service (which then fails or
+     * misdelivers upstream after the money is already taken). Categories that
+     * match no keyword skip validation entirely.
+     */
+    private const PLATFORM_HOSTS = [
+        'instagram' => ['instagram.com', 'instagr.am'],
+        'tiktok' => ['tiktok.com'],
+        'youtube' => ['youtube.com', 'youtu.be'],
+        'facebook' => ['facebook.com', 'fb.com', 'fb.watch'],
+        'twitter' => ['x.com', 'twitter.com'],
+        'telegram' => ['t.me', 'telegram.me'],
+        'whatsapp' => ['whatsapp.com', 'wa.me'],
+        'spotify' => ['spotify.com'],
+        'linkedin' => ['linkedin.com'],
+    ];
+
+    /**
+     * Null when the link is acceptable for the service's platform; otherwise
+     * a user-facing error message.
+     */
+    private function validateLinkPlatform(Service $service, string $link): ?string
+    {
+        $category = strtolower((string) $service->category);
+        $host = strtolower((string) parse_url($link, PHP_URL_HOST));
+
+        if ($host === '') {
+            return null; // the url validation rule already handles malformed links
+        }
+
+        foreach (self::PLATFORM_HOSTS as $keyword => $hosts) {
+            // 'x' as a keyword would false-positive; twitter covers x.com below.
+            if (! str_contains($category, $keyword)) {
+                continue;
+            }
+
+            foreach ($hosts as $allowed) {
+                if ($host === $allowed || str_ends_with($host, '.'.$allowed)) {
+                    return null;
+                }
+            }
+
+            return "This is a {$service->category} service — the link must be a {$keyword} link (got {$host}).";
+        }
+
+        return null; // unknown platform category: don't block
+    }
 
     /**
      * Atomically validate, create, and charge an order.
@@ -37,6 +87,17 @@ class OrderService
             return [
                 'ok' => false,
                 'error' => "Quantity must be between {$service->min_qty} and {$service->max_qty}.",
+                'field' => 'quantity',
+                'code' => 422,
+            ];
+        }
+
+        // --- Validate the link matches the service's platform ---
+        if ($linkError = $this->validateLinkPlatform($service, $link)) {
+            return [
+                'ok' => false,
+                'error' => $linkError,
+                'field' => 'link',
                 'code' => 422,
             ];
         }
@@ -111,6 +172,17 @@ class OrderService
 
         // --- Dispatch upstream (outside transaction; failure is recoverable) ---
         $dispatch = $dispatchService->dispatch($order);
+
+        // A failed synchronous push gets queued retries with backoff; the job
+        // auto-cancels and refunds the order if every attempt fails, so the
+        // customer's money never stays stuck on an undeliverable order.
+        // Skipped on the sync driver (it can't defer or retry, so the job's
+        // retry-signalling throw would just crash this request) and for
+        // unknown outcomes (the provider may have the order — retrying could
+        // buy the delivery twice; admins are alerted to verify manually).
+        if (! $dispatch['ok'] && ! ($dispatch['unknown'] ?? false) && config('queue.default') !== 'sync') {
+            DispatchOrderUpstream::dispatch($order->id)->delay(now()->addSeconds(15));
+        }
 
         return [
             'ok' => true,

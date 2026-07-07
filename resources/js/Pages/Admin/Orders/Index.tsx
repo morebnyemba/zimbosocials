@@ -170,7 +170,7 @@ export default function OrdersIndex({ orders, filters, status_counts }: Props) {
                 <ConfirmModal
                     open
                     title="Refund Order"
-                    message={`Refund order #${pendingRefund.id} ($${Number(pendingRefund.charge).toFixed(2)})? The amount will be returned to the user's wallet.`}
+                    message={`Refund order #${pendingRefund.id}? Any amount not already refunded (up to $${Number(pendingRefund.charge).toFixed(2)}) will be returned to the user's wallet.`}
                     confirmLabel="Refund"
                     danger
                     onConfirm={() => { router.post(route('admin.orders.refund', pendingRefund.id), {}, { preserveScroll: true }); setPendingRefund(null); }}

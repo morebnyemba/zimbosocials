@@ -47,6 +47,7 @@ interface Props extends PageProps {
     manualPaymentDetails: ManualPaymentDetail[];
     availableMethods: Record<string, string>;
     gatewayMethods: string[];
+    manualDepositBonusPercent: number;
 }
 
 interface ToastState {
@@ -81,7 +82,7 @@ const methodIcons: Record<string, any> = {
     paypal: FaPaypal,
 };
 
-export default function WalletIndex({ auth, transactions, totals, manualPaymentDetails, availableMethods, gatewayMethods }: Props) {
+export default function WalletIndex({ auth, transactions, totals, manualPaymentDetails, availableMethods, gatewayMethods, manualDepositBonusPercent }: Props) {
     const { t } = useTranslation();
     const user = auth.user;
     const isMarketer = user.role === 'marketer' || user.role === 'reseller';
@@ -131,6 +132,11 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
 
     const chosenDetails = manualPaymentDetails.find((m) => m.method_key === depositForm.data.method);
     const isPaynowMethod = gatewaySet.has(depositForm.data.method);
+    const bonusPercent = Number(manualDepositBonusPercent ?? 0);
+    const depositAmount = parseFloat(depositForm.data.amount);
+    const bonusPreview = !isPaynowMethod && bonusPercent > 0 && !isNaN(depositAmount) && depositAmount > 0
+        ? Math.round(depositAmount * bonusPercent) / 100
+        : null;
 
     const notify = (kind: ToastState['kind'], message: string) => {
         setToast({ kind, message });
@@ -571,7 +577,7 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                                 const Icon = methodIcons[key] || FaRegCreditCard;
                                                 const isSelected = depositForm.data.method === key;
                                                 const isPaynow = gatewaySet.has(key);
-                                                const badge = isPaynow ? 'ONLINE' : 'MANUAL';
+                                                const badge = isPaynow ? 'ONLINE' : (bonusPercent > 0 ? `MANUAL +${bonusPercent}%` : 'MANUAL');
                                                 return (
                                                     <button 
                                                         key={key}
@@ -645,6 +651,16 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                         </>
                                     ) : (
                                         <>
+                                            {bonusPercent > 0 && (
+                                                <div className="p-5 rounded-3xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium leading-relaxed">
+                                                    <p className="font-black uppercase tracking-widest text-[9px] mb-1 flex items-center gap-2">
+                                                        <FaCheckCircle /> {bonusPercent}% Bonus on Every Manual Deposit
+                                                    </p>
+                                                    {bonusPreview !== null
+                                                        ? <>Deposit <span className="font-black">${depositAmount.toFixed(2)}</span> and get an extra <span className="font-black">${bonusPreview.toFixed(2)}</span> credited instantly when your payment is confirmed.</>
+                                                        : <>Every manual deposit earns an instant {bonusPercent}% wallet bonus once your payment is confirmed.</>}
+                                                </div>
+                                            )}
                                             {chosenDetails && (
                                                 <div className="p-6 rounded-3xl bg-zinc-900 text-zinc-300 text-xs font-medium leading-relaxed border border-white/5 space-y-4">
                                                     <p className="text-emerald-400 font-black uppercase tracking-widest text-[9px] flex items-center gap-2">

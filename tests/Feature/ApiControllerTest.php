@@ -17,18 +17,29 @@ class ApiControllerTest extends TestCase
 
     private function apiUser(array $attrs = []): User
     {
-        return User::factory()->create(array_merge([
+        // Keys are stored hashed; keep the plaintext on the in-memory model
+        // only so the tests' `$user->api_key` reads keep working.
+        $key = $attrs['api_key'] ?? 'test-api-key-'.Str::random(8);
+        unset($attrs['api_key']);
+
+        $user = User::factory()->create(array_merge([
             'role' => 'reseller',
             'is_active' => true,
-            'api_key' => 'test-api-key-'.Str::random(8),
             'balance' => 50,
+            'api_key_hash' => hash('sha256', $key),
+            'api_key_last4' => substr($key, -4),
         ], $attrs));
+
+        $user->api_key = $key;
+
+        return $user;
     }
 
     private function activeService(array $attrs = []): Service
     {
         return Service::factory()->create(array_merge([
             'is_active' => true,
+            'category' => 'Instagram',
             'rate' => 1.0,   // $1 per 1000 → 100 qty = $0.10
             'min_qty' => 100,
             'max_qty' => 100000,
@@ -83,7 +94,7 @@ class ApiControllerTest extends TestCase
 
         $response = $this->withToken($user->api_key)->postJson('/api/v1/order', [
             'service' => $service->id,
-            'link' => 'https://example.com/profile',
+            'link' => 'https://instagram.com/zimbo.profile',
             'quantity' => 1000,
         ]);
 
@@ -107,7 +118,7 @@ class ApiControllerTest extends TestCase
 
         $this->withToken($user->api_key)->postJson('/api/v1/order', [
             'service' => $service->id,
-            'link' => 'https://example.com/profile',
+            'link' => 'https://instagram.com/zimbo.profile',
             'quantity' => 1000,
         ])->assertStatus(402)
             ->assertJsonFragment(['error' => 'Insufficient balance.']);
@@ -120,7 +131,7 @@ class ApiControllerTest extends TestCase
 
         $this->withToken($user->api_key)->postJson('/api/v1/order', [
             'service' => $service->id,
-            'link' => 'https://example.com/profile',
+            'link' => 'https://instagram.com/zimbo.profile',
             'quantity' => 9999999,
         ])->assertStatus(422);
     }
@@ -131,7 +142,7 @@ class ApiControllerTest extends TestCase
 
         $this->postJson('/api/v1/order', [
             'service' => $service->id,
-            'link' => 'https://example.com/profile',
+            'link' => 'https://instagram.com/zimbo.profile',
             'quantity' => 500,
         ])->assertUnauthorized();
     }
@@ -164,7 +175,7 @@ class ApiControllerTest extends TestCase
 
     public function test_cancel_order_refunds_balance(): void
     {
-        $user = $this->apiUser(['balance' => 5.0]);
+        $user = $this->apiUser(['balance' => 6.0]);
         $service = $this->activeService(['rate' => 1.0]);
         $order = Order::factory()->create([
             'user_id' => $user->id,
@@ -172,6 +183,9 @@ class ApiControllerTest extends TestCase
             'charge' => 1.0,
             'status' => 'pending',
         ]);
+        // Refunds pay back only what was actually charged — record the charge
+        // the same way production order placement does.
+        $user->deductBalance(1.0, $order, 'Order #'.$order->id);
 
         $this->withToken($user->api_key)
             ->postJson('/api/v1/cancel', ['order' => $order->id])

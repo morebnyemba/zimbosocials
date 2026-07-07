@@ -1,18 +1,14 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { PageProps } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
-import { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
 
 export default function ApiDocs({ auth }: PageProps) {
     const { user } = auth;
-    const [copied, setCopied] = useState(false);
-
-    const copyKey = () => {
-        navigator.clipboard.writeText(user.api_key || '');
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
+    // The full key is only revealed once at generation (Settings page); docs
+    // show the masked form so the plaintext never appears in page payloads.
+    const maskedKey = user.api_key_last4
+        ? `zvk_live_••••••••••••${user.api_key_last4}`
+        : null;
 
     const apiUrl = `${window.location.origin}/api/v1`;
 
@@ -27,21 +23,18 @@ export default function ApiDocs({ auth }: PageProps) {
                     <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-8 border border-emerald-100">
                         <div className="p-6 bg-emerald-50/50 border-b border-emerald-100">
                             <h3 className="text-lg font-bold text-emerald-900">Your API Key</h3>
-                            <p className="mt-1 text-sm text-emerald-700">Use this key to authenticate your API requests. Keep it secret.</p>
+                            <p className="mt-1 text-sm text-emerald-700">
+                                Authenticate requests with your API key. The full key is shown only once when
+                                generated in <a href={route('settings.index')} className="underline font-semibold">Settings</a> — keep it secret.
+                            </p>
                             
                             <div className="mt-4 flex items-center max-w-lg">
                                 <input 
                                     type="text" 
                                     readOnly 
-                                    value={user.api_key || 'No API key generated yet.'}
-                                    className="block w-full rounded-l-md border-emerald-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm bg-white font-mono"
+                                    value={maskedKey ?? 'No API key generated yet — create one in Settings.'}
+                                    className="block w-full rounded-md border-emerald-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm bg-white font-mono"
                                 />
-                                <button
-                                    onClick={copyKey}
-                                    className="inline-flex items-center rounded-r-md border border-l-0 border-emerald-300 bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none"
-                                >
-                                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -63,7 +56,7 @@ export default function ApiDocs({ auth }: PageProps) {
                                     <p className="text-sm text-slate-600 mb-2">Returns a list of all available services.</p>
                                     <div className="bg-slate-900 rounded-md p-4 text-emerald-400 font-mono text-sm overflow-x-auto">
                                         curl -X POST {apiUrl} \<br/>
-                                        &nbsp;&nbsp;-d "key={user.api_key || 'YOUR_API_KEY'}" \<br/>
+                                        &nbsp;&nbsp;-d "key=YOUR_API_KEY" \<br/>
                                         &nbsp;&nbsp;-d "action=services"
                                     </div>
                                 </section>
@@ -74,7 +67,7 @@ export default function ApiDocs({ auth }: PageProps) {
                                     <p className="text-sm text-slate-600 mb-2">Places a new order.</p>
                                     <div className="bg-slate-900 rounded-md p-4 text-emerald-400 font-mono text-sm overflow-x-auto">
                                         curl -X POST {apiUrl} \<br/>
-                                        &nbsp;&nbsp;-d "key={user.api_key || 'YOUR_API_KEY'}" \<br/>
+                                        &nbsp;&nbsp;-d "key=YOUR_API_KEY" \<br/>
                                         &nbsp;&nbsp;-d "action=add" \<br/>
                                         &nbsp;&nbsp;-d "service=1" \<br/>
                                         &nbsp;&nbsp;-d "link=https://instagram.com/example" \<br/>
@@ -89,7 +82,7 @@ export default function ApiDocs({ auth }: PageProps) {
                                     <p className="text-sm text-slate-600 mb-2">Check the status of a single order or multiple orders (comma-separated).</p>
                                     <div className="bg-slate-900 rounded-md p-4 text-emerald-400 font-mono text-sm overflow-x-auto">
                                         curl -X POST {apiUrl} \<br/>
-                                        &nbsp;&nbsp;-d "key={user.api_key || 'YOUR_API_KEY'}" \<br/>
+                                        &nbsp;&nbsp;-d "key=YOUR_API_KEY" \<br/>
                                         &nbsp;&nbsp;-d "action=status" \<br/>
                                         &nbsp;&nbsp;-d "orders=12345,12346"
                                     </div>
@@ -102,7 +95,7 @@ export default function ApiDocs({ auth }: PageProps) {
                                     <p className="text-sm text-slate-600 mb-2">Check your current account balance.</p>
                                     <div className="bg-slate-900 rounded-md p-4 text-emerald-400 font-mono text-sm overflow-x-auto">
                                         curl -X POST {apiUrl} \<br/>
-                                        &nbsp;&nbsp;-d "key={user.api_key || 'YOUR_API_KEY'}" \<br/>
+                                        &nbsp;&nbsp;-d "key=YOUR_API_KEY" \<br/>
                                         &nbsp;&nbsp;-d "action=balance"
                                     </div>
                                     <p className="mt-2 text-sm text-slate-500"><strong>Response:</strong> <code>{"{\"balance\": \"150.00\", \"currency\": \"USD\"}"}</code></p>

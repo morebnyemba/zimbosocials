@@ -5,7 +5,7 @@ export interface User {
     email_verified_at?: string;
     balance?: number;
     role?: string;
-    api_key?: string;
+    api_key_last4?: string;
     phone?: string;
     currency?: string;
     locale?: string;

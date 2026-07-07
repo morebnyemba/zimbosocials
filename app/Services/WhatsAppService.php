@@ -30,12 +30,15 @@ class WhatsAppService
 
     public function __construct()
     {
-        $this->provider = config('services.whatsapp.provider', 'meta');
-        $this->apiToken = config('services.whatsapp.api_token', '');
-        $this->phoneNumberId = config('services.whatsapp.phone_number_id', '');
-        $this->wabAccountId = config('services.whatsapp.waba_id', '');
-        $this->twilioSid = config('services.whatsapp.twilio_sid', '');
-        $this->twilioFrom = config('services.whatsapp.twilio_from', '');
+        // Cast: config() returns null (not the default) when the key exists
+        // but the env var is unset, and null fatals on these string properties —
+        // which used to 500 registration on any install without WhatsApp set up.
+        $this->provider = (string) (config('services.whatsapp.provider') ?? 'meta');
+        $this->apiToken = (string) config('services.whatsapp.api_token', '');
+        $this->phoneNumberId = (string) config('services.whatsapp.phone_number_id', '');
+        $this->wabAccountId = (string) config('services.whatsapp.waba_id', '');
+        $this->twilioSid = (string) config('services.whatsapp.twilio_sid', '');
+        $this->twilioFrom = (string) config('services.whatsapp.twilio_from', '');
     }
 
     // ─── Text Messages ───────────────────────────────────────────────────────

@@ -19,6 +19,13 @@ class ContractApplication extends Model
 
     public const STATUS_IGNORED = 'ignored';
 
+    /**
+     * An approved marketer who never delivered, removed by the business/admin.
+     * Frees the slot (not slot-consuming) so the escrow can be reassigned or
+     * refunded on close.
+     */
+    public const STATUS_REVOKED = 'revoked';
+
     protected $fillable = [
         'business_contract_id',
         'marketer_id',

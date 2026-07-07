@@ -30,6 +30,15 @@ class MonetizerController extends Controller
         $this->managerService->assignIfEligible($user);
         $user->refresh();
 
+        // Qualification is computed over a sliding window, so a user who hits
+        // the threshold would silently LOSE access later as old activity ages
+        // out — persist the unlock the first time they qualify instead of
+        // depending on them clicking the unlock button in time.
+        if ($user->monetizer_unlocked_at === null && $user->qualifiesForMonetizer()) {
+            $user->update(['monetizer_unlocked_at' => now()]);
+            $user->refresh();
+        }
+
         $threshold = (float) Setting::get(
             'monetizer_threshold_usd',
             config('services.monetizer.threshold_usd', 100.00)

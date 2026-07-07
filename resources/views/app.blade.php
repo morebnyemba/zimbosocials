@@ -70,6 +70,17 @@
         @if($tawkPropertyId && $tawkWidgetId && $shouldShowTawk)
             <script type="text/javascript">
                 var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
+                @auth
+                // Authenticated pages show a fixed bottom tab bar on mobile
+                // (~64px + safe area). Lift the widget above it — customStyle
+                // must be set before the embed script loads to take effect.
+                Tawk_API.customStyle = {
+                    visibility: {
+                        desktop: { position: 'br', xOffset: 20, yOffset: 20 },
+                        mobile: { position: 'br', xOffset: 12, yOffset: 84 }
+                    }
+                };
+                @endauth
                 (function() {
                     var s1 = document.createElement('script');
                     var s0 = document.getElementsByTagName('script')[0];

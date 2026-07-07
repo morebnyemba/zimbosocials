@@ -87,6 +87,43 @@ class Order extends Model
         return $this->status === 'pending' && ! $this->pushed_to_upstream;
     }
 
+    /**
+     * Total already refunded for this order (refund transactions are stored
+     * with positive amounts).
+     */
+    public function refundedAmount(): float
+    {
+        return (float) Transaction::where('order_id', $this->id)
+            ->where('type', 'refund')
+            ->where('status', 'completed')
+            ->sum('amount');
+    }
+
+    /**
+     * What the user actually paid for this order (order_charge transactions
+     * are stored negative). Comp orders created by an admin without charging
+     * anyone have no charge transaction, so this is 0 for them.
+     */
+    public function chargedAmount(): float
+    {
+        return abs((float) Transaction::where('order_id', $this->id)
+            ->where('type', 'order_charge')
+            ->where('status', 'completed')
+            ->sum('amount'));
+    }
+
+    /**
+     * How much can still be refunded: what was actually charged minus what
+     * was already refunded. Every refund path must cap at this remainder — it
+     * prevents both double refunds (order already auto-refunded as
+     * cancelled/partial) and refunding money that was never charged (admin
+     * comp orders).
+     */
+    public function remainingRefundable(): float
+    {
+        return max(0.0, round($this->chargedAmount() - $this->refundedAmount(), 4));
+    }
+
     /** Shona status label */
     public function getStatusLabelSn(): string
     {

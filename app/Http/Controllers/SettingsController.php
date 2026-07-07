@@ -76,10 +76,14 @@ class SettingsController extends Controller
 
     public function regenerateApiKey(): RedirectResponse
     {
-        Auth::user()->generateApiKey();
+        $key = Auth::user()->generateApiKey();
 
-        return back()->with('success', app()->getLocale() === 'sn'
-            ? 'Kiyi itsva yeAPI yagadzirwa!'
-            : 'New API key generated!');
+        // Flash the plaintext key for a one-time reveal — only its hash is
+        // stored, so this is the only moment it can ever be displayed.
+        return back()
+            ->with('new_api_key', $key)
+            ->with('success', app()->getLocale() === 'sn'
+                ? 'Kiyi itsva yeAPI yagadzirwa! Kopa izvozvi — haizooneki zvakare.'
+                : 'New API key generated! Copy it now — it will not be shown again.');
     }
 }

@@ -72,7 +72,8 @@ interface Props {
 
 type PendingAction =
     | { type: 'application'; applicationId: number; decision: 'approved' | 'denied' }
-    | { type: 'proof'; proofId: number; decision: 'approved' | 'rejected' };
+    | { type: 'proof'; proofId: number; decision: 'approved' | 'rejected' }
+    | { type: 'revoke'; applicationId: number };
 
 export default function ContractShow({ contract }: Props) {
     const { t } = useTranslation();
@@ -110,6 +111,10 @@ export default function ContractShow({ contract }: Props) {
         setPendingAction({ type: 'proof', proofId, decision });
     };
 
+    const handleRevoke = (applicationId: number) => {
+        setPendingAction({ type: 'revoke', applicationId });
+    };
+
     const confirmPendingAction = () => {
         if (!pendingAction) return;
 
@@ -117,6 +122,14 @@ export default function ContractShow({ contract }: Props) {
             router.post(route('contracts.applications.decision', [contract.id, pendingAction.applicationId]), {
                 decision: pendingAction.decision,
             }, {
+                preserveScroll: true,
+                onFinish: () => setPendingAction(null),
+            });
+            return;
+        }
+
+        if (pendingAction.type === 'revoke') {
+            router.post(route('contracts.applications.revoke', [contract.id, pendingAction.applicationId]), {}, {
                 preserveScroll: true,
                 onFinish: () => setPendingAction(null),
             });
@@ -136,9 +149,11 @@ export default function ContractShow({ contract }: Props) {
             ? pendingAction.decision === 'approved'
                 ? t('confirm_hire_marketer')
                 : t('confirm_deny_applicant')
-            : pendingAction.decision === 'approved'
-                ? t('confirm_release_funds')
-                : t('confirm_reject_proof')
+            : pendingAction.type === 'revoke'
+                ? 'Revoke this marketer\'s slot? Any pending proof will be rejected and the slot becomes available again.'
+                : pendingAction.decision === 'approved'
+                    ? t('confirm_release_funds')
+                    : t('confirm_reject_proof')
         : '';
 
     const pendingApplications = contract.applications.filter(a => a.status === 'pending');
@@ -230,11 +245,12 @@ export default function ContractShow({ contract }: Props) {
                                         {t('in_progress_review', { count: activeApplications.length })}
                                     </h4>
                                     {activeApplications.map(app => (
-                                        <ApplicationCard 
-                                            key={app.id} 
-                                            application={app} 
+                                        <ApplicationCard
+                                            key={app.id}
+                                            application={app}
                                             onDecision={handleDecision}
                                             onProofDecision={handleProofDecision}
+                                            onRevoke={handleRevoke}
                                             isActive
                                         />
                                     ))}
@@ -434,17 +450,19 @@ function HealthRow({ label, value, color }: { label: string; value: string; colo
     );
 }
 
-function ApplicationCard({ 
-    application, 
-    onDecision, 
+function ApplicationCard({
+    application,
+    onDecision,
     onProofDecision,
+    onRevoke,
     onReview,
-    isPending, 
-    isActive 
-}: { 
-    application: Application; 
-    onDecision: (id: number, d: 'approved' | 'denied') => void; 
+    isPending,
+    isActive
+}: {
+    application: Application;
+    onDecision: (id: number, d: 'approved' | 'denied') => void;
     onProofDecision?: (id: number, d: 'approved' | 'rejected') => void;
+    onRevoke?: (id: number) => void;
     onReview?: () => void;
     isPending?: boolean;
     isActive?: boolean;
@@ -572,19 +590,29 @@ function ApplicationCard({
 
                     {isActive && pendingProof && onProofDecision && (
                         <div className="flex md:flex-col gap-2">
-                            <button 
+                            <button
                                 onClick={() => onProofDecision(pendingProof.id, 'approved')}
                                 className="px-6 py-3 rounded-2xl bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:scale-105 transition-all flex items-center gap-2"
                             >
                                 <FaCheckCircle /> {t('approve_proof')}
                             </button>
-                            <button 
+                            <button
                                 onClick={() => onProofDecision(pendingProof.id, 'rejected')}
                                 className="px-6 py-3 rounded-2xl bg-zinc-100 text-zinc-500 text-[9px] font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all"
                             >
                                 <FaTimesCircle /> {t('reject')}
                             </button>
                         </div>
+                    )}
+
+                    {isActive && onRevoke && (
+                        <button
+                            onClick={() => onRevoke(application.id)}
+                            className="px-6 py-3 rounded-2xl bg-zinc-100 text-zinc-500 text-[9px] font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all"
+                            title="Free this slot — no payout is made"
+                        >
+                            <FaTimesCircle className="inline mr-1" /> Revoke Slot
+                        </button>
                     )}
 
                     {!isPending && !pendingProof && (

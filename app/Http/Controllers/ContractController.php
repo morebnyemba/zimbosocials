@@ -7,6 +7,7 @@ use App\Models\ContractApplication;
 use App\Models\MarketerSocialLink;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\ContractSettlementService;
 use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -181,7 +182,12 @@ class ContractController extends Controller
                 }
 
                 $lockedUser = User::lockForUpdate()->findOrFail((int) $lockedContract->user_id);
-                $chargeDifference = round($totalCharge - $currentFundedAmount, 2);
+
+                // Escrow only moves when budget/slots actually changed.
+                // funded_amount is drawn down as payouts release, so comparing
+                // it against the full total on a brief-only edit would wrongly
+                // re-charge the business for already-paid slots.
+                $chargeDifference = $financialsChanged ? round($totalCharge - $currentFundedAmount, 2) : 0.0;
 
                 if ($chargeDifference > 0) {
                     $balanceBefore = (float) $lockedUser->balance;
@@ -223,7 +229,7 @@ class ContractController extends Controller
                     'description' => $data['description'],
                     'budget' => $unitBudget,
                     'slots' => $slots,
-                    'funded_amount' => $totalCharge,
+                    'funded_amount' => $financialsChanged ? $totalCharge : $lockedContract->funded_amount,
                     'deadline_at' => $data['deadline_at'],
                     'status' => $activeAssignments >= $slots
                         ? BusinessContract::STATUS_FILLED
@@ -251,6 +257,10 @@ class ContractController extends Controller
 
         // Policy check covers role, marketer_status, and contract open status
         $this->authorize('apply', $contract);
+
+        if ($contract->isPastDeadline()) {
+            return back()->with('error', 'This contract\'s deadline has passed — applications are closed.');
+        }
 
         // Require at least one social link before applying
         $hasSocialLinks = MarketerSocialLink::where('user_id', (int) $user->getAuthIdentifier())->exists();
@@ -310,6 +320,10 @@ class ContractController extends Controller
         ])['decision'];
 
         if ($decision === ContractApplication::STATUS_APPROVED) {
+            if ($contract->isPastDeadline()) {
+                return back()->with('error', 'This contract\'s deadline has passed — close it to refund unused escrow, or extend the deadline first.');
+            }
+
             try {
                 DB::transaction(function () use ($application, $contractId, $userId): void {
                     // Lock the contract row to prevent concurrent slot allocation
@@ -362,61 +376,84 @@ class ContractController extends Controller
         }
     }
 
-    public function closeContract(BusinessContract $contract): RedirectResponse
+    public function closeContract(BusinessContract $contract, ContractSettlementService $settlement): RedirectResponse
     {
         $this->authorize('close', $contract);
 
-        /** @var User $user */
-        $user = Auth::user();
-
         try {
-            DB::transaction(function () use ($contract, $user): void {
-                // Lock user and contract rows
-                $lockedContract = BusinessContract::lockForUpdate()->findOrFail($contract->id);
-                $lockedUser = User::lockForUpdate()->findOrFail($user->id);
-
-                $totalSlots = (int) $lockedContract->slots;
-                $approvedApps = ContractApplication::where('business_contract_id', $lockedContract->id)
-                    ->whereIn('status', ContractApplication::slotConsumingStatuses())
-                    ->count();
-
-                $unusedSlots = $totalSlots - $approvedApps;
-
-                if ($unusedSlots > 0) {
-                    $unitBudget = (float) $lockedContract->budget;
-                    $feeRate = self::PLATFORM_FEE_RATE;
-                    $refundPerSlot = $unitBudget + ($unitBudget * $feeRate);
-                    $totalRefund = $unusedSlots * $refundPerSlot;
-
-                    $balanceBefore = (float) $lockedUser->balance;
-                    $lockedUser->increment('balance', $totalRefund);
-
-                    Transaction::create([
-                        'user_id' => (int) $lockedUser->getKey(),
-                        'type' => 'refund',
-                        'amount' => $totalRefund,
-                        'balance_before' => $balanceBefore,
-                        'balance_after' => $balanceBefore + $totalRefund,
-                        'status' => 'completed',
-                        'notes' => 'Refund for '.$unusedSlots.' unused slots on contract #'.$lockedContract->id,
-                    ]);
-                }
-
-                $lockedContract->update(['status' => BusinessContract::STATUS_CLOSED]);
-
-                ContractApplication::where('business_contract_id', $lockedContract->id)
-                    ->where('status', ContractApplication::STATUS_PENDING)
-                    ->update([
-                        'status' => ContractApplication::STATUS_IGNORED,
-                        'decided_by' => (int) $lockedUser->id,
-                        'reviewed_at' => now(),
-                    ]);
-            });
+            $settlement->closeAndRefundUnusedSlots($contract, 'Refund on contract close');
 
             return back()->with('success', 'Contract closed and unused funds refunded to your wallet.');
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to close contract: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Revoke an approved application whose marketer never delivered. Frees
+     * the slot (reopening a filled contract) so the escrow can be reassigned
+     * or refunded on close — previously a no-show marketer locked that slot's
+     * funds forever.
+     */
+    public function revoke(BusinessContract $contract, ContractApplication $application): RedirectResponse
+    {
+        $this->authorize('update', $contract);
+
+        if ((int) $application->getAttribute('business_contract_id') !== (int) $contract->getKey()) {
+            abort(404);
+        }
+
+        try {
+            DB::transaction(function () use ($contract, $application): void {
+                $lockedContract = BusinessContract::lockForUpdate()->findOrFail($contract->getKey());
+                $lockedApplication = ContractApplication::lockForUpdate()->findOrFail($application->getKey());
+
+                if ($lockedApplication->status !== ContractApplication::STATUS_APPROVED) {
+                    throw new \RuntimeException('Only approved (not yet completed) applications can be revoked.');
+                }
+
+                $hasApprovedProof = $lockedApplication->proofSubmissions()
+                    ->where('status', 'approved')
+                    ->exists();
+
+                if ($hasApprovedProof) {
+                    throw new \RuntimeException('This marketer already has approved proof of work — the slot is completed, not revocable.');
+                }
+
+                $lockedApplication->update([
+                    'status' => ContractApplication::STATUS_REVOKED,
+                    'decided_by' => (int) Auth::id(),
+                    'reviewed_at' => now(),
+                ]);
+
+                // Reject any still-pending proof so it can't be approved (and
+                // paid) after the slot was taken away.
+                $lockedApplication->proofSubmissions()
+                    ->where('status', 'pending')
+                    ->update([
+                        'status' => 'rejected',
+                        'reviewed_by' => (int) Auth::id(),
+                        'reviewed_at' => now(),
+                    ]);
+
+                // Freeing a slot reopens a filled contract.
+                if ($lockedContract->status === BusinessContract::STATUS_FILLED) {
+                    $lockedContract->update(['status' => BusinessContract::STATUS_OPEN]);
+                }
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        NotificationService::notify(
+            (int) $application->getAttribute('marketer_id'),
+            'contract_application',
+            'Contract Slot Revoked',
+            "Your slot on the contract \"{$contract->title}\" was revoked because no approved proof of work was submitted.",
+            ['contract_id' => (int) $contract->getKey()]
+        );
+
+        return back()->with('success', 'Application revoked — the slot is available again.');
     }
 
     /**

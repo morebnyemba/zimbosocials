@@ -25,7 +25,8 @@ class ApiController extends Controller
             return null;
         }
 
-        return User::where('api_key', $key)->where('is_active', true)->first();
+        // Keys are stored hashed — never compared in plaintext.
+        return User::findByApiKey($key);
     }
 
     private function unauthorized(): JsonResponse
@@ -177,8 +178,11 @@ class ApiController extends Controller
             return response()->json(['error' => 'This service does not support refills.'], 422);
         }
 
-        // TODO: trigger refill with upstream provider
-        return response()->json(['refill' => $order->id]);
+        // Upstream refill isn't implemented yet. Say so instead of returning a
+        // fake success that makes resellers believe a refill was requested.
+        return response()->json([
+            'error' => 'Refill requests are not yet supported. Please open a support ticket and our team will process the refill manually.',
+        ], 501);
     }
 
     // ─── POST /api/v1/cancel ──────────────────────────────────────────────────
@@ -207,7 +211,10 @@ class ApiController extends Controller
             $lockedOrder->update(['status' => 'cancelled']);
 
             $lockedUser = User::lockForUpdate()->findOrFail($user->id);
-            $lockedUser->creditBalance($lockedOrder->charge, 'refund', "API cancel order #{$lockedOrder->id}", 'refund');
+            $refundable = $lockedOrder->remainingRefundable();
+            if ($refundable > 0) {
+                $lockedUser->creditBalance($refundable, 'refund', "API cancel order #{$lockedOrder->id}", 'refund', $lockedOrder);
+            }
         });
 
         return response()->json(['cancel' => $order->id]);

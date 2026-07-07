@@ -100,12 +100,14 @@ class AdminUpstreamProviderImportTest extends TestCase
                 'external_service_id' => '101',
                 'already_imported' => true,
                 'existing_service_name' => 'Instagram Followers',
-                'default_markup_percentage' => 20,
+                'default_markup_type' => 'percentage',
+                'default_markup_value' => 20,
             ])
             ->assertJsonFragment([
                 'external_service_id' => '202',
                 'already_imported' => false,
-                'default_markup_percentage' => 20,
+                'default_markup_type' => 'percentage',
+                'default_markup_value' => 20,
             ]);
     }
 
@@ -161,7 +163,8 @@ class AdminUpstreamProviderImportTest extends TestCase
             'services' => [
                 [
                     'external_service_id' => '501',
-                    'markup_percentage' => 25,
+                    'markup_type' => 'percentage',
+                    'markup_value' => 25,
                 ],
             ],
         ]);
@@ -243,7 +246,7 @@ class AdminUpstreamProviderImportTest extends TestCase
 
         $response = $this->actingAs($admin)->post(route('admin.upstream-providers.import-services', $provider), [
             'services' => [
-                ['external_service_id' => '501', 'markup_percentage' => 25],
+                ['external_service_id' => '501', 'markup_type' => 'percentage', 'markup_value' => 25],
             ],
             'enrich_with_ai' => true,
         ]);

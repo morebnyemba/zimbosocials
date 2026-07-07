@@ -26,6 +26,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'balance',
         'api_key',
+        'api_key_hash',
+        'api_key_last4',
         'referral_code',
         'referred_by',
         'referred_bonus_awarded_at',
@@ -62,6 +64,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'remember_token',
         'api_key',
+        'api_key_hash',
     ];
 
     protected function casts(): array
@@ -299,12 +302,29 @@ class User extends Authenticatable implements MustVerifyEmail
         return $query->where('is_active', true);
     }
 
+    /**
+     * Generate a fresh API key. Only a SHA-256 hash (plus the last four
+     * characters for display) is stored — the returned plaintext key is shown
+     * to the user exactly once and cannot be recovered later.
+     */
     public function generateApiKey(): string
     {
-        $key = 'zvk_live_'.Str::random(32);
-        $this->update(['api_key' => $key]);
+        $key = 'zvk_live_'.Str::random(40);
+
+        $this->forceFill([
+            'api_key_hash' => hash('sha256', $key),
+            'api_key_last4' => substr($key, -4),
+        ])->save();
 
         return $key;
+    }
+
+    /** Resolve an active user from a presented API key (hash lookup). */
+    public static function findByApiKey(string $key): ?self
+    {
+        return static::where('api_key_hash', hash('sha256', $key))
+            ->where('is_active', true)
+            ->first();
     }
 
     public function sendPasswordResetNotification($token): void
@@ -379,15 +399,17 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Credit balance and record a deposit transaction.
+     * Credit balance and record a transaction. Pass the related order for
+     * refunds so per-order refund totals stay queryable (double-refund guard).
      */
-    public function creditBalance(float $amount, string $method, string $reference = '', string $type = 'deposit'): Transaction
+    public function creditBalance(float $amount, string $method, string $reference = '', string $type = 'deposit', ?Order $order = null): Transaction
     {
         $before = $this->balance;
         $this->increment('balance', $amount);
 
         return Transaction::create([
             'user_id' => $this->id,
+            'order_id' => $order?->id,
             'type' => $type,
             'amount' => $amount,
             'balance_before' => $before,

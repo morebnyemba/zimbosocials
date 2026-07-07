@@ -85,6 +85,11 @@ Route::middleware('guest')->group(function () {
     Route::get('/home', [MarketingController::class, 'home'])->name('home');
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+
+    // Admin second factor (emailed code)
+    Route::get('/login/verify', [AuthController::class, 'show2fa'])->name('2fa.show');
+    Route::post('/login/verify', [AuthController::class, 'verify2fa'])->middleware('throttle:10,1')->name('2fa.verify');
+    Route::post('/login/verify/resend', [AuthController::class, 'resend2fa'])->middleware('throttle:3,1')->name('2fa.resend');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
     Route::get('/username-available', [AuthController::class, 'checkUsername'])
@@ -283,6 +288,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders/new', [OrderController::class, 'create'])->name('orders.create');
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::post('/orders/{order}/sync', [OrderController::class, 'syncStatus'])->middleware('throttle:12,1')->name('orders.sync-status');
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
 
     // Services (read-only list)
@@ -340,6 +346,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/contracts/{contract}', [ContractController::class, 'closeContract'])->name('contracts.destroy');
     Route::post('/contracts/{contract}/apply', [ContractController::class, 'apply'])->name('contracts.apply');
     Route::post('/contracts/{contract}/applications/{application}/decision', [ContractController::class, 'decide'])->name('contracts.applications.decision');
+    Route::post('/contracts/{contract}/applications/{application}/revoke', [ContractController::class, 'revoke'])->name('contracts.applications.revoke');
 
     // Marketer social links
     Route::post('/social-links', [MarketerSocialLinkController::class, 'store'])->name('social-links.store');

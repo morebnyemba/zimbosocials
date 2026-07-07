@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\LeaderboardSnapshot;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\LeaderboardService;
 use App\Services\NotificationService;
@@ -18,7 +19,7 @@ class CloseMonthlyLeaderboard extends Command
 
     protected $description = 'Snapshot final leaderboard rankings for the previous month and associate prizes.';
 
-    public function handle(LeaderboardService $leaderboardService, NotificationService $notificationService): int
+    public function handle(LeaderboardService $leaderboardService): int
     {
         $previousMonth = Carbon::now()->subMonth();
         $year = (int) ($this->option('year') ?? $previousMonth->year);
@@ -31,12 +32,13 @@ class CloseMonthlyLeaderboard extends Command
         $created = $leaderboardService->snapshotMonth($year, $month);
 
         if ($created === 0) {
-            $this->warn('No new snapshot entries created. The month may have already been closed or there were no qualifying participants.');
-
-            return self::SUCCESS;
+            // Don't bail out here: a previous run may have crashed between
+            // snapshotting and awarding, leaving is_awarded=false rows behind.
+            // Continue so those winners still get their prizes.
+            $this->warn('No new snapshot entries created (month already closed or no qualifying participants). Checking for unawarded prizes...');
+        } else {
+            $this->info("Created {$created} snapshot entries.");
         }
-
-        $this->info("Created {$created} snapshot entries.");
 
         // Credit wallet bonuses for prizes that have a bonus_amount
         $snapshots = LeaderboardSnapshot::with(['user', 'prize'])
@@ -56,14 +58,25 @@ class CloseMonthlyLeaderboard extends Command
                 continue;
             }
 
-            // Credit wallet bonus if prize has one
+            // Credit wallet bonus if prize has one — idempotent via the
+            // transaction reference so a crashed/re-run close never double-pays.
+            $reference = "LB-{$year}-{$month}-{$snapshot->category}-R{$snapshot->rank}";
+
             if ($prize->bonus_amount > 0) {
-                $user->creditBalance(
-                    $prize->bonus_amount,
-                    'leaderboard_prize',
-                    "LB-{$year}-{$month}-{$snapshot->category}-R{$snapshot->rank}",
-                    'bonus'
-                );
+                $alreadyCredited = Transaction::query()
+                    ->where('user_id', $user->id)
+                    ->where('type', 'bonus')
+                    ->where('reference', $reference)
+                    ->exists();
+
+                if (! $alreadyCredited) {
+                    $user->creditBalance(
+                        $prize->bonus_amount,
+                        'leaderboard_prize',
+                        $reference,
+                        'bonus'
+                    );
+                }
             }
 
             $snapshot->update([
@@ -76,16 +89,26 @@ class CloseMonthlyLeaderboard extends Command
 
             $awarded++;
 
-            // Notify the winner
-            if ($this->option('notify') && $user) {
+            // Notify the winner. This used to pass (User, message, type) into
+            // notify(int $userId, string $type, string $title, string $body),
+            // which fatally crashed the scheduled --notify run after the first
+            // award and stranded every remaining winner.
+            if ($this->option('notify')) {
                 $categoryLabel = ucfirst($snapshot->category);
                 $ordinal = $this->ordinal($snapshot->rank);
 
-                $notificationService->notify(
-                    $user,
-                    "🏆 Congratulations! You finished {$ordinal} on the {$categoryLabel} Leaderboard for {$monthLabel}! Your prize: {$prize->title}.",
-                    'leaderboard_prize'
-                );
+                try {
+                    NotificationService::notify(
+                        (int) $user->id,
+                        'leaderboard_prize',
+                        'Leaderboard Prize',
+                        "🏆 Congratulations! You finished {$ordinal} on the {$categoryLabel} Leaderboard for {$monthLabel}! Your prize: {$prize->title}.",
+                        ['year' => $year, 'month' => $month, 'rank' => $snapshot->rank, 'prize' => $prize->title]
+                    );
+                } catch (\Throwable $e) {
+                    // A notification failure must never stop the award loop.
+                    $this->warn("Failed to notify user #{$user->id}: {$e->getMessage()}");
+                }
             }
         }
 

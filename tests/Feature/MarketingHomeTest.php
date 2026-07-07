@@ -35,7 +35,7 @@ class MarketingHomeTest extends TestCase
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
             ->component('Marketing/Home')
-            ->has('activityServices', 200)
+            ->has('activityServices', 80)
             ->has('categories', 2)
         );
     }

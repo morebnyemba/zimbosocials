@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Authenticated pages show a fixed bottom tab bar on mobile (~64px tall plus
+ * the device safe area). AuthenticatedLayout stamps body.has-mobile-tabbar so
+ * the floating WhatsApp button rides above the bar instead of covering it.
+ * The bar is hidden at lg and up, so the offset resets there.
+ */
+body.has-mobile-tabbar .whatsapp-float {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 1024px) {
+    body.has-mobile-tabbar .whatsapp-float {
+        bottom: 1.5rem;
+    }
+}

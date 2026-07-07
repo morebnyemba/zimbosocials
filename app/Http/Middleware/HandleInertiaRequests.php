@@ -34,7 +34,9 @@ class HandleInertiaRequests extends Middleware
                     'email' => $user->email,
                     'balance' => $user->balance,
                     'role' => $user->role,
-                    'api_key' => $user->api_key,
+                    // Only the tail is ever shared — the full key is flashed
+                    // once at generation and never leaves the server again.
+                    'api_key_last4' => $user->api_key_last4,
                     'locale' => $user->locale,
                     'currency' => $user->currency,
                     'phone' => $user->phone,
@@ -53,6 +55,8 @@ class HandleInertiaRequests extends Middleware
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
                 'info' => $request->session()->get('info'),
+                // One-time reveal of a freshly generated API key
+                'new_api_key' => $request->session()->get('new_api_key'),
             ],
             // Cached for 30 seconds to avoid a COUNT query on every page load
             'notifications_count' => $user

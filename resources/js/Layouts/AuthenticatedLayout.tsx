@@ -114,6 +114,17 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    // Flag the mobile bottom tab bar's presence so the fixed WhatsApp button
+    // lifts above it (CSS rule in app.css) instead of covering it. Tawk.to is
+    // offset separately in app.blade.php — its customStyle API only applies
+    // when set before the embed script loads. Guest/marketing pages don't set
+    // this class, so their widgets keep the default bottom offset.
+    useEffect(() => {
+        document.body.classList.add('has-mobile-tabbar');
+
+        return () => document.body.classList.remove('has-mobile-tabbar');
+    }, []);
+
     const navLinks = [
         { href: route('dashboard'), name: 'dashboard', label: 'Dashboard', icon: FaChartPie },
         { href: route('services.index'), name: 'services.index', label: 'Services', icon: FaBox },

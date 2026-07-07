@@ -21,6 +21,7 @@ class RegistrationTest extends TestCase
     {
         $response = $this->post('/register', [
             'name' => 'Test User',
+            'username' => 'test_user',
             'email' => 'test@example.com',
             'whatsapp_number' => '263771234567',
             'password' => 'password',
@@ -39,6 +40,7 @@ class RegistrationTest extends TestCase
 
         $response = $this->post('/register', [
             'name' => 'Referred User',
+            'username' => 'referred_user',
             'email' => 'referred@example.com',
             'whatsapp_number' => '263771234568',
             'password' => 'password',

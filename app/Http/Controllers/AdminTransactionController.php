@@ -61,13 +61,33 @@ class AdminTransactionController extends Controller
         ]);
     }
 
-    public function approveDeposit(Transaction $transaction): RedirectResponse
+    public function approveDeposit(Request $request, Transaction $transaction): RedirectResponse
     {
         if ($transaction->type !== 'deposit' || $transaction->status !== 'pending') {
             return back()->with('error', 'Cannot approve this transaction.');
         }
 
-        $credited = $this->depositService->credit($transaction, 'admin_approval');
+        // The deposit amount is user-asserted at creation; the admin can
+        // correct it here to what the proof of payment actually shows.
+        $data = $request->validate([
+            'amount' => ['nullable', 'numeric', 'min:0.01', 'max:100000'],
+        ]);
+
+        if (isset($data['amount']) && round((float) $data['amount'], 2) !== round((float) $transaction->amount, 2)) {
+            $originalAmount = (float) $transaction->amount;
+            $transaction->update(['amount' => round((float) $data['amount'], 2)]);
+
+            AuditLog::dispatchLog(
+                action: 'transaction.deposit_amount_corrected',
+                userId: (int) Auth::id(),
+                modelType: Transaction::class,
+                modelId: (int) $transaction->getKey(),
+                oldValues: ['amount' => $originalAmount],
+                newValues: ['amount' => (float) $transaction->amount],
+            );
+        }
+
+        $credited = $this->depositService->credit($transaction->fresh(), 'admin_approval');
 
         if (! $credited) {
             return back()->with('error', 'Transaction was already processed.');

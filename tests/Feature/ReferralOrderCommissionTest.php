@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Order;
 use App\Models\Service;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Upstream\OrderDispatchService;
+use App\Services\Upstream\OrderStatusSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -19,6 +21,16 @@ class ReferralOrderCommissionTest extends TestCase
         $mock = Mockery::mock(OrderDispatchService::class);
         $mock->shouldReceive('dispatch')->andReturn(['ok' => false]);
         $this->app->instance(OrderDispatchService::class, $mock);
+    }
+
+    /**
+     * Commission is paid when an order COMPLETES (not at placement), so the
+     * tests drive the same status-sync path production uses.
+     */
+    private function completeOrder(Order $order): void
+    {
+        app(OrderStatusSyncService::class)
+            ->applyStatusUpdate($order, 'completed', ['remains' => 0], 'test');
     }
 
     public function test_no_commission_on_first_referred_order_even_if_above_threshold(): void
@@ -56,6 +68,8 @@ class ReferralOrderCommissionTest extends TestCase
             'link' => 'https://instagram.com/p/firsthigh',
             'quantity' => 300,
         ]);
+
+        $this->completeOrder(Order::latest('id')->firstOrFail());
 
         $referrer->refresh();
         $this->assertEquals(0.0, (float) $referrer->balance);
@@ -98,13 +112,15 @@ class ReferralOrderCommissionTest extends TestCase
             'link' => 'https://instagram.com/p/firstsmall',
             'quantity' => 10,
         ]);
+        $this->completeOrder(Order::latest('id')->firstOrFail());
 
-        // Second order (charge 30) -> eligible commission 2% of 30 = 0.6
+        // Second order (charge 30) -> eligible commission 2% of 30 = 0.6 on completion
         $this->actingAs($referred)->post('/orders', [
             'service_id' => $service->getKey(),
             'link' => 'https://instagram.com/p/secondlarge',
             'quantity' => 300,
         ]);
+        $this->completeOrder(Order::latest('id')->firstOrFail());
 
         $referrer->refresh();
         $this->assertEquals(0.6, (float) $referrer->balance);
@@ -119,7 +135,7 @@ class ReferralOrderCommissionTest extends TestCase
         $this->assertEquals(0.6, (float) $bonus->getAttribute('amount'));
     }
 
-    public function test_no_commission_on_second_order_when_total_is_20_or_less(): void
+    public function test_no_commission_on_second_order_when_total_is_below_threshold(): void
     {
         config([
             'services.referral.order_commission_percent' => 2.0,
@@ -154,13 +170,16 @@ class ReferralOrderCommissionTest extends TestCase
             'link' => 'https://instagram.com/p/firstedge',
             'quantity' => 10,
         ]);
+        $this->completeOrder(Order::latest('id')->firstOrFail());
 
-        // Second order charge exactly 20 (qty 200, rate 100) -> not eligible because must be > 20
+        // Second order charge 19 (qty 190, rate 100) -> below the $20 minimum.
+        // (The minimum is inclusive — exactly $20 WOULD qualify per ReferralService.)
         $this->actingAs($referred)->post('/orders', [
             'service_id' => $service->getKey(),
             'link' => 'https://instagram.com/p/secondedge',
-            'quantity' => 200,
+            'quantity' => 190,
         ]);
+        $this->completeOrder(Order::latest('id')->firstOrFail());
 
         $referrer->refresh();
         $this->assertEquals(0.0, (float) $referrer->balance);
