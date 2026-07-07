@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\DuplicateOrderException;
 use App\Exceptions\InsufficientBalanceException;
+use App\Jobs\DispatchOrderUpstream;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\User;
@@ -111,6 +112,15 @@ class OrderService
 
         // --- Dispatch upstream (outside transaction; failure is recoverable) ---
         $dispatch = $dispatchService->dispatch($order);
+
+        // A failed synchronous push gets queued retries with backoff; the job
+        // auto-cancels and refunds the order if every attempt fails, so the
+        // customer's money never stays stuck on an undeliverable order.
+        // Skipped on the sync driver: it can't defer or retry, so the job's
+        // retry-signalling throw would just crash this request.
+        if (! $dispatch['ok'] && config('queue.default') !== 'sync') {
+            DispatchOrderUpstream::dispatch($order->id)->delay(now()->addSeconds(15));
+        }
 
         return [
             'ok' => true,

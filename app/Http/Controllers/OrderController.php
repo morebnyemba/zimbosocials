@@ -9,7 +9,6 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\OrderService;
-use App\Services\ReferralService;
 use App\Services\Upstream\OrderDispatchService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,7 +40,7 @@ class OrderController extends Controller
     /**
      * Store a new order.
      */
-    public function store(Request $request, OrderService $orderService, OrderDispatchService $dispatchService, ReferralService $referralService): RedirectResponse
+    public function store(Request $request, OrderService $orderService, OrderDispatchService $dispatchService): RedirectResponse
     {
         $data = $request->validate([
             'service_id' => ['required', 'exists:services,id'],
@@ -77,7 +76,6 @@ class OrderController extends Controller
         }
 
         $order = $result['order'];
-        $referralService->rewardReferrerOnReferredOrder($order);
 
         NotificationService::notifyAdmins(
             'admin_new_order',
@@ -156,12 +154,16 @@ class OrderController extends Controller
             $lockedOrder->update(['status' => 'cancelled']);
 
             $user = User::lockForUpdate()->findOrFail(Auth::id());
-            $user->creditBalance(
-                $lockedOrder->charge,
-                'refund',
-                "Cancelled order #{$lockedOrder->id}",
-                'refund'
-            );
+            $refundable = $lockedOrder->remainingRefundable();
+            if ($refundable > 0) {
+                $user->creditBalance(
+                    $refundable,
+                    'refund',
+                    "Cancelled order #{$lockedOrder->id}",
+                    'refund',
+                    $lockedOrder
+                );
+            }
         });
 
         return back()->with('success', __('messages.cancelled_success'));

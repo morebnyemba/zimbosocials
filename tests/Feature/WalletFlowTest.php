@@ -152,7 +152,9 @@ class WalletFlowTest extends TestCase
             'method' => 'innbucks',
         ]);
 
-        $response->assertRedirect('/wallet');
-        $response->assertSessionHasErrors(['method']);
+        // The controller answers JSON (the wallet UI calls this via fetch):
+        // non-gateway methods are rejected with a 422 payload, not a redirect.
+        $response->assertStatus(422);
+        $response->assertJson(['success' => false]);
     }
 }

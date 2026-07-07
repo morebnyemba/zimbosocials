@@ -379,15 +379,17 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Credit balance and record a deposit transaction.
+     * Credit balance and record a transaction. Pass the related order for
+     * refunds so per-order refund totals stay queryable (double-refund guard).
      */
-    public function creditBalance(float $amount, string $method, string $reference = '', string $type = 'deposit'): Transaction
+    public function creditBalance(float $amount, string $method, string $reference = '', string $type = 'deposit', ?Order $order = null): Transaction
     {
         $before = $this->balance;
         $this->increment('balance', $amount);
 
         return Transaction::create([
             'user_id' => $this->id,
+            'order_id' => $order?->id,
             'type' => $type,
             'amount' => $amount,
             'balance_before' => $before,

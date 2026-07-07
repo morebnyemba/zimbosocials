@@ -86,12 +86,19 @@ class AdminOrderController extends Controller
         ]);
     }
 
-    public function updateStatus(Order $order, Request $request): RedirectResponse
+    public function updateStatus(Order $order, Request $request, \App\Services\ReferralService $referralService): RedirectResponse
     {
         $data = $request->validate([
             'status' => ['required', 'in:pending,processing,in_progress,completed,partial,cancelled,refunded'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
+
+        // 'refunded' set through here never credits the wallet — the order
+        // would claim refunded while the user's money stayed gone. Force the
+        // dedicated refund action, which pays the un-refunded remainder.
+        if ($data['status'] === 'refunded') {
+            return back()->with('error', 'Use the Refund action to refund an order — it credits the wallet and sets the status together.');
+        }
 
         $oldStatus = $order->status;
         $updates = ['status' => $data['status']];
@@ -104,6 +111,11 @@ class AdminOrderController extends Controller
         }
 
         $order->update($updates);
+
+        // Same completion-time referral commission as the automated sync path.
+        if ($data['status'] === 'completed') {
+            $referralService->rewardReferrerOnReferredOrder($order);
+        }
 
         AuditLog::dispatchLog(
             'order.status_changed',
@@ -148,54 +160,57 @@ class AdminOrderController extends Controller
     }
 
     /**
-     * Refund an order — atomic with row locking to prevent double-refunds.
+     * Refund an order — atomic with row locking, and capped at the amount not
+     * already refunded. An order that was auto-refunded (cancelled/partial by
+     * the upstream sync) or whose status was set to 'refunded' without a
+     * wallet credit is handled correctly: only the remainder is paid out.
      */
     public function refund(Order $order): RedirectResponse
     {
-        if ($order->status === 'refunded') {
-            return back()->with('error', 'Order is already refunded.');
-        }
+        $refunded = 0.0;
 
         try {
-            DB::transaction(function () use ($order): void {
+            DB::transaction(function () use ($order, &$refunded): void {
                 $lockedOrder = Order::lockForUpdate()->findOrFail($order->id);
 
-                if ($lockedOrder->status === 'refunded') {
-                    throw new \RuntimeException('Order is already refunded.');
+                $remaining = $lockedOrder->remainingRefundable();
+
+                if ($remaining <= 0) {
+                    throw new \RuntimeException('Order has already been fully refunded.');
                 }
 
+                $oldStatus = (string) $lockedOrder->status;
                 $lockedOrder->update(['status' => 'refunded']);
 
                 $user = User::lockForUpdate()->findOrFail($lockedOrder->user_id);
-                $charge = (float) $lockedOrder->charge;
 
-                $user->creditBalance($charge, 'refund', "Admin refund for order #{$lockedOrder->id}", 'refund');
+                $user->creditBalance($remaining, 'refund', "Admin refund for order #{$lockedOrder->id}", 'refund', $lockedOrder);
+                $refunded = $remaining;
 
                 AuditLog::log(
                     'order.refunded',
                     Auth::id(),
                     Order::class,
                     $lockedOrder->id,
-                    ['status' => $lockedOrder->getOriginal('status')],
-                    ['status' => 'refunded', 'refund_amount' => $charge],
+                    ['status' => $oldStatus],
+                    ['status' => 'refunded', 'refund_amount' => $remaining],
                 );
 
                 NotificationService::notify(
                     $user->id,
                     'order_refunded',
                     'Order #'.$lockedOrder->id.' Refunded',
-                    "Your order has been refunded. \${$charge} has been credited to your account.",
-                    ['order_id' => $lockedOrder->id, 'amount' => $charge]
+                    "Your order has been refunded. \${$remaining} has been credited to your account.",
+                    ['order_id' => $lockedOrder->id, 'amount' => $remaining]
                 );
             });
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        $charge = (float) $order->charge;
         $user = $order->user;
 
-        return back()->with('success', "Order #{$order->id} refunded. \${$charge} credited to {$user->name}.");
+        return back()->with('success', "Order #{$order->id} refunded. \${$refunded} credited to {$user->name}.");
     }
 
     public function store(Request $request): RedirectResponse

@@ -17,6 +17,10 @@ use Illuminate\Support\Facades\Log;
  */
 class OrderStatusSyncService
 {
+    public function __construct(
+        private readonly \App\Services\ReferralService $referralService,
+    ) {}
+
     /**
      * Map an upstream status payload to a local order status.
      *
@@ -77,11 +81,24 @@ class OrderStatusSyncService
                 }
             }
 
+            // Never refund more than what hasn't been refunded yet — an order
+            // that already got a partial (or manual admin) refund must not be
+            // paid the full charge again when a later sync reports 'cancelled'.
+            $refundAmount = min($refundAmount, $order->remainingRefundable());
+
             $order->update([
                 'status' => $newStatus,
                 'start_count' => $startCount,
                 'remains' => $remains,
             ]);
+
+            // Referral order commission is paid on COMPLETION, not placement —
+            // otherwise a referred account can farm commissions by placing
+            // qualifying orders and cancelling them for a full refund.
+            // Idempotent inside the service via the REF-ORDER-{id} reference.
+            if ($newStatus === 'completed') {
+                $this->referralService->rewardReferrerOnReferredOrder($order);
+            }
 
             if ($refundAmount > 0 && $user) {
                 $lockedUser = User::lockForUpdate()->findOrFail($user->id);
