@@ -86,6 +86,7 @@ class WalletController extends Controller
             'availableMethods' => $availableMethods,
             'gatewayMethods' => $gatewayMethods,
             'pendingProofs' => $this->getPendingProofCount($userId),
+            'manualDepositBonusPercent' => $this->depositService->manualDepositBonusPercent(),
         ]);
     }
 
