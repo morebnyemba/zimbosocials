@@ -26,6 +26,7 @@ interface Props extends PageProps {
     transactions: OrderTransaction[]
     can_cancel: boolean
     can_sync: boolean
+    can_refill: boolean
 }
 
 const statusMeta: Record<string, { label: string; pill: string; description: string }> = {
@@ -41,9 +42,10 @@ const statusMeta: Record<string, { label: string; pill: string; description: str
 
 const ACTIVE_STATUSES = ['pending', 'processing', 'in_progress']
 
-export default function OrderShow({ order, transactions, can_cancel, can_sync }: Props) {
+export default function OrderShow({ order, transactions, can_cancel, can_sync, can_refill }: Props) {
     const [showCancelConfirm, setShowCancelConfirm] = useState(false)
     const [syncing, setSyncing] = useState(false)
+    const [refilling, setRefilling] = useState(false)
     const autoSynced = useRef(false)
 
     const meta = statusMeta[order.status] ?? { label: order.status, pill: 'bg-zinc-100 text-zinc-700', description: '' }
@@ -267,6 +269,33 @@ export default function OrderShow({ order, transactions, can_cancel, can_sync }:
                                 Refunds are credited to your wallet instantly and can be used for new orders right away.
                             </p>
                         )}
+                    </div>
+                )}
+
+                {/* Refill */}
+                {can_refill && (
+                    <div className="rounded-[2rem] border border-emerald-100 bg-emerald-50/50 p-6 flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <p className="text-sm font-black text-zinc-900">Numbers dropped?</p>
+                            <p className="text-xs font-medium text-zinc-500 mt-0.5">
+                                This service is refill-eligible — request a free refill and lost engagement is typically restored within 24–72 hours.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                if (refilling) return
+                                setRefilling(true)
+                                router.post(route('orders.refill', order.id), {}, {
+                                    preserveScroll: true,
+                                    onFinish: () => setRefilling(false),
+                                })
+                            }}
+                            disabled={refilling}
+                            className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                        >
+                            <FaSyncAlt className={refilling ? 'animate-spin' : ''} />
+                            {refilling ? 'Requesting…' : 'Request Refill'}
+                        </button>
                     </div>
                 )}
 

@@ -78,11 +78,13 @@ class OrderService
         string $link,
         int $quantity,
         OrderDispatchService $dispatchService,
-        string $notePrefix = 'Order'
+        string $notePrefix = 'Order',
+        ?int $runs = null,
+        ?int $intervalMinutes = null
     ): array {
         $link = trim($link);
 
-        // --- Validate quantity range ---
+        // --- Validate quantity range (per run for drip-feed orders) ---
         if ($quantity < $service->min_qty || $quantity > $service->max_qty) {
             return [
                 'ok' => false,
@@ -90,6 +92,24 @@ class OrderService
                 'field' => 'quantity',
                 'code' => 422,
             ];
+        }
+
+        // --- Validate drip-feed parameters ---
+        $isDripFeed = $runs !== null && $runs > 1;
+
+        if ($isDripFeed) {
+            if (! $service->is_dripfeed) {
+                return ['ok' => false, 'error' => 'This service does not support drip-feed delivery.', 'field' => 'runs', 'code' => 422];
+            }
+            if ($runs < 2 || $runs > 100) {
+                return ['ok' => false, 'error' => 'Runs must be between 2 and 100.', 'field' => 'runs', 'code' => 422];
+            }
+            if ($intervalMinutes === null || $intervalMinutes < 5 || $intervalMinutes > 1440) {
+                return ['ok' => false, 'error' => 'Interval must be between 5 and 1440 minutes.', 'field' => 'interval', 'code' => 422];
+            }
+        } else {
+            $runs = null;
+            $intervalMinutes = null;
         }
 
         // --- Validate the link matches the service's platform ---
@@ -102,7 +122,9 @@ class OrderService
             ];
         }
 
-        $charge = $service->calculateCharge($quantity);
+        // Drip-feed delivers `quantity` on each of `runs` passes — the charge
+        // covers the total delivered amount.
+        $charge = $service->calculateCharge($quantity * ($runs ?? 1));
 
         // --- Atomically create order and deduct balance ---
         // Balance check is inside the transaction with lockForUpdate to prevent
@@ -110,7 +132,7 @@ class OrderService
         // duplicate-link check rides the same lock, so two rapid clicks by the
         // same user can't both slip past it.
         try {
-            $order = DB::transaction(function () use ($user, $service, $link, $quantity, $charge, $notePrefix): Order {
+            $order = DB::transaction(function () use ($user, $service, $link, $quantity, $charge, $notePrefix, $runs, $intervalMinutes): Order {
                 $lockedUser = User::lockForUpdate()->findOrFail($user->id);
 
                 $hasOrderInProgressForLink = Order::where('user_id', $lockedUser->id)
@@ -137,6 +159,8 @@ class OrderService
                     'service_id' => $service->id,
                     'link' => $link,
                     'quantity' => $quantity,
+                    'runs' => $runs,
+                    'interval_minutes' => $intervalMinutes,
                     'charge' => $charge,
                     'rate_at_order' => $service->rate,
                     'status' => 'pending',

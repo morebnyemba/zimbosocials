@@ -46,6 +46,8 @@ class OrderController extends Controller
             'service_id' => ['required', 'exists:services,id'],
             'link' => ['required', 'url', 'max:500'],
             'quantity' => ['required', 'integer', 'min:1'],
+            'runs' => ['nullable', 'integer', 'min:2', 'max:100'],
+            'interval' => ['nullable', 'integer', 'min:5', 'max:1440', 'required_with:runs'],
         ]);
 
         $service = Service::findOrFail($data['service_id']);
@@ -62,7 +64,9 @@ class OrderController extends Controller
             $data['link'],
             (int) $data['quantity'],
             $dispatchService,
-            'Order'
+            'Order',
+            isset($data['runs']) ? (int) $data['runs'] : null,
+            isset($data['interval']) ? (int) $data['interval'] : null
         );
 
         if (! $result['ok']) {
@@ -139,12 +143,25 @@ class OrderController extends Controller
             'order' => $order,
             'transactions' => $transactions,
             'can_cancel' => $order->canCancel(),
+            'can_refill' => $order->canRequestRefill(),
             // Status can be refreshed on demand while the order is live upstream.
             'can_sync' => $order->isActive()
                 && $order->pushed_to_upstream
                 && $order->external_order_id !== null
                 && $order->upstream_provider_id !== null,
         ]);
+    }
+
+    /**
+     * Request a refill for a delivered refill-eligible order.
+     */
+    public function requestRefill(Order $order, \App\Services\Upstream\OrderRefillService $refillService): RedirectResponse
+    {
+        $this->authorize('view', $order);
+
+        $result = $refillService->request($order);
+
+        return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
     }
 
     /**

@@ -76,8 +76,11 @@ class OrderStatusSyncService
             if (in_array($newStatus, ['cancelled', 'refunded', 'failed'])) {
                 $refundAmount = $charge;
             } elseif ($newStatus === 'partial') {
-                if ($order->quantity > 0 && $remains > 0) {
-                    $refundAmount = round(($remains / $order->quantity) * $charge, 4);
+                // remains is measured against the TOTAL delivery amount,
+                // which for drip-feed orders is quantity × runs.
+                $totalQuantity = $order->totalQuantity();
+                if ($totalQuantity > 0 && $remains > 0) {
+                    $refundAmount = round(($remains / $totalQuantity) * $charge, 4);
                 }
             }
 

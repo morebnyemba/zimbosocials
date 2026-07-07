@@ -45,16 +45,24 @@ class UpstreamProviderClient
             ];
         }
 
+        $payload = [
+            'key' => $key,
+            'action' => 'add',
+            'service' => $providerServiceId,
+            'link' => $order->link,
+            'quantity' => $order->quantity,
+        ];
+
+        // Drip-feed (standard SMM panel API): quantity per run + runs + interval
+        if ((int) $order->runs > 1) {
+            $payload['runs'] = (int) $order->runs;
+            $payload['interval'] = (int) $order->interval_minutes;
+        }
+
         try {
             $response = Http::timeout((int) config('upstream.timeout', 20))
                 ->asForm()
-                ->post($url, [
-                    'key' => $key,
-                    'action' => 'add',
-                    'service' => $providerServiceId,
-                    'link' => $order->link,
-                    'quantity' => $order->quantity,
-                ]);
+                ->post($url, $payload);
 
             $body = $response->json();
 
@@ -104,6 +112,41 @@ class UpstreamProviderClient
                 'raw' => null,
                 'external_order_id' => null,
             ];
+        }
+    }
+
+    /**
+     * Request a refill for a delivered order (standard SMM panel API:
+     * action=refill). Returns ['ok' => bool, 'refill_id' => ?string, 'message' => string].
+     */
+    public function requestRefill(string $externalOrderId): array
+    {
+        if (! $this->provider || ! $this->provider->is_active) {
+            return ['ok' => false, 'refill_id' => null, 'message' => 'Upstream provider is missing or inactive.'];
+        }
+
+        try {
+            $response = Http::timeout((int) config('upstream.timeout', 20))
+                ->asForm()
+                ->post($this->provider->url, [
+                    'key' => $this->provider->api_key,
+                    'action' => 'refill',
+                    'order' => $externalOrderId,
+                ]);
+
+            $body = $response->json();
+
+            if ($response->ok() && is_array($body) && isset($body['refill'])) {
+                return ['ok' => true, 'refill_id' => (string) $body['refill'], 'message' => 'Refill requested.'];
+            }
+
+            $error = is_array($body) && isset($body['error'])
+                ? (string) $body['error']
+                : 'Unexpected upstream response (HTTP '.$response->status().').';
+
+            return ['ok' => false, 'refill_id' => null, 'message' => $error];
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'refill_id' => null, 'message' => $e->getMessage()];
         }
     }
 

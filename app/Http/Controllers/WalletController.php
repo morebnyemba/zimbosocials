@@ -244,8 +244,49 @@ class WalletController extends Controller
     }
 
     /**
-     * Request a withdrawal. Wrapped in a DB transaction with pessimistic locking
-     * to prevent race conditions from concurrent requests.
+     * Email a 6-digit confirmation code for a withdrawal request. Withdrawals
+     * move money out of the platform — a hijacked session alone must not be
+     * able to drain a wallet without also controlling the email inbox.
+     */
+    public function sendWithdrawalCode(Request $request): RedirectResponse
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        $userId = (int) $user->getAuthIdentifier();
+
+        if (! in_array((string) $user->getAttribute('role'), ['marketer', 'reseller'], true)) {
+            return back()->with('error', 'Only marketer accounts can request withdrawals.');
+        }
+
+        if (! \Illuminate\Support\Facades\Cache::add("withdraw:resend:{$userId}", true, 60)) {
+            return back()->with('error', 'A code was just sent — wait a minute before requesting another.');
+        }
+
+        $code = (string) random_int(100000, 999999);
+        \Illuminate\Support\Facades\Cache::put("withdraw:code:{$userId}", hash('sha256', $code), now()->addMinutes(10));
+        \Illuminate\Support\Facades\Cache::put("withdraw:attempts:{$userId}", 0, now()->addMinutes(10));
+
+        try {
+            // Synchronous — the cron-drained queue is too slow for a code the
+            // user is actively waiting on.
+            \Illuminate\Support\Facades\Mail::raw(
+                "Your Zimbo Socials withdrawal confirmation code is: {$code}\n\nIt expires in 10 minutes. If you didn't request a withdrawal, change your password immediately.",
+                function ($message) use ($user): void {
+                    $message->to($user->email, $user->name)->subject('Confirm your withdrawal');
+                }
+            );
+        } catch (\Throwable $e) {
+            Log::error('Withdrawal code send failed', ['user_id' => $userId, 'message' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not send the confirmation code. Please try again.');
+        }
+
+        return back()->with('success', 'A confirmation code has been sent to your email.');
+    }
+
+    /**
+     * Request a withdrawal. Requires the emailed confirmation code; wrapped in
+     * a DB transaction with pessimistic locking to prevent race conditions.
      */
     public function withdraw(Request $request): RedirectResponse
     {
@@ -261,7 +302,33 @@ class WalletController extends Controller
             'amount' => ['required', 'numeric', 'min:1'],
             'method' => ['required', 'string', 'max:60'],
             'reference' => ['nullable', 'string', 'max:120'],
+            'code' => ['required', 'digits:6'],
         ]);
+
+        // Verify the emailed confirmation code (hashed at rest, 5 attempts).
+        $codeUserId = (int) $user->getAuthIdentifier();
+        $attempts = (int) \Illuminate\Support\Facades\Cache::get("withdraw:attempts:{$codeUserId}", 0);
+
+        if ($attempts >= 5) {
+            \Illuminate\Support\Facades\Cache::forget("withdraw:code:{$codeUserId}");
+
+            return back()->with('error', 'Too many incorrect codes. Request a new code and try again.');
+        }
+
+        $expectedCode = \Illuminate\Support\Facades\Cache::get("withdraw:code:{$codeUserId}");
+
+        if ($expectedCode === null || ! hash_equals($expectedCode, hash('sha256', (string) $data['code']))) {
+            \Illuminate\Support\Facades\Cache::put("withdraw:attempts:{$codeUserId}", $attempts + 1, now()->addMinutes(10));
+
+            return back()->withErrors([
+                'code' => $expectedCode === null
+                    ? 'This code has expired — request a new one.'
+                    : 'That code is incorrect.',
+            ]);
+        }
+
+        \Illuminate\Support\Facades\Cache::forget("withdraw:code:{$codeUserId}");
+        \Illuminate\Support\Facades\Cache::forget("withdraw:attempts:{$codeUserId}");
 
         $amount = (float) $data['amount'];
         $userId = (int) $user->getAuthIdentifier();

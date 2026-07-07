@@ -11,12 +11,13 @@ import {
 } from 'react-icons/fa';
 
 interface Service {
-    id: number; 
-    name: string; 
+    id: number;
+    name: string;
     category: string;
-    min_qty: number; 
-    max_qty: number; 
-    rate: number; 
+    min_qty: number;
+    max_qty: number;
+    rate: number;
+    is_dripfeed?: boolean;
     description?: string;
 }
 
@@ -48,11 +49,18 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
         service_id: selected?.id?.toString() ?? '',
         link: '',
         quantity: '1000',
+        runs: '',
+        interval: '',
     });
 
     const chosenService = services.find((s) => s.id === Number(data.service_id));
     const serviceRate = chosenService ? Number(chosenService.rate) : 0;
-    const rawCharge = chosenService ? ((Number(data.quantity) / 1000) * serviceRate) : 0;
+    const supportsDripFeed = Boolean(chosenService?.is_dripfeed);
+    const dripFeedOn = supportsDripFeed && Number(data.runs) >= 2;
+    // Drip-feed delivers `quantity` per run — the charge covers the total.
+    const effectiveRuns = dripFeedOn ? Number(data.runs) : 1;
+    const totalQuantity = (Number(data.quantity) || 0) * effectiveRuns;
+    const rawCharge = chosenService ? ((totalQuantity / 1000) * serviceRate) : 0;
     // Money shows 2dp; fall back to 4dp only when 2dp would round a real
     // amount down to $0.00 (tiny quantities on cheap services).
     const money = (n: number) => (n > 0 && n < 0.01 ? n.toFixed(4) : n.toFixed(2));
@@ -74,6 +82,13 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
             setData('service_id', '');
         }
     }, [category]);
+
+    // Clear drip-feed inputs when switching to a service that doesn't support it
+    useEffect(() => {
+        if (!supportsDripFeed && (data.runs || data.interval)) {
+            setData((prev) => ({ ...prev, runs: '', interval: '' }));
+        }
+    }, [data.service_id]);
 
     function submit(e: React.FormEvent) {
         e.preventDefault();
@@ -223,6 +238,57 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                                                     )}
                                                     {errors.quantity && <p className="mt-2 text-xs font-bold text-red-500 flex items-center gap-1"><FaExclamationCircle/> {errors.quantity}</p>}
                                                 </div>
+
+                                                {/* Drip-feed (only for services that support it) */}
+                                                {supportsDripFeed && (
+                                                    <div className="md:col-span-2 rounded-2xl border-2 border-zinc-100 bg-zinc-50/60 p-5 space-y-4">
+                                                        <label className="flex items-center gap-3 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={dripFeedOn}
+                                                                onChange={(e) => setData((prev) => ({
+                                                                    ...prev,
+                                                                    runs: e.target.checked ? '2' : '',
+                                                                    interval: e.target.checked ? '60' : '',
+                                                                }))}
+                                                                className="h-4 w-4 rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500"
+                                                            />
+                                                            <span className="text-xs font-black text-zinc-900 uppercase tracking-widest flex items-center gap-2">
+                                                                <FaBolt className="text-emerald-500" /> Drip-Feed Delivery
+                                                            </span>
+                                                        </label>
+                                                        <p className="text-xs font-medium text-zinc-500">
+                                                            Spread delivery over multiple runs for natural-looking growth — the quantity above is delivered on <strong>each run</strong>.
+                                                        </p>
+                                                        {dripFeedOn && (
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <div>
+                                                                    <label className="mb-1.5 block text-[10px] font-black text-zinc-400 uppercase tracking-widest">Runs (2–100)</label>
+                                                                    <input
+                                                                        type="number" min={2} max={100}
+                                                                        value={data.runs}
+                                                                        onChange={(e) => setData('runs', e.target.value)}
+                                                                        className="w-full rounded-xl border-2 border-zinc-100 bg-white px-3 py-2.5 font-black text-zinc-900 focus:border-emerald-500 focus:outline-none"
+                                                                    />
+                                                                    {errors.runs && <p className="mt-1 text-xs font-bold text-red-500">{errors.runs}</p>}
+                                                                </div>
+                                                                <div>
+                                                                    <label className="mb-1.5 block text-[10px] font-black text-zinc-400 uppercase tracking-widest">Interval (minutes)</label>
+                                                                    <input
+                                                                        type="number" min={5} max={1440}
+                                                                        value={data.interval}
+                                                                        onChange={(e) => setData('interval', e.target.value)}
+                                                                        className="w-full rounded-xl border-2 border-zinc-100 bg-white px-3 py-2.5 font-black text-zinc-900 focus:border-emerald-500 focus:outline-none"
+                                                                    />
+                                                                    {errors.interval && <p className="mt-1 text-xs font-bold text-red-500">{errors.interval}</p>}
+                                                                </div>
+                                                                <p className="col-span-2 text-[11px] font-bold text-emerald-600">
+                                                                    Total delivery: {totalQuantity.toLocaleString()} over {effectiveRuns} runs, one every {Number(data.interval) || 0} min.
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </motion.section>
@@ -254,7 +320,11 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                                         </div>
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-zinc-400 font-medium">{t('quantity')}</span>
-                                            <span className="font-bold text-zinc-300">{Number(data.quantity || 0).toLocaleString()}</span>
+                                            <span className="font-bold text-zinc-300">
+                                                {dripFeedOn
+                                                    ? `${Number(data.quantity || 0).toLocaleString()} × ${effectiveRuns} = ${totalQuantity.toLocaleString()}`
+                                                    : Number(data.quantity || 0).toLocaleString()}
+                                            </span>
                                         </div>
                                     </div>
 

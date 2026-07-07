@@ -211,6 +211,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/tickets/{ticket}/close', [AdminTicketController::class, 'close'])->name('tickets.close');
         Route::post('/tickets/{ticket}/draft-reply', [AdminTicketController::class, 'draftReply'])
             ->middleware('throttle:ai-drafts')->name('tickets.draft-reply');
+        Route::post('/tickets/{ticket}/enhance-reply', [AdminTicketController::class, 'enhanceReply'])
+            ->middleware('throttle:ai-drafts')->name('tickets.enhance-reply');
+        Route::post('/tickets/{ticket}/summarize', [AdminTicketController::class, 'summarizeThread'])
+            ->middleware('throttle:ai-drafts')->name('tickets.summarize');
 
         // WhatsApp Management
         Route::get('/whatsapp/templates', [WhatsAppTemplateController::class, 'index'])->name('whatsapp.templates');
@@ -289,6 +293,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{order}/sync', [OrderController::class, 'syncStatus'])->middleware('throttle:12,1')->name('orders.sync-status');
+    Route::post('/orders/{order}/refill', [OrderController::class, 'requestRefill'])->middleware('throttle:6,1')->name('orders.refill');
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
 
     // Services (read-only list)
@@ -299,6 +304,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/wallet/add-funds', [WalletController::class, 'manualDeposit'])->middleware('throttle:wallet-manual-deposit')->name('wallet.add');
     Route::post('/wallet/submit-proof', [WalletController::class, 'submitProof'])->middleware('throttle:wallet-proof-submit')->name('wallet.submit-proof');
     Route::post('/wallet/withdraw', [WalletController::class, 'withdraw'])->middleware('throttle:wallet-withdraw')->name('wallet.withdraw');
+    Route::post('/wallet/withdraw/send-code', [WalletController::class, 'sendWithdrawalCode'])->middleware('throttle:3,1')->name('wallet.withdraw.send-code');
 
     // Referrals
     Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');

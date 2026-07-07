@@ -16,10 +16,12 @@ class Order extends Model
 
     protected $fillable = [
         'user_id', 'service_id', 'link', 'quantity',
+        'runs', 'interval_minutes',
         'charge', 'rate_at_order', 'status',
         'start_count', 'remains', 'external_order_id',
         'push_attempts', 'pushed_to_upstream', 'pushed_at', 'upstream_last_error',
         'notes', 'started_at', 'completed_at', 'upstream_provider_id',
+        'refill_requested_at', 'external_refill_id',
     ];
 
     protected function casts(): array
@@ -31,7 +33,25 @@ class Order extends Model
             'pushed_at' => 'datetime',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'refill_requested_at' => 'datetime',
         ];
+    }
+
+    /** Total units this order delivers (drip-feed orders run `quantity` per run). */
+    public function totalQuantity(): int
+    {
+        return $this->quantity * max(1, (int) $this->runs);
+    }
+
+    /** Whether the user can request a refill right now. */
+    public function canRequestRefill(): bool
+    {
+        return in_array($this->status, ['completed', 'partial'], true)
+            && (bool) ($this->service?->is_refill)
+            && $this->pushed_to_upstream
+            && $this->external_order_id !== null
+            && $this->upstream_provider_id !== null
+            && ($this->refill_requested_at === null || $this->refill_requested_at->lt(now()->subDay()));
     }
 
     // ─── Relationships ────────────────────────────────────────────────────────

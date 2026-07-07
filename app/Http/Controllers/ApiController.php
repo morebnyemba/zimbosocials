@@ -78,6 +78,8 @@ class ApiController extends Controller
             'service' => ['required', 'exists:services,id'],
             'link' => ['required', 'url'],
             'quantity' => ['required', 'integer', 'min:1'],
+            'runs' => ['nullable', 'integer', 'min:2', 'max:100'],
+            'interval' => ['nullable', 'integer', 'min:5', 'max:1440', 'required_with:runs'],
         ]);
 
         $service = Service::active()->findOrFail($data['service']);
@@ -88,7 +90,9 @@ class ApiController extends Controller
             $data['link'],
             (int) $data['quantity'],
             $dispatchService,
-            'API Order'
+            'API Order',
+            isset($data['runs']) ? (int) $data['runs'] : null,
+            isset($data['interval']) ? (int) $data['interval'] : null
         );
 
         if (! $result['ok']) {
@@ -160,7 +164,7 @@ class ApiController extends Controller
 
     // ─── POST /api/v1/refill ──────────────────────────────────────────────────
 
-    public function refill(Request $request): JsonResponse
+    public function refill(Request $request, \App\Services\Upstream\OrderRefillService $refillService): JsonResponse
     {
         $user = $this->resolveUser($request);
         if (! $user) {
@@ -174,15 +178,13 @@ class ApiController extends Controller
             return response()->json(['error' => 'Order not found.'], 404);
         }
 
-        if (! $order->service->is_refill) {
-            return response()->json(['error' => 'This service does not support refills.'], 422);
+        $result = $refillService->request($order);
+
+        if (! $result['ok']) {
+            return response()->json(['error' => $result['message']], 422);
         }
 
-        // Upstream refill isn't implemented yet. Say so instead of returning a
-        // fake success that makes resellers believe a refill was requested.
-        return response()->json([
-            'error' => 'Refill requests are not yet supported. Please open a support ticket and our team will process the refill manually.',
-        ], 501);
+        return response()->json(['refill' => $order->id]);
     }
 
     // ─── POST /api/v1/cancel ──────────────────────────────────────────────────

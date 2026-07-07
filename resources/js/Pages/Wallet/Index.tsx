@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { PageProps } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { useTranslation } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -128,7 +128,20 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
         amount: '',
         method: 'ecocash',
         reference: '',
+        code: '',
     });
+    const [withdrawCodeSent, setWithdrawCodeSent] = useState(false);
+    const [sendingWithdrawCode, setSendingWithdrawCode] = useState(false);
+
+    const sendWithdrawCode = () => {
+        if (sendingWithdrawCode) return;
+        setSendingWithdrawCode(true);
+        router.post(route('wallet.withdraw.send-code'), {}, {
+            preserveScroll: true,
+            onSuccess: () => setWithdrawCodeSent(true),
+            onFinish: () => setSendingWithdrawCode(false),
+        });
+    };
 
     const chosenDetails = manualPaymentDetails.find((m) => m.method_key === depositForm.data.method);
     const isPaynowMethod = gatewaySet.has(depositForm.data.method);
@@ -743,7 +756,7 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                 <div className="space-y-6">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-4">Destination Account</label>
-                                        <input 
+                                        <input
                                             type="text" required
                                             value={withdrawalForm.data.reference}
                                             onChange={e => withdrawalForm.setData('reference', e.target.value)}
@@ -751,8 +764,34 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                             className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-6 py-4 font-black text-zinc-900 focus:outline-none focus:border-emerald-500 transition-all"
                                         />
                                     </div>
-                                    <button 
-                                        disabled={withdrawalForm.processing}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-4">Email Confirmation Code</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text" inputMode="numeric" maxLength={6} required
+                                                value={withdrawalForm.data.code}
+                                                onChange={e => withdrawalForm.setData('code', e.target.value.replace(/\D/g, ''))}
+                                                placeholder="123456"
+                                                className="flex-1 bg-zinc-50 border-2 border-zinc-100 rounded-2xl px-6 py-4 font-mono font-black text-zinc-900 tracking-[0.3em] focus:outline-none focus:border-emerald-500 transition-all"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={sendWithdrawCode}
+                                                disabled={sendingWithdrawCode}
+                                                className="shrink-0 rounded-2xl border-2 border-zinc-200 bg-white px-4 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:border-emerald-300 transition-all disabled:opacity-50"
+                                            >
+                                                {sendingWithdrawCode ? 'Sending…' : withdrawCodeSent ? 'Resend Code' : 'Email Me a Code'}
+                                            </button>
+                                        </div>
+                                        {(withdrawalForm.errors as any).code && (
+                                            <p className="text-xs font-bold text-red-600 ml-4">{(withdrawalForm.errors as any).code}</p>
+                                        )}
+                                        <p className="text-[10px] font-medium text-zinc-400 ml-4">
+                                            Withdrawals must be confirmed with a code sent to your email.
+                                        </p>
+                                    </div>
+                                    <button
+                                        disabled={withdrawalForm.processing || withdrawalForm.data.code.length !== 6}
                                         className="w-full py-5 rounded-2xl bg-amber-600 text-white font-black text-xs uppercase tracking-widest shadow-xl hover:bg-amber-700 transition-all disabled:opacity-50"
                                     >
                                         Request Withdrawal
