@@ -66,23 +66,65 @@ class AdminTicketController extends Controller
         ]);
     }
 
+    /**
+     * Generate a reply draft built around the admin's own talking points —
+     * the AI is required to know WHAT the admin wants to say before it
+     * writes anything.
+     */
     public function draftReply(Ticket $ticket, Request $request, SupportTicketAssistant $assistant): JsonResponse
     {
         if ($ticket->status === 'closed') {
             return response()->json(['draft' => null, 'message' => 'Ticket is closed.'], 422);
         }
 
-        $request->validate([
+        $data = $request->validate([
+            'intent' => ['required', 'string', 'min:5', 'max:2000'],
             'tone' => ['nullable', 'string', 'max:200'],
         ]);
 
-        $draft = $assistant->draftReply($ticket, $request->input('tone'));
+        $draft = $assistant->draftReply($ticket, $data['intent'], $request->input('tone'));
 
         if ($draft === null) {
             return response()->json(['draft' => null, 'message' => 'AI assistant is not available.'], 503);
         }
 
         return response()->json(['draft' => $draft]);
+    }
+
+    /**
+     * Polish the reply the admin already typed (grammar/clarity/tone) without
+     * changing any facts or commitments.
+     */
+    public function enhanceReply(Ticket $ticket, Request $request, SupportTicketAssistant $assistant): JsonResponse
+    {
+        if ($ticket->status === 'closed') {
+            return response()->json(['draft' => null, 'message' => 'Ticket is closed.'], 422);
+        }
+
+        $data = $request->validate([
+            'message' => ['required', 'string', 'min:5', 'max:5000'],
+            'tone' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $improved = $assistant->enhanceReply($ticket, $data['message'], $request->input('tone'));
+
+        if ($improved === null) {
+            return response()->json(['draft' => null, 'message' => 'AI assistant is not available.'], 503);
+        }
+
+        return response()->json(['draft' => $improved]);
+    }
+
+    /** Quick AI catch-up on a long thread. */
+    public function summarizeThread(Ticket $ticket, SupportTicketAssistant $assistant): JsonResponse
+    {
+        $summary = $assistant->summarizeThread($ticket);
+
+        if ($summary === null) {
+            return response()->json(['summary' => null, 'message' => 'AI assistant is not available.'], 503);
+        }
+
+        return response()->json(['summary' => $summary]);
     }
 
     public function reply(Ticket $ticket, Request $request): RedirectResponse
