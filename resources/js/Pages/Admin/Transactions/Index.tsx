@@ -15,7 +15,18 @@ export default function TransactionsIndex({ transactions, filters, pending_depos
     const applySearch = () => router.get(route('admin.transactions.index'), { ...filters, search }, { preserveState: true });
     const setFilter = (k: string, v: string) => router.get(route('admin.transactions.index'), { ...filters, [k]: v || undefined }, { preserveState: true });
 
-    const approve = (id: number) => router.post(route('admin.transactions.approve', id), {}, { preserveScroll: true });
+    const approve = (tx: Tx) => {
+        // Deposit amounts are user-asserted; let the admin correct to what
+        // the proof of payment actually shows before crediting.
+        const input = window.prompt(
+            `Approve deposit #${tx.id} for ${tx.user?.name ?? 'user'}.\n\nConfirm the amount to credit (from the proof of payment):`,
+            Number(tx.amount).toFixed(2)
+        );
+        if (input === null) return;
+        const amount = parseFloat(input);
+        if (isNaN(amount) || amount <= 0) { alert('Enter a valid amount greater than 0.'); return; }
+        router.post(route('admin.transactions.approve', tx.id), { amount }, { preserveScroll: true });
+    };
     const reject = (id: number) => { setPendingRejectId(id); };
     const processW = (id: number) => router.post(route('admin.transactions.process-withdrawal', id), {}, { preserveScroll: true });
     const rejectW = (id: number) => { setPendingRejectWithdrawalId(id); };
@@ -86,7 +97,7 @@ export default function TransactionsIndex({ transactions, filters, pending_depos
                                         <td className="py-3 px-5 text-right text-gray-500 text-xs">{new Date(tx.created_at).toLocaleDateString()}</td>
                                         <td className="py-3 px-5 text-right space-x-2">
                                             {tx.type === 'deposit' && tx.status === 'pending' && (<>
-                                                <button onClick={() => approve(tx.id)} className="px-3 py-1 text-xs font-medium rounded-lg bg-brand-green/10 text-brand-green border border-brand-green/20 hover:bg-brand-green/20">Approve</button>
+                                                <button onClick={() => approve(tx)} className="px-3 py-1 text-xs font-medium rounded-lg bg-brand-green/10 text-brand-green border border-brand-green/20 hover:bg-brand-green/20">Approve</button>
                                                 <button onClick={() => reject(tx.id)} className="px-3 py-1 text-xs font-medium rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">Reject</button>
                                             </>)}
                                             {tx.type === 'withdrawal' && tx.status === 'pending' && (<>

@@ -187,6 +187,10 @@ class AdminOrderController extends Controller
                 $user->creditBalance($remaining, 'refund', "Admin refund for order #{$lockedOrder->id}", 'refund', $lockedOrder);
                 $refunded = $remaining;
 
+                // If this order paid a referral commission, reverse it —
+                // the referrer keeps no cut of refunded money.
+                app(\App\Services\ReferralService::class)->clawbackOrderCommission($lockedOrder);
+
                 AuditLog::log(
                     'order.refunded',
                     Auth::id(),
@@ -213,7 +217,13 @@ class AdminOrderController extends Controller
         return back()->with('success', "Order #{$order->id} refunded. \${$refunded} credited to {$user->name}.");
     }
 
-    public function store(Request $request): RedirectResponse
+    /**
+     * Place a manual order on a user's behalf. By default the user's wallet
+     * is charged like any normal order (with a balance check + transaction);
+     * unticking charge_user creates an explicit comp order, which is never
+     * refundable because nothing was ever charged.
+     */
+    public function store(Request $request, \App\Services\Upstream\OrderDispatchService $dispatchService): RedirectResponse
     {
         $data = $request->validate([
             'user_id' => ['required', 'exists:users,id'],
@@ -221,16 +231,45 @@ class AdminOrderController extends Controller
             'link' => ['required', 'string', 'max:500'],
             'quantity' => ['required', 'integer', 'min:1'],
             'charge' => ['required', 'numeric', 'min:0'],
+            'charge_user' => ['nullable', 'boolean'],
         ]);
 
-        $order = Order::create([
-            'user_id' => $data['user_id'],
-            'service_id' => $data['service_id'],
-            'link' => $data['link'],
-            'quantity' => $data['quantity'],
-            'charge' => $data['charge'],
-            'status' => 'pending',
-        ]);
+        $chargeUser = $request->boolean('charge_user', true);
+        $service = \App\Models\Service::findOrFail($data['service_id']);
+
+        try {
+            $order = DB::transaction(function () use ($data, $chargeUser, $service): Order {
+                $user = User::lockForUpdate()->findOrFail($data['user_id']);
+                $charge = round((float) $data['charge'], 4);
+
+                if ($chargeUser && (float) $user->balance < $charge) {
+                    throw new \RuntimeException(
+                        "Insufficient balance: {$user->name} has \$".number_format((float) $user->balance, 2)
+                        .' but the order costs $'.number_format($charge, 2)
+                        .'. Top up their wallet first or place it as a comp order.'
+                    );
+                }
+
+                $order = Order::create([
+                    'user_id' => $user->id,
+                    'service_id' => $service->id,
+                    'link' => trim($data['link']),
+                    'quantity' => (int) $data['quantity'],
+                    'charge' => $charge,
+                    'rate_at_order' => $service->rate,
+                    'status' => 'pending',
+                    'notes' => $chargeUser ? 'Placed by admin' : 'Placed by admin (comp — no charge)',
+                ]);
+
+                if ($chargeUser && $charge > 0) {
+                    $user->deductBalance($charge, $order, "Manual order #{$order->id} placed by admin — {$service->name}");
+                }
+
+                return $order;
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         AuditLog::dispatchLog(
             'order.created_by_admin',
@@ -238,16 +277,23 @@ class AdminOrderController extends Controller
             Order::class,
             $order->id,
             null,
-            $data
+            $data + ['charged_user' => $chargeUser]
         );
 
         NotificationService::notify(
-            $data['user_id'],
+            (int) $data['user_id'],
             'order_placed',
             'Manual Order Placed',
             "An admin has placed an order (#{$order->id}) on your behalf."
         );
 
-        return back()->with('success', "Order #{$order->id} created successfully.");
+        // Push upstream like any normal order; failed pushes get queued
+        // retries with backoff (skipped on the sync driver, which can't defer).
+        $dispatch = $dispatchService->dispatch($order);
+        if (! $dispatch['ok'] && config('queue.default') !== 'sync') {
+            \App\Jobs\DispatchOrderUpstream::dispatch($order->id)->delay(now()->addSeconds(15));
+        }
+
+        return back()->with('success', "Order #{$order->id} created".($chargeUser ? ' and charged to the user.' : ' as a comp (no charge).'));
     }
 }

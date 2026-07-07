@@ -140,6 +140,18 @@ class WalletController extends Controller
         $user = Auth::user();
         $userId = (int) $user->getAuthIdentifier();
 
+        // Cap open manual deposit requests — unlimited pending rows are just
+        // clutter for the admin review queue and an abuse vector.
+        $openManualDeposits = Transaction::where('user_id', $userId)
+            ->where('type', 'deposit')
+            ->where('status', 'pending')
+            ->whereIn('method', $manualOnlyMethods)
+            ->count();
+
+        if ($openManualDeposits >= 3) {
+            return back()->with('error', 'You already have 3 pending manual deposits. Submit proof of payment for those (or wait for review) before creating another.');
+        }
+
         $transaction = Transaction::create([
             'user_id' => $userId,
             'type' => 'deposit',
