@@ -2,11 +2,21 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// Heartbeat: proves the host's cron is actually invoking `schedule:run`.
+// Every scheduled behaviour (order status sync, notifications queue,
+// leaderboard close, cleanups) silently dies when that cron entry is missing —
+// the admin dashboard watches this timestamp and warns loudly when it goes
+// stale. See AGENTS.md "Set up a cron job" for the required crontab line.
+Schedule::call(function (): void {
+    Cache::put('scheduler:heartbeat_at', now()->toIso8601String(), now()->addWeek());
+})->everyMinute()->name('scheduler-heartbeat');
 
 Schedule::command('upstream:sync-orders')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('upstream:sync-services')->dailyAt('02:00')->withoutOverlapping();

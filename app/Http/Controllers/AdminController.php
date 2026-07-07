@@ -99,9 +99,23 @@ class AdminController extends Controller
 
         $recent_users = User::latest()->limit(5)->get(['id', 'name', 'email', 'role', 'created_at']);
 
+        // Scheduler health: everything time-based (order status sync, queued
+        // notifications, cleanups, leaderboard close) rides the host cron
+        // calling `schedule:run` every minute. When the heartbeat goes stale
+        // the dashboard must say so — the symptom is otherwise subtle
+        // ("orders only update on manual sync").
+        $heartbeatAt = Cache::get('scheduler:heartbeat_at');
+        $scheduler = [
+            'heartbeat_at' => $heartbeatAt,
+            'orders_last_synced_at' => Cache::get('upstream:orders_last_synced_at'),
+            'is_stale' => $heartbeatAt === null
+                || \Illuminate\Support\Carbon::parse($heartbeatAt)->lt(now()->subMinutes(10)),
+        ];
+
         return Inertia::render('Admin/Dashboard', compact(
             'stats', 'recent_orders', 'pending_proofs',
-            'daily_revenue', 'orders_by_status', 'new_users_weekly', 'recent_users'
+            'daily_revenue', 'orders_by_status', 'new_users_weekly', 'recent_users',
+            'scheduler'
         ));
     }
 

@@ -283,6 +283,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders/new', [OrderController::class, 'create'])->name('orders.create');
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::post('/orders/{order}/sync', [OrderController::class, 'syncStatus'])->middleware('throttle:12,1')->name('orders.sync-status');
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
 
     // Services (read-only list)

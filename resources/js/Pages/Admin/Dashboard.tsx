@@ -18,10 +18,17 @@ interface DailyRevenue { date: string; total: string; count: number; }
 interface NewUser { date: string; count: number; }
 interface RecentUser { id: number; name: string; email: string; role: string; created_at: string; }
 
+interface SchedulerHealth {
+    heartbeat_at: string | null;
+    orders_last_synced_at: string | null;
+    is_stale: boolean;
+}
+
 interface Props {
     stats: Stats; recent_orders: Order[]; pending_proofs: ProofSubmission[];
     daily_revenue: DailyRevenue[]; orders_by_status: Record<string, number>;
     new_users_weekly: NewUser[]; recent_users: RecentUser[];
+    scheduler: SchedulerHealth;
 }
 
 const statusColors: Record<string, string> = {
@@ -99,7 +106,7 @@ function NewUsersChart({ data }: { data: { date: string; count: number }[] }) {
     );
 }
 
-export default function AdminDashboard({ stats, recent_orders, pending_proofs, daily_revenue, orders_by_status, new_users_weekly, recent_users }: Props) {
+export default function AdminDashboard({ stats, recent_orders, pending_proofs, daily_revenue, orders_by_status, new_users_weekly, recent_users, scheduler }: Props) {
     const revenueChartData = daily_revenue.map(d => ({ date: d.date, total: Number(d.total) }));
     const newUsersChartData = (new_users_weekly ?? []).map(d => ({ date: d.date, count: Number(d.count) }));
     const { t } = useTranslation();
@@ -162,6 +169,34 @@ export default function AdminDashboard({ stats, recent_orders, pending_proofs, d
             <Head title={t('admin_panel')} />
 
             <div className="space-y-6">
+                {/* Scheduler health — when the host cron isn't calling
+                    schedule:run, order syncing, notifications and cleanups all
+                    silently stop; the only user-visible symptom is "orders only
+                    update on manual sync". */}
+                {scheduler?.is_stale && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+                        <ShieldAlert className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+                        <div className="text-sm">
+                            <p className="font-bold text-red-800">Background scheduler is not running</p>
+                            <p className="text-red-700 mt-1">
+                                {scheduler.heartbeat_at
+                                    ? `Last heartbeat: ${new Date(scheduler.heartbeat_at).toLocaleString()}.`
+                                    : 'No heartbeat has ever been recorded.'}{' '}
+                                Automatic order status sync, WhatsApp/email notifications, deposit cleanup and the
+                                monthly leaderboard all depend on it. Add this cron entry on the server (runs every minute):
+                            </p>
+                            <code className="mt-2 inline-block rounded bg-red-100 px-2 py-1 text-[11px] font-mono text-red-900 break-all">
+                                * * * * * cd /path/to/app && php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1
+                            </code>
+                            {scheduler.orders_last_synced_at && (
+                                <p className="text-red-600 mt-2 text-xs">
+                                    Orders last auto-synced: {new Date(scheduler.orders_last_synced_at).toLocaleString()}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>

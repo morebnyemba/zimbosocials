@@ -16,6 +16,10 @@ class SyncUpstreamOrders extends Command
 
     public function handle(UpstreamProviderClient $client, OrderStatusSyncService $syncService): int
     {
+        // Watched by the admin dashboard: distinguishes "sync ran but nothing
+        // changed" from "sync never runs" (missing schedule:run cron).
+        \Illuminate\Support\Facades\Cache::put('upstream:orders_last_synced_at', now()->toIso8601String(), now()->addWeek());
+
         // 'in_progress' (with underscore) is the real orders.status enum value —
         // this previously filtered on 'inprogress' (no underscore), a typo that
         // never matched, silently excluding any order sitting at in_progress
