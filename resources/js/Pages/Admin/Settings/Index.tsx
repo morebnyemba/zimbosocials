@@ -74,8 +74,44 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
             // Monetizer
             { key: 'monetizer_threshold_usd', value: getMonetizerSetting('monetizer_threshold_usd', monetizerDefaults?.threshold_usd || '100.00'), group: 'monetizer' },
             { key: 'monetizer_lookback_days', value: getMonetizerSetting('monetizer_lookback_days', monetizerDefaults?.lookback_days || '90'), group: 'monetizer' },
+            // Security
+            { key: 'admin_2fa_enabled', value: getSetting('security', 'admin_2fa_enabled') || '0', group: 'security' },
         ]
     });
+
+    const [mailTest, setMailTest] = useState<{ status: 'idle' | 'sending' | 'ok' | 'error'; message: string }>({ status: 'idle', message: '' });
+
+    const sendTestMail = async () => {
+        const val = (key: string) => data.settings.find(s => s.key === key)?.value || '';
+        setMailTest({ status: 'sending', message: '' });
+        try {
+            const res = await fetch(route('admin.settings.test-mail'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+                },
+                body: JSON.stringify({
+                    host: val('host'),
+                    port: Number(val('port')) || 0,
+                    username: val('username'),
+                    password: val('password'),
+                    encryption: val('encryption'),
+                    from_address: val('from_address'),
+                    from_name: val('from_name'),
+                }),
+            });
+            const json = await res.json();
+            if (res.ok && json.ok) {
+                setMailTest({ status: 'ok', message: json.message });
+            } else {
+                setMailTest({ status: 'error', message: json.message ?? Object.values(json.errors ?? {}).flat().join(' ') ?? 'Test failed.' });
+            }
+        } catch {
+            setMailTest({ status: 'error', message: 'Request failed — check your connection and try again.' });
+        }
+    };
 
     const updateSetting = (key: string, value: string) => {
         const index = data.settings.findIndex(s => s.key === key);
@@ -176,6 +212,25 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
                                         <SettingInput label="Application Name" value={data.settings.find(s => s.key === 'name')?.value} onChange={(v: string) => updateSetting('name', v)} placeholder="ZimSocials Admin" />
                                         <SettingInput label="Logo URL" value={data.settings.find(s => s.key === 'logo_url')?.value} onChange={(v: string) => updateSetting('logo_url', v)} placeholder="https://..." />
                                     </div>
+
+                                    <label className={`flex items-start gap-4 p-6 rounded-[1.5rem] border-2 cursor-pointer transition-all ${data.settings.find(s => s.key === 'admin_2fa_enabled')?.value === '1' ? 'border-emerald-300 bg-emerald-50' : 'border-zinc-100 bg-zinc-50'}`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={data.settings.find(s => s.key === 'admin_2fa_enabled')?.value === '1'}
+                                            onChange={e => updateSetting('admin_2fa_enabled', e.target.checked ? '1' : '0')}
+                                            className="mt-1 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                                        />
+                                        <div>
+                                            <p className="text-sm font-black text-zinc-900 flex items-center gap-2">
+                                                <FaShieldAlt className="text-emerald-600" /> Admin 2FA (emailed login code)
+                                            </p>
+                                            <p className="text-xs font-medium text-zinc-500 mt-1 leading-relaxed">
+                                                Requires admins to enter a 6-digit code emailed on every login. Only enable after
+                                                verifying your SMTP settings with the "Send Test Email" button — if mail is broken,
+                                                admins cannot log in (emergency escape hatch: <span className="font-mono">php artisan admin:2fa off</span> via SSH).
+                                            </p>
+                                        </div>
+                                    </label>
                                 </div>
                             )}
 
@@ -190,6 +245,33 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
                                         <div />
                                         <SettingInput label="From Address" value={data.settings.find(s => s.key === 'from_address')?.value} onChange={(v: string) => updateSetting('from_address', v)} placeholder="noreply@zimsocials.co.zw" />
                                         <SettingInput label="From Name" value={data.settings.find(s => s.key === 'from_name')?.value} onChange={(v: string) => updateSetting('from_name', v)} placeholder="ZimSocials Admin" />
+                                    </div>
+
+                                    {/* Test SMTP with the values in the form, before saving */}
+                                    <div className="p-8 rounded-[2rem] bg-zinc-50 border border-zinc-100 space-y-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-4">
+                                            <div>
+                                                <h3 className="text-sm font-black text-zinc-900 uppercase tracking-widest">Verify Connection</h3>
+                                                <p className="text-xs font-medium text-zinc-500 mt-1 max-w-md">
+                                                    Sends a test email to your own address using the values above (as typed — no need to save first).
+                                                    Confirm this works before enabling admin 2FA.
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={sendTestMail}
+                                                disabled={mailTest.status === 'sending'}
+                                                className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest shadow-xl hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50"
+                                            >
+                                                <FaEnvelope /> {mailTest.status === 'sending' ? 'Sending…' : 'Send Test Email'}
+                                            </button>
+                                        </div>
+                                        {mailTest.status === 'ok' && (
+                                            <p className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">✅ {mailTest.message}</p>
+                                        )}
+                                        {mailTest.status === 'error' && (
+                                            <p className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 break-words">❌ {mailTest.message}</p>
+                                        )}
                                     </div>
                                 </div>
                             )}

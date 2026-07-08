@@ -13,6 +13,15 @@ class AdminTwoFactorTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // 2FA now ships disabled (broken mail must not lock admins out of a
+        // fresh install) — these tests exercise the enabled behaviour.
+        Setting::set('admin_2fa_enabled', '1', 'security');
+    }
+
     private function admin(): User
     {
         return User::factory()->create([
