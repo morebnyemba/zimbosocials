@@ -170,6 +170,8 @@ Route::middleware('auth')->group(function () {
         // App Settings
         Route::get('/settings', [AdminSettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings', [AdminSettingsController::class, 'update'])->name('settings.update');
+        Route::post('/settings/test-mail', [AdminSettingsController::class, 'testMail'])
+            ->middleware('throttle:6,1')->name('settings.test-mail');
         Route::get('/seo', [AdminSettingsController::class, 'seoGenerator'])->name('seo.index');
         Route::post('/seo/generate', [AdminSettingsController::class, 'generateSeo'])
             ->middleware('throttle:ai-drafts')->name('seo.generate');

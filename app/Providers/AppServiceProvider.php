@@ -129,9 +129,12 @@ class AppServiceProvider extends ServiceProvider
                 'from_name' => 'mail.from.name',
             ];
 
+            $mail = [];
+
             foreach ($settingsArray as $setting) {
                 if ($setting['group'] === 'mail' && isset($mailKeyMap[$setting['key']])) {
                     config([$mailKeyMap[$setting['key']] => $setting['value']]);
+                    $mail[$setting['key']] = $setting['value'];
                 }
 
                 if ($setting['group'] === 'whatsapp') {
@@ -147,6 +150,22 @@ class AppServiceProvider extends ServiceProvider
                 }
 
                 config(["settings.{$setting['key']}" => $setting['value']]);
+            }
+
+            // An SMTP host configured in the admin panel means "send real
+            // mail" — force the smtp mailer even when .env still says
+            // MAIL_MAILER=log (the stock default), which would otherwise
+            // silently write every email to the log file forever.
+            if (! empty($mail['host'])) {
+                config(['mail.default' => 'smtp']);
+
+                // Port 465 / 'ssl' is implicit TLS: Symfony needs scheme
+                // 'smtps' for it, otherwise the handshake fails. 'tls'
+                // (STARTTLS, port 587) works on the plain smtp scheme.
+                $encryption = strtolower((string) ($mail['encryption'] ?? ''));
+                if ($encryption === 'ssl' || (int) ($mail['port'] ?? 0) === 465) {
+                    config(['mail.mailers.smtp.scheme' => 'smtps']);
+                }
             }
         } catch (\Exception $e) {
             // Fail silently if DB not ready

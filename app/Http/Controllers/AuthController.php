@@ -182,8 +182,10 @@ class AuthController extends Controller
 
             // Admins get a second factor: a valid password alone must not open
             // an account that controls every wallet on the platform. Log the
-            // session back out and require an emailed code first.
-            if ($user->isAdmin() && (bool) Setting::get('admin_2fa_enabled', '1')) {
+            // session back out and require an emailed code first. Off by
+            // default — the code arrives by email, so enabling it before SMTP
+            // is verified (Settings → Send Test Email) locks every admin out.
+            if ($user->isAdmin() && (bool) Setting::get('admin_2fa_enabled', '0')) {
                 $userId = (int) $user->getAuthIdentifier();
                 $remember = $request->boolean('remember');
 

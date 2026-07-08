@@ -56,10 +56,69 @@ class AdminSettingsController extends Controller
             Cache::forget('currency:rates');
         }
 
-        // Optional: Clear config cache to apply changes if needed
-        // Artisan::call('config:clear');
+        // Boot-time overrides (mail, whatsapp, app, tawk) read from this
+        // cache — without forgetting it, saved changes wouldn't take effect
+        // for up to 5 minutes.
+        Cache::forget('app:boot_settings');
 
         return back()->with('success', 'Application settings updated successfully.');
+    }
+
+    /**
+     * Send a test email using the SMTP values currently in the form (not the
+     * saved ones), so an admin can verify the connection works before saving
+     * — and before enabling anything that depends on mail, like admin 2FA.
+     */
+    public function testMail(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'host' => ['required', 'string'],
+            'port' => ['required', 'integer', 'between:1,65535'],
+            'username' => ['nullable', 'string'],
+            'password' => ['nullable', 'string'],
+            'encryption' => ['nullable', 'string'],
+            'from_address' => ['nullable', 'email'],
+            'from_name' => ['nullable', 'string'],
+        ]);
+
+        $encryption = strtolower((string) ($data['encryption'] ?? ''));
+        $useSmtps = $encryption === 'ssl' || (int) $data['port'] === 465;
+
+        $recipient = $request->user()->email;
+
+        try {
+            $mailer = \Illuminate\Support\Facades\Mail::build([
+                'transport' => 'smtp',
+                'host' => $data['host'],
+                'port' => (int) $data['port'],
+                'username' => $data['username'] ?: null,
+                'password' => $data['password'] ?: null,
+                'scheme' => $useSmtps ? 'smtps' : null,
+                'timeout' => 15,
+            ]);
+
+            $fromAddress = $data['from_address'] ?: (string) config('mail.from.address');
+            $fromName = $data['from_name'] ?: (string) config('mail.from.name');
+
+            $mailer->raw(
+                "This is a test email from Zimbo Socials.\n\nIf you're reading this, your SMTP settings are working — save them, then you can safely enable admin 2FA.",
+                function ($message) use ($recipient, $fromAddress, $fromName): void {
+                    $message->to($recipient)
+                        ->from($fromAddress, $fromName)
+                        ->subject('Zimbo Socials — SMTP test');
+                }
+            );
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Send failed: '.$e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => "Test email sent to {$recipient} — check the inbox (and spam folder).",
+        ]);
     }
 
     public function seoGenerator(): Response
