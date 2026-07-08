@@ -6,16 +6,18 @@ use App\Models\Service;
 use App\Models\Setting;
 use App\Models\UpstreamProvider;
 use App\Services\AI\SeoContentGenerator;
+use App\Services\CurrencyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class AdminSettingsController extends Controller
 {
-    public function index(): Response
+    public function index(CurrencyService $currencyService): Response
     {
         $settings = Setting::all()->groupBy('group');
         $providers = UpstreamProvider::all();
@@ -23,6 +25,7 @@ class AdminSettingsController extends Controller
         return Inertia::render('Admin/Settings/Index', [
             'settings' => $settings,
             'providers' => $providers,
+            'currencyRates' => $currencyService->rates(),
             'referralDefaults' => [
                 'first_deposit_reward' => (string) config('services.referral.first_deposit_reward', '1.00'),
                 'order_commission_percent' => (string) config('services.referral.order_commission_percent', '2.00'),
@@ -47,6 +50,10 @@ class AdminSettingsController extends Controller
 
         foreach ($data['settings'] as $item) {
             Setting::set($item['key'], $item['value'], $item['group']);
+        }
+
+        if (collect($data['settings'])->contains(fn ($item) => $item['group'] === 'currency')) {
+            Cache::forget('currency:rates');
         }
 
         // Optional: Clear config cache to apply changes if needed

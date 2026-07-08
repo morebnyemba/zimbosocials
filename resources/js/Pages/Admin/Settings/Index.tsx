@@ -2,26 +2,36 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, useForm, router, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    FaCog, 
-    FaEnvelope, 
-    FaWhatsapp, 
-    FaGlobe, 
-    FaSave, 
-    FaSync, 
-    FaPlus, 
-    FaTrash, 
-    FaEdit, 
+import {
+    FaCog,
+    FaEnvelope,
+    FaWhatsapp,
+    FaGlobe,
+    FaSave,
+    FaSync,
+    FaPlus,
+    FaTrash,
+    FaEdit,
     FaShieldAlt,
     FaTerminal,
     FaServer,
     FaUsers,
     FaDollarSign,
     FaCommentDots,
+    FaCoins,
 } from 'react-icons/fa';
 
-export default function SettingsIndex({ settings, providers, referralDefaults, monetizerDefaults }: any) {
+interface CurrencyRate { code: string; symbol: string; rate: string; }
+
+export default function SettingsIndex({ settings, providers, referralDefaults, monetizerDefaults, currencyRates }: any) {
     const [activeTab, setActiveTab] = useState('general');
+
+    const initialCurrencies: CurrencyRate[] = Object.entries(currencyRates || {}).map(([code, entry]: [string, any]) => ({
+        code,
+        symbol: entry.symbol,
+        rate: String(entry.rate),
+    }));
+    const [currencies, setCurrencies] = useState<CurrencyRate[]>(initialCurrencies);
     
     // Flatten settings for useForm
     const getSetting = (group: string, key: string) => {
@@ -36,7 +46,7 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
         return getSetting('monetizer', key) || fallback;
     };
 
-    const { data, setData, post, processing } = useForm({
+    const { data, setData } = useForm({
         settings: [
             // General
             { key: 'name', value: getSetting('app', 'name'), group: 'app' },
@@ -76,9 +86,35 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
         }
     };
 
+    const addCurrency = () => setCurrencies([...currencies, { code: '', symbol: '', rate: '' }]);
+    const removeCurrency = (index: number) => setCurrencies(currencies.filter((_, i) => i !== index));
+    const updateCurrency = (index: number, field: keyof CurrencyRate, value: string) => {
+        const next = [...currencies];
+        next[index] = { ...next[index], [field]: field === 'code' ? value.toUpperCase() : value };
+        setCurrencies(next);
+    };
+
+    const [saving, setSaving] = useState(false);
+
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        post(route('admin.settings.update'));
+
+        const ratesMap: Record<string, { symbol: string; rate: number }> = {};
+        currencies.forEach(c => {
+            if (c.code.trim() && Number(c.rate) > 0) {
+                ratesMap[c.code.trim()] = { symbol: c.symbol.trim() || c.code.trim(), rate: Number(c.rate) };
+            }
+        });
+
+        const settingsWithRates = [
+            ...data.settings,
+            { key: 'currency_rates', value: JSON.stringify(ratesMap), group: 'currency' },
+        ];
+
+        setSaving(true);
+        router.post(route('admin.settings.update'), { settings: settingsWithRates }, {
+            onFinish: () => setSaving(false),
+        });
     };
 
     const tabs = [
@@ -87,6 +123,7 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
         { id: 'whatsapp', label: 'WhatsApp Terminal', icon: FaWhatsapp },
         { id: 'referral', label: 'Referral Program', icon: FaUsers },
         { id: 'monetizer', label: 'Creator Monetizer', icon: FaDollarSign },
+        { id: 'currency', label: 'Currencies', icon: FaCoins },
         { id: 'tawk', label: 'Live Chat (Tawk.to)', icon: FaCommentDots },
         { id: 'providers', label: 'API Supply Chain', icon: FaServer },
     ];
@@ -104,7 +141,7 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
                     {activeTab !== 'providers' && (
                         <button 
                             onClick={submit}
-                            disabled={processing}
+                            disabled={saving}
                             className="flex items-center gap-3 px-10 py-4 rounded-2xl bg-zinc-900 text-white text-sm font-black uppercase tracking-widest shadow-2xl hover:bg-zinc-800 transition-all active:scale-95 disabled:opacity-50"
                         >
                             <FaSave className="text-brand-green" /> Deploy Changes
@@ -265,6 +302,78 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
                                             type="number"
                                         />
                                     </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'currency' && (
+                                <div className="space-y-8 max-w-3xl">
+                                    <div className="p-8 rounded-[2rem] bg-amber-50 border border-amber-100 mb-8">
+                                        <h3 className="text-amber-800 font-black text-sm uppercase tracking-widest flex items-center gap-2 mb-2">
+                                            <FaCoins /> Display Currencies
+                                        </h3>
+                                        <p className="text-amber-700/80 text-xs font-medium leading-relaxed">
+                                            USD is always the base currency — balances, transactions, and orders are stored and charged in USD only.
+                                            Currencies added here just let users choose a display currency (Settings → Profile); amounts are converted
+                                            using the rate below (units of that currency per 1 USD) for display purposes only.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        {currencies.length === 0 && (
+                                            <p className="text-zinc-400 font-bold text-sm text-center py-8">No display currencies configured — users can only choose USD.</p>
+                                        )}
+                                        {currencies.map((c, i) => (
+                                            <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 items-end p-6 rounded-[1.5rem] bg-zinc-50 border border-zinc-100">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1 block">Code</label>
+                                                    <input
+                                                        type="text"
+                                                        value={c.code}
+                                                        onChange={e => updateCurrency(i, 'code', e.target.value)}
+                                                        placeholder="ZWL"
+                                                        maxLength={3}
+                                                        className="w-full bg-white border-2 border-zinc-200 rounded-xl px-4 py-3 font-bold text-zinc-900 uppercase focus:outline-none focus:border-brand-green"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1 block">Symbol</label>
+                                                    <input
+                                                        type="text"
+                                                        value={c.symbol}
+                                                        onChange={e => updateCurrency(i, 'symbol', e.target.value)}
+                                                        placeholder="ZWL$"
+                                                        className="w-full bg-white border-2 border-zinc-200 rounded-xl px-4 py-3 font-bold text-zinc-900 focus:outline-none focus:border-brand-green"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1 block">Rate (per $1)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.0001"
+                                                        value={c.rate}
+                                                        onChange={e => updateCurrency(i, 'rate', e.target.value)}
+                                                        placeholder="13000"
+                                                        className="w-full bg-white border-2 border-zinc-200 rounded-xl px-4 py-3 font-bold text-zinc-900 focus:outline-none focus:border-brand-green"
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeCurrency(i)}
+                                                    className="p-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-all"
+                                                >
+                                                    <FaTrash />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={addCurrency}
+                                        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-100 text-zinc-700 text-xs font-black uppercase tracking-widest hover:bg-zinc-200 transition-all"
+                                    >
+                                        <FaPlus /> Add Currency
+                                    </button>
                                 </div>
                             )}
 

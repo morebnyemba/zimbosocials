@@ -101,8 +101,11 @@ export default function SettingsIndex({ auth }: PageProps) {
                                 <select value={profileForm.data.currency} onChange={(e) => profileForm.setData('currency', e.target.value)}
                                     className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none">
                                     <option value="USD">USD</option>
-                                    <option value="ZWL">ZWL</option>
+                                    {Object.keys((usePage().props as any).currencyRates ?? {}).map((code) => (
+                                        <option key={code} value={code}>{code}</option>
+                                    ))}
                                 </select>
+                                <p className="mt-1 text-xs text-slate-400">Balances are always stored and charged in USD — this only changes how amounts are displayed to you.</p>
                             </div>
                         </div>
                         <button type="submit" disabled={profileForm.processing}

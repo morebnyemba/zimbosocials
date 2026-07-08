@@ -4,7 +4,8 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import CreateContractSlideOver from '@/Components/CreateContractSlideOver';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from '@/lib/i18n';
-import { 
+import { useCurrency } from '@/lib/currency';
+import {
     FaRocket, 
     FaWallet, 
     FaClock, 
@@ -122,6 +123,7 @@ function BusinessDashboardView({
 }: Props) {
     const user = auth.user;
     const { t } = useTranslation();
+    const { formatUSD } = useCurrency();
     const firstName = (user?.name ?? '').trim().split(' ')[0] || 'User';
     
     
@@ -192,7 +194,7 @@ const contractForm = useForm({
                             <div>
                                 <p className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mb-2">{t('available_budget')}</p>
                                 <div className="flex items-end gap-3">
-                                    <span className="text-5xl font-black tracking-tighter">${Number(user.balance || 0).toFixed(2)}</span>
+                                    <span className="text-5xl font-black tracking-tighter">{formatUSD(Number(user.balance || 0))}</span>
                                     <span className="text-amber-400 text-sm font-black mb-1">USD</span>
                                 </div>
                             </div>
@@ -357,6 +359,7 @@ function CustomerDashboardView({
 }: Props) {
     const user = auth.user;
     const { t } = useTranslation();
+    const { formatUSD } = useCurrency();
     const firstName = (user?.name ?? '').trim().split(' ')[0] || 'User';
 
     const topCategories = Object.entries(category_counts ?? {})
@@ -414,7 +417,7 @@ function CustomerDashboardView({
                             <div>
                                 <p className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mb-2">{t('power_reserve')}</p>
                                 <div className="flex items-end gap-3">
-                                    <span className="text-5xl font-black tracking-tighter">${Number(user.balance || 0).toFixed(2)}</span>
+                                    <span className="text-5xl font-black tracking-tighter">{formatUSD(Number(user.balance || 0))}</span>
                                     <span className="text-emerald-400 text-sm font-black mb-1">USD</span>
                                 </div>
                             </div>

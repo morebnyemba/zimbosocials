@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Notification;
+use App\Services\CurrencyService;
 use App\Services\TranslationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -68,6 +69,14 @@ class HandleInertiaRequests extends Middleware
                 : 0,
             'locale' => app()->getLocale(),
             'translations' => fn () => app(TranslationService::class)->messages(app()->getLocale()),
+            // Cached (rates change rarely) — USD-per-unit rates for any
+            // admin-configured display currency. Frontend converts/formats
+            // client-side; nothing here is ever persisted or charged.
+            'currencyRates' => fn () => Cache::remember(
+                'currency:rates',
+                300,
+                fn () => app(CurrencyService::class)->rates()
+            ),
         ];
     }
 }
