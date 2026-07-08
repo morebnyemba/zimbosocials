@@ -1,6 +1,7 @@
 import { Link, usePage, router } from '@inertiajs/react';
 import { PropsWithChildren, ReactNode, useState, useEffect, useRef } from 'react';
 import { useTranslation } from '@/lib/i18n';
+import { useCurrency } from '@/lib/currency';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     FaChartPie, 
@@ -99,6 +100,7 @@ function LangSwitcher() {
 
 export default function AuthenticatedLayout({ header, children }: PropsWithChildren<{ header?: ReactNode }>) {
     const { t } = useTranslation();
+    const { formatUSD } = useCurrency();
     const user = usePage().props.auth.user;
     const flash = (usePage().props as any).flash as { success?: string; error?: string; info?: string } | undefined;
     const notificationsCount = (usePage().props as any).notifications_count || 0;
@@ -202,7 +204,7 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                         <Link href={route('wallet.index')} className="flex lg:hidden items-center gap-1.5 bg-zinc-950 px-3 py-2 rounded-xl">
                             <FaWallet className="text-amber-400 text-[10px]" />
                             <span className="text-white font-mono font-black text-xs tracking-tighter">
-                                ${Number(user.balance || 0).toFixed(2)}
+                                {formatUSD(Number(user.balance || 0))}
                             </span>
                         </Link>
 
@@ -211,7 +213,7 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                             <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 via-amber-400 to-red-600 opacity-10 group-hover:opacity-20 transition-opacity" />
                             <FaWallet className="text-amber-400 text-xs relative z-10" />
                             <span className="text-white font-mono font-black text-sm tracking-tighter relative z-10">
-                                ${Number(user.balance || 0).toFixed(2)}
+                                {formatUSD(Number(user.balance || 0))}
                             </span>
                             <div className="p-1 rounded-lg bg-white/10 group-hover:bg-white/20 transition-colors relative z-10">
                                 <FaPlus className="text-[10px] text-white" />
@@ -340,7 +342,7 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                                     <div className="flex items-center gap-4 font-black uppercase tracking-widest text-xs">
                                         <FaWallet className="text-emerald-400" /> My Wallet
                                     </div>
-                                    <span className="font-mono text-xl font-black tracking-tighter">${Number(user.balance || 0).toFixed(2)}</span>
+                                    <span className="font-mono text-xl font-black tracking-tighter">{formatUSD(Number(user.balance || 0))}</span>
                                 </Link>
                                 <div className="rounded-2xl border border-zinc-200 p-4">
                                     <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Language</label>

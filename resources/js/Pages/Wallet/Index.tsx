@@ -3,6 +3,7 @@ import { PageProps } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { useTranslation } from '@/lib/i18n';
+import { useCurrency } from '@/lib/currency';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     FaWallet, 
@@ -84,6 +85,7 @@ const methodIcons: Record<string, any> = {
 
 export default function WalletIndex({ auth, transactions, totals, manualPaymentDetails, availableMethods, gatewayMethods, manualDepositBonusPercent }: Props) {
     const { t } = useTranslation();
+    const { formatUSD, currencyCode } = useCurrency();
     const user = auth.user;
     const isMarketer = user.role === 'marketer' || user.role === 'reseller';
     const methods = Object.entries(availableMethods ?? {});
@@ -513,8 +515,8 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                             </span>
                             <h1 className="text-4xl lg:text-6xl font-black tracking-tighter">Your <span className="text-zinc-500">Balance</span></h1>
                             <div className="flex items-baseline gap-3 justify-center md:justify-start">
-                                <span className="text-6xl font-black tracking-tighter">${Number(user.balance || 0).toFixed(2)}</span>
-                                <span className="text-emerald-400 text-sm font-black">USD</span>
+                                <span className="text-6xl font-black tracking-tighter">{formatUSD(Number(user.balance || 0))}</span>
+                                <span className="text-emerald-400 text-sm font-black">{currencyCode}</span>
                             </div>
                         </div>
 
@@ -539,10 +541,10 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
 
                 {/* Sub-Stats Grid */}
                 <section className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatCard label="Total Deposited" value={`$${Number(totals.deposited).toFixed(2)}`} />
-                    <StatCard label="Manual Earnings" value={`$${Number(totals.contract_earnings).toFixed(2)}`} />
-                    <StatCard label="Total Spent" value={`$${Number(totals.spent).toFixed(2)}`} />
-                    <StatCard label="Withdrawn" value={`$${Number(totals.withdrawn).toFixed(2)}`} />
+                    <StatCard label="Total Deposited" value={formatUSD(Number(totals.deposited))} />
+                    <StatCard label="Manual Earnings" value={formatUSD(Number(totals.contract_earnings))} />
+                    <StatCard label="Total Spent" value={formatUSD(Number(totals.spent))} />
+                    <StatCard label="Withdrawn" value={formatUSD(Number(totals.withdrawn))} />
                 </section>
 
                 <AnimatePresence>
@@ -877,7 +879,7 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                                         )}
                                     </div>
                                     <div className={`text-xl font-black ${amountColor} ${isUnsettled ? 'line-through' : ''}`}>
-                                        {t.amount >= 0 ? '+' : ''}{Number(t.amount).toFixed(2)}
+                                        {t.amount >= 0 ? '+' : '-'}{formatUSD(Math.abs(Number(t.amount)))}
                                     </div>
                                 </div>
                             );

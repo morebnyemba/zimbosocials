@@ -4,6 +4,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CurrencyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,7 +20,7 @@ class SettingsController extends Controller
         return Inertia::render('Settings/Index');
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request, CurrencyService $currencyService): RedirectResponse
     {
         $user = Auth::user();
         $section = $request->input('section');
@@ -31,7 +32,7 @@ class SettingsController extends Controller
                 'whatsapp_number' => ['nullable', 'string', 'max:20'],
                 'company_name' => ['nullable', 'string', 'max:100'],
                 'bio' => ['nullable', 'string', 'max:500'],
-                'currency' => ['required', 'in:USD,ZWL'],
+                'currency' => ['required', 'in:'.implode(',', $currencyService->supportedCodes())],
                 'locale' => ['required', 'in:sn,en'],
             ]);
 
