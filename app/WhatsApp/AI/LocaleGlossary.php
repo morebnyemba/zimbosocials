@@ -2,10 +2,14 @@
 
 namespace App\WhatsApp\AI;
 
+use App\Services\TranslationService;
+
 /**
- * Builds a domain glossary from the site's own i18n (the messages.php lang
- * files) so the AI uses the panel's approved Shona/Ndebele terms instead of
- * guessing. Injected into the AI context for non-English locales.
+ * Builds a domain glossary from the site's own i18n so the AI uses the panel's
+ * approved Shona/Ndebele terms instead of guessing. Resolves through
+ * TranslationService, so admin-panel translation edits (DB overrides merged
+ * over the messages.php files) reach the assistant too. Injected into the AI
+ * context for non-English locales.
  */
 class LocaleGlossary
 {
@@ -13,7 +17,7 @@ class LocaleGlossary
 
     /** Curated domain keys that exist in messages.php across all locales. */
     private const KEYS = [
-        'balance', 'current_balance', 'wallet_status', 'services', 'service',
+        'balance', 'current_balance', 'wallet_balance', 'wallet_status', 'services', 'service',
         'select_service', 'order_quantity', 'order_summary', 'place_order',
         'confirm_payment', 'charge', 'link', 'search_services', 'service_catalog',
         'instant', 'refill', 'avg_speed', 'deposit_funds', 'add_funds',
@@ -35,17 +39,20 @@ class LocaleGlossary
             return [];
         }
 
+        // Merged file + admin-override translations, matching the website.
+        $svc = app(TranslationService::class);
+        $en = $svc->messages('en');
+        $loc = $svc->messages($locale);
+
         $glossary = [];
         foreach (self::KEYS as $key) {
-            $path = 'messages.'.$key;
-            $en = trans($path, [], 'en');
-            $loc = trans($path, [], $locale);
+            $enTerm = $en[$key] ?? null;
+            $locTerm = $loc[$key] ?? null;
 
-            // Skip unresolved keys (Laravel returns the path itself) and no-ops.
-            if ($en === $path || $loc === $path || $en === $loc) {
+            if (! $enTerm || ! $locTerm || $enTerm === $locTerm) {
                 continue;
             }
-            $glossary[$en] = $loc;
+            $glossary[$enTerm] = $locTerm;
         }
 
         return $glossary;

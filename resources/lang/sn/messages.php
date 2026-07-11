@@ -225,7 +225,7 @@ return [
     'business_panel' => 'Bhodhi ReBhizimisi',
     'marketer_panel' => 'Bhodhi Remutengesi',
     'your_performance' => 'Performance yako nemabasa achangoburwa',
-    'wallet_balance' => 'Mari Iripo YeChikwama',
+    'wallet_balance' => 'Mari Irimuchikwama',
     'total_spend' => 'Mari Yose Yashandiswa',
     'contract_earnings' => 'Mutengo weKontiraka',
     'withdrawn' => 'Yakatorwa',
