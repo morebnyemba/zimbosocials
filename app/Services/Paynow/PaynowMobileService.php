@@ -100,6 +100,7 @@ class PaynowMobileService
                 return [
                     'ok' => true, 'flow' => 'innbucks_authcode', 'transaction' => $transaction, 'transaction_id' => (int) $transaction->id,
                     'authorization_code' => $authCode,
+                    'authorization_expires' => $data['authorizationexpires'] ?? '',
                     'deep_link' => 'com.innbucks.customer://purchase?paymentToken='.$authCode,
                     'qr_url' => 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='.urlencode($authCode),
                     'instructions' => $response->instructions(),
