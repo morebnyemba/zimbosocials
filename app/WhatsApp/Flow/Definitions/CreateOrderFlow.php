@@ -36,13 +36,19 @@ class CreateOrderFlow extends AbstractFlow
         // AI fast-forward: if the orchestrator extracted a service/platform (and
         // maybe link/quantity), resolve it and jump to the first missing step.
         // We always stop at the confirm step — never auto-place an order.
+        $serviceId = $ctx->pullPrefill('service_id');
         $platform = $ctx->pullPrefill('platform');
         $serviceName = $ctx->pullPrefill('service');
         $link = $ctx->pullPrefill('link');
         $quantity = $ctx->pullPrefill('quantity');
 
-        if ($platform || $serviceName) {
-            $service = $this->resolveService((string) $platform, (string) $serviceName);
+        // Gemini may pass an exact catalogue service_id; otherwise match by name.
+        $service = ($serviceId && is_numeric($serviceId))
+            ? Service::active()->find((int) $serviceId)
+            : null;
+
+        if ($service || $platform || $serviceName) {
+            $service ??= $this->resolveService((string) $platform, (string) $serviceName);
             if ($service) {
                 $ctx->set('order_service_id', $service->id);
 

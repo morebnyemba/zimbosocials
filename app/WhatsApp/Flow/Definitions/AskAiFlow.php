@@ -49,7 +49,7 @@ class AskAiFlow extends AbstractFlow
         }
         $this->guard->record($ctx->phone);
 
-        $answer = $this->ai->answer(trim($input));
+        $answer = $this->ai->answer(trim($input), $this->user($ctx));
         if (! $answer) {
             return FlowResult::fail("🤖 I couldn't find an answer just now. Type *support* to reach our team.");
         }
