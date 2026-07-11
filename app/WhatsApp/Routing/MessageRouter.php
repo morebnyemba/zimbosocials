@@ -195,6 +195,11 @@ class MessageRouter
                     $this->responder->send($phone, $reply, ['handled_by' => 'ai', 'ai_used' => true, 'intent' => $flow ?? 'ai']);
                 }
 
+                // Optional AI follow-up nudge, sent as a second message.
+                if (! empty($r['follow_up'])) {
+                    $this->responder->send($phone, (string) $r['follow_up'], ['handled_by' => 'ai', 'ai_used' => true, 'intent' => 'follow_up']);
+                }
+
                 if ($flow !== null) {
                     foreach (($r['flow_data'] ?? []) as $k => $v) {
                         $ctx->set('_prefill_'.$k, $v);
