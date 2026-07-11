@@ -2,14 +2,18 @@
 
 namespace App\Providers;
 
+use App\WhatsApp\Flow\Definitions\AskAiFlow;
 use App\WhatsApp\Flow\Definitions\BrowseServicesFlow;
 use App\WhatsApp\Flow\Definitions\CreateOrderFlow;
 use App\WhatsApp\Flow\Definitions\CreateTicketFlow;
 use App\WhatsApp\Flow\Definitions\DepositFundsFlow;
+use App\WhatsApp\Flow\Definitions\FaqFlow;
 use App\WhatsApp\Flow\Definitions\ForgotPasswordFlow;
 use App\WhatsApp\Flow\Definitions\LinkAccountFlow;
 use App\WhatsApp\Flow\Definitions\MyOrdersFlow;
+use App\WhatsApp\Flow\Definitions\ProfileFlow;
 use App\WhatsApp\Flow\Definitions\RegistrationFlow;
+use App\WhatsApp\Flow\Definitions\SettingsFlow;
 use App\WhatsApp\Flow\Definitions\TrackOrderFlow;
 use App\WhatsApp\Flow\Definitions\TransactionHistoryFlow;
 use App\WhatsApp\Flow\Definitions\ViewTicketsFlow;
@@ -39,7 +43,11 @@ class WhatsAppServiceProvider extends ServiceProvider
         DepositFundsFlow::class,
         CreateTicketFlow::class,
         ViewTicketsFlow::class,
-        // Wave 5+: ask_ai/faq, profile/settings…
+        // Wave 5 — profile, settings, FAQ, AI:
+        ProfileFlow::class,
+        SettingsFlow::class,
+        FaqFlow::class,
+        AskAiFlow::class,
     ];
 
     public function register(): void
