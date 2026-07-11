@@ -95,6 +95,8 @@ return [
     'rate_per_1k' => 'Intengo nga-1k',
     'avg_speed' => 'Ijubane',
     'refill' => 'Ukugcwalisa',
+    'order_now' => 'Oda', // TODO(i18n): confirm native ND wording
+    'custom_amount' => 'Enye inani', // TODO(i18n): confirm native ND wording
     'instant' => 'Khathesi',
     'service_desc_fallback' => 'Insiza ephezulu elokugcinwa okuphezulu lokulethwa ngokuphangisa.',
 

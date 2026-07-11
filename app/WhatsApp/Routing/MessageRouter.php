@@ -1,0 +1,343 @@
+<?php
+
+namespace App\WhatsApp\Routing;
+
+use App\Models\WhatsAppAccount;
+use App\WhatsApp\Flow\FlowEngine;
+use App\WhatsApp\Flow\FlowResult;
+use App\WhatsApp\Menu\MenuProvider;
+use App\WhatsApp\Messaging\Responder;
+use App\WhatsApp\Persistence\AccountStore;
+use App\WhatsApp\Persistence\MessageStore;
+use App\WhatsApp\Session\SessionContext;
+use App\WhatsApp\Session\SessionManager;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * MessageRouter (Wave 2) — the deterministic dispatch ladder.
+ *
+ *   1. Resume / restart buttons (after a timeout)
+ *   2. Typed universal command / data shortcut       [no AI]
+ *   3. Timed-out active flow → offer resume/restart   [no AI]
+ *   4. Any menu/button selection → navigate           [no AI]
+ *   5. Active flow → advance with free text           [no AI]
+ *   6. Fallback → menu (Wave 5 inserts rule → KB → AI here)
+ *
+ * Flows in Wave 2 collect input as free text (numbers), so every interactive
+ * selection is treated as global navigation.
+ */
+class MessageRouter
+{
+    /** Flows a guest may start without authenticating. */
+    private array $guestFlows = ['register', 'login', 'link', 'forgot', 'faq'];
+
+    public function __construct(
+        private readonly AccountStore $accounts,
+        private readonly MessageStore $messages,
+        private readonly Responder $responder,
+        private readonly MenuProvider $menus,
+        private readonly SessionManager $sessions,
+        private readonly FlowEngine $engine,
+        private readonly CommandRegistry $commands,
+        private readonly RateLimiter $limiter,
+    ) {}
+
+    public function handle(array $msg, ?string $displayName = null): void
+    {
+        $inboundId = $this->messages->recordInbound($msg);
+        if ($inboundId === 0) {
+            return; // duplicate delivery
+        }
+
+        $phone = $msg['from'] ?? '';
+        if ($phone === '') {
+            return;
+        }
+
+        $this->responder->markRead($msg['wa_message_id'] ?? null);
+        $this->responder->typing($msg['wa_message_id'] ?? null);
+
+        // Flood control.
+        $rl = $this->limiter->check($phone);
+        if (! $rl['allowed']) {
+            if ($rl['warn']) {
+                $this->responder->send($phone, "⏳ You're sending messages too quickly. Please wait a moment.");
+            }
+            $this->messages->tagInbound($inboundId, ['handled_by' => 'system', 'intent' => 'rate_limited']);
+
+            return;
+        }
+
+        $account = $this->accounts->resolveOrCreate($phone, $displayName ?? ($msg['name'] ?? null));
+
+        // Agent handoff — a human is handling this chat; record but stay silent.
+        if ($account->inAgentHandoff()) {
+            $this->messages->tagInbound($inboundId, ['handled_by' => 'agent', 'intent' => 'handoff']);
+
+            return;
+        }
+
+        $text = trim((string) ($msg['text'] ?? ''));
+
+        // Opt-out gate.
+        if (! $account->opted_in) {
+            if (in_array(mb_strtolower($text), ['start', 'menu', 'hi', 'hello'], true)) {
+                $this->accounts->setOptOut($phone, true);
+                $account->opted_in = true;
+            } else {
+                $this->messages->tagInbound($inboundId, ['handled_by' => 'system', 'intent' => 'opted_out']);
+
+                return;
+            }
+        }
+
+        $ctx = $this->sessions->load($phone);
+        if ($account->isLinked()) {
+            $ctx->set('_user_id', $account->user_id);
+        }
+
+        $selection = $msg['interactive_id'] ?? null;
+
+        try {
+            $tag = $this->dispatch($ctx, $account, $text, $selection);
+        } catch (\Throwable $e) {
+            Log::error('WhatsApp dispatch error', ['message' => $e->getMessage()]);
+            $ctx->resetFlow();
+            $this->responder->send($phone, "⚠️ Something went wrong. Let's go back to the menu.");
+            $this->sendMenuFor($account, $ctx);
+            $tag = ['handled_by' => 'system', 'intent' => 'error'];
+        }
+
+        $this->sessions->save($ctx);
+        $this->messages->tagInbound($inboundId, array_merge(['flow' => $ctx->flow], $tag));
+    }
+
+    private function dispatch(SessionContext $ctx, WhatsAppAccount $account, string $text, ?string $selection): array
+    {
+        $phone = $ctx->phone;
+        $authenticated = $account->isLinked();
+
+        // 1. Resume / restart buttons.
+        if ($selection === 'wa_resume') {
+            $res = $this->engine->resume($ctx);
+            $this->emit($account, $ctx, $res);
+
+            return ['handled_by' => 'command', 'intent' => 'resume'];
+        }
+        if ($selection === 'wa_restart') {
+            $this->engine->cancel($ctx);
+            $this->sendMenuFor($account, $ctx);
+
+            return ['handled_by' => 'command', 'intent' => 'restart'];
+        }
+
+        // 2. Typed universal command / data shortcut.
+        if ($selection === null) {
+            $cmd = $this->commands->match($text);
+            if ($cmd !== null) {
+                $this->runCommand($cmd, $ctx, $account);
+
+                return ['handled_by' => 'command', 'intent' => $cmd];
+            }
+        }
+
+        // 3. Active flow that timed out → offer resume / restart.
+        if ($ctx->wasExpired && $ctx->inFlow() && $selection === null && $text !== '') {
+            $this->responder->sendButtons(
+                $phone,
+                "⏱️ You have an unfinished action. Resume where you left off?",
+                [['id' => 'wa_resume', 'title' => 'Resume'], ['id' => 'wa_restart', 'title' => 'Main menu']],
+                ['handled_by' => 'system']
+            );
+
+            return ['handled_by' => 'system', 'intent' => 'resume_offer'];
+        }
+
+        // 4. Any selection navigates (cancel an active flow first).
+        if ($selection !== null) {
+            if ($ctx->inFlow()) {
+                $this->engine->cancel($ctx);
+            }
+            $this->handleSelection($selection, $ctx, $account);
+
+            return ['handled_by' => 'menu', 'intent' => $selection];
+        }
+
+        // 5. Active flow consumes free text.
+        if ($ctx->inFlow() && $text !== '') {
+            $res = $this->engine->advance($ctx, $text);
+            $this->emit($account, $ctx, $res);
+
+            return ['handled_by' => 'flow'];
+        }
+
+        // 6. Fallback → menu. (Wave 5 inserts rule → KB → AI here.)
+        $this->sendMenuFor($account, $ctx);
+
+        return ['handled_by' => 'menu', 'intent' => 'fallback'];
+    }
+
+    private function runCommand(string $cmd, SessionContext $ctx, WhatsAppAccount $account): void
+    {
+        $phone = $ctx->phone;
+
+        switch ($cmd) {
+            case 'menu':
+                $this->engine->cancel($ctx);
+                $this->sendMenuFor($account, $ctx);
+
+                return;
+            case 'help':
+                $this->responder->send($phone, $this->helpText());
+                $this->sendMenuFor($account, $ctx);
+
+                return;
+            case 'back':
+            case 'cancel':
+                $wasInFlow = $ctx->inFlow();
+                $this->engine->cancel($ctx);
+                $this->responder->send($phone, $wasInFlow ? '✖ Cancelled.' : 'Nothing to cancel.');
+                $this->sendMenuFor($account, $ctx);
+
+                return;
+            case 'stop':
+                $this->accounts->setOptOut($phone, false);
+                $this->responder->send($phone, "🔕 You've been unsubscribed. Send *menu* anytime to come back.");
+
+                return;
+        }
+
+        // Auth entry-points and data shortcuts map to flows.
+        $flowMap = [
+            'register' => 'register', 'login' => 'link', 'link' => 'link', 'forgot' => 'forgot',
+            'order' => 'order',
+            'balance' => 'balance', 'orders' => 'my_orders', 'services' => 'browse',
+            'support' => 'ticket', 'tickets' => 'tickets', 'deposit' => 'deposit',
+            'track' => 'track', 'profile' => 'profile', 'history' => 'history',
+            'search' => 'search', 'faq' => 'faq',
+        ];
+        $flowId = $flowMap[$cmd] ?? null;
+        if ($flowId !== null) {
+            $this->startFlow($flowId, $ctx, $account);
+
+            return;
+        }
+
+        $this->sendMenuFor($account, $ctx);
+    }
+
+    private function handleSelection(string $selection, SessionContext $ctx, WhatsAppAccount $account): void
+    {
+        if ($selection === 'menu' || $selection === 'menu_home') {
+            $this->sendMenuFor($account, $ctx);
+
+            return;
+        }
+        if ($selection === 'guest_learn') {
+            $this->responder->send($ctx->phone, $this->learnMoreText());
+            $this->sendMenuFor($account, $ctx);
+
+            return;
+        }
+
+        $flowId = MenuProvider::$actionFlow[$selection] ?? null;
+        if ($flowId === null) {
+            $this->sendMenuFor($account, $ctx);
+
+            return;
+        }
+
+        $this->startFlow($flowId, $ctx, $account);
+    }
+
+    private function startFlow(string $flowId, SessionContext $ctx, WhatsAppAccount $account): void
+    {
+        $isGuestFlow = in_array($flowId, $this->guestFlows, true);
+
+        if (! $isGuestFlow && ! $account->isLinked()) {
+            // Auth required for a guest → start guided sign-up, remembering the
+            // action they wanted so it can be resumed after registration.
+            $ctx->set('_pending_flow', $flowId);
+            $res = $this->engine->start($ctx, 'register');
+            $this->emit($account, $ctx, $res);
+
+            return;
+        }
+
+        if (! $this->engine->canStart($flowId)) {
+            $label = ucwords(str_replace('_', ' ', $flowId));
+            $this->responder->send($ctx->phone, "🛠️ *{$label}* is coming in the next update. Type *menu* to go back.");
+
+            return;
+        }
+
+        $res = $this->engine->start($ctx, $flowId);
+        $this->emit($account, $ctx, $res);
+    }
+
+    private function emit(WhatsAppAccount $account, SessionContext $ctx, FlowResult $res): void
+    {
+        if ($res->reply !== null && $res->reply !== '') {
+            $this->responder->send($ctx->phone, $res->reply, ['flow' => $ctx->flow, 'handled_by' => 'flow']);
+        }
+
+        if (! $res->isDone()) {
+            return; // still mid-flow, awaiting input
+        }
+
+        // If the user just authenticated, resume the action they originally
+        // wanted (e.g. asked for "balance" as a guest → registered → balance).
+        $pending = $ctx->get('_pending_flow');
+        if ($pending !== null) {
+            $ctx->forget('_pending_flow');
+            $account->refresh();
+            if ($account->isLinked()
+                && ! in_array($pending, ['register', 'link', 'forgot'], true)
+                && $this->engine->canStart($pending)
+            ) {
+                $ctx->set('_user_id', $account->user_id);
+                $this->emit($account, $ctx, $this->engine->start($ctx, $pending));
+
+                return;
+            }
+        }
+
+        if ($res->showMenuAfter()) {
+            $this->sendMenuFor($account, $ctx);
+        }
+    }
+
+    private function sendMenuFor(WhatsAppAccount $account, SessionContext $ctx): void
+    {
+        $account->refresh();
+
+        if ($account->isLinked()) {
+            $user = $account->user;
+            $balanceText = $user ? number_format((float) $user->balance, 2).' '.($user->currency ?? 'USD') : null;
+            $this->responder->sendMenu($ctx->phone, $this->menus->mainMenu($account->display_name, $balanceText));
+        } else {
+            $this->responder->sendMenu($ctx->phone, $this->menus->guestMenu());
+        }
+    }
+
+    private function helpText(): string
+    {
+        return "🤖 *How to use this assistant*\n\n"
+            ."Tap a menu option, or type a command:\n"
+            ."*menu* – main menu\n"
+            ."*balance* – your wallet\n"
+            ."*orders* – your orders\n"
+            ."*track* – track an order\n"
+            ."*services* – browse services\n"
+            ."*history* – transactions\n"
+            ."*cancel* – stop the current step\n\n"
+            .'Type *menu* at any time.';
+    }
+
+    private function learnMoreText(): string
+    {
+        return "ℹ️ We provide social media marketing services — followers, likes, views and more, "
+            ."delivered fast. Register or link your account to browse services, place orders and "
+            .'track delivery right here on WhatsApp.';
+    }
+}

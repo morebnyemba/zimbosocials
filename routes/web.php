@@ -3,6 +3,7 @@
 // routes/web.php
 
 use App\Http\Controllers\Admin\WhatsAppTemplateController;
+use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Controllers\AdminCampaignController;
 use App\Http\Controllers\AdminContractController;
 use App\Http\Controllers\AdminController;
@@ -381,3 +382,11 @@ Route::middleware('auth')->group(function () {
 Route::post('/webhooks/payment', [WalletController::class, 'handleWebhook'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->name('webhooks.payment');
+
+// ─── WhatsApp assistant webhook (Meta Cloud API, no CSRF) ─────────────────────
+
+Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])
+    ->name('webhooks.whatsapp.verify');
+Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'receive'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('webhooks.whatsapp');

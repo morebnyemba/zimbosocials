@@ -45,6 +45,11 @@ return [
         'api_token' => env('WHATSAPP_API_TOKEN'),
         'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
         'waba_id' => env('WHATSAPP_WABA_ID'),              // WhatsApp Business Account ID (for templates)
+        'graph_version' => env('WHATSAPP_GRAPH_VERSION', 'v21.0'),
+        // Inbound webhook (conversational assistant):
+        'webhook_verify_token' => env('WHATSAPP_WEBHOOK_VERIFY_TOKEN'),  // GET handshake token you set in Meta
+        'app_secret' => env('WHATSAPP_APP_SECRET'),                       // signs X-Hub-Signature-256 on POSTs
+        'assistant_enabled' => env('WHATSAPP_ASSISTANT_ENABLED', true),
         'twilio_sid' => env('TWILIO_SID'),
         'twilio_from' => env('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
     ],

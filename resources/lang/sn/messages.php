@@ -90,6 +90,8 @@ return [
     'rate_per_1k' => 'Mutengo pa 1k',
     'avg_speed' => 'Kumhanya',
     'refill' => 'Kuzadzazve',
+    'order_now' => 'Oda', // TODO(i18n): confirm native SN wording
+    'custom_amount' => 'Imwe huwandu', // TODO(i18n): confirm native SN wording
     'instant' => 'Pakarepo',
     'service_desc_fallback' => 'Sevhisi yepamusoro ine kuchengetedza kwakakwirira uye kuendeswa nekukurumidza.',
 
