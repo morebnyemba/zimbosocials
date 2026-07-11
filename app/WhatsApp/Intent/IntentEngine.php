@@ -6,74 +6,82 @@ use App\WhatsApp\AI\AIGuard;
 use App\WhatsApp\AI\GeminiProvider;
 
 /**
- * Resolves free text that wasn't a command or active-flow input, in cost order:
- *   1. Knowledge base (deterministic, free)
- *   2. Gemini classification → a flow (with entities) or an AI answer
+ * AI-primary orchestration for free text. Gemini plans the action (start any
+ * flow with extracted params, answer, or run a command). The knowledge base is
+ * a deterministic fallback when AI is unavailable or over its daily budget.
  *
  * Returns a normalized decision the router acts on:
- *   ['kind' => 'flow'|'kb'|'ai'|'none', 'reply' => ?string, 'flow' => ?string,
- *    'flow_data' => array]
+ *   ['kind' => 'flow'|'command'|'kb'|'ai'|'none',
+ *    'reply' => ?string, 'flow' => ?string, 'command' => ?string, 'flow_data' => array]
  */
 class IntentEngine
 {
-    /** Classifier intent → flow id. */
-    private const INTENT_FLOW = [
-        'order' => 'order', 'balance' => 'balance', 'my_orders' => 'my_orders',
-        'track' => 'track', 'browse' => 'browse', 'deposit' => 'deposit',
-        'history' => 'history', 'ticket' => 'ticket', 'tickets' => 'tickets',
-        'profile' => 'profile',
-    ];
-
     public function __construct(
         private readonly KnowledgeBase $kb,
         private readonly GeminiProvider $ai,
         private readonly AIGuard $guard,
     ) {}
 
-    public function resolve(string $text, string $phone): array
+    /**
+     * @param  array{authenticated:bool, current_flow:?string}  $context
+     */
+    public function resolve(string $text, string $phone, array $context): array
     {
-        // 1. Knowledge base.
+        // 1. AI is the primary brain.
+        if ($this->ai->isConfigured() && $this->guard->allow($phone)) {
+            $this->guard->record($phone);
+            $plan = $this->ai->plan($text, $context);
+            if ($plan) {
+                return $this->fromPlan($plan, $text);
+            }
+        }
+
+        // 2. Deterministic fallback: knowledge base.
         if ($hit = $this->kb->lookup($text)) {
-            return ['kind' => 'kb', 'reply' => "💡 *{$hit['title']}*\n\n{$hit['answer']}", 'flow' => null, 'flow_data' => []];
+            return $this->decision('kb', reply: "💡 *{$hit['title']}*\n\n{$hit['answer']}");
         }
 
-        // 2. AI (guarded).
-        if (! $this->ai->isConfigured() || ! $this->guard->allow($phone)) {
-            return ['kind' => 'none', 'reply' => null, 'flow' => null, 'flow_data' => []];
-        }
-
-        $this->guard->record($phone);
-        $c = $this->ai->classify($text);
-
-        if (! $c) {
+        // 3. Last resort: a plain AI answer if we still have budget.
+        if ($this->ai->isConfigured() && $this->guard->allow($phone)) {
             $answer = $this->ai->answer($text);
-
-            return ['kind' => $answer ? 'ai' : 'none', 'reply' => $answer, 'flow' => null, 'flow_data' => []];
+            if ($answer) {
+                return $this->decision('ai', reply: $answer);
+            }
         }
 
-        $flow = self::INTENT_FLOW[$c['intent']] ?? null;
-        if ($flow !== null) {
-            return [
-                'kind' => 'flow',
-                'flow' => $flow,
-                'reply' => $c['reply'] ?: null,
-                'flow_data' => $this->cleanEntities($c['entities']),
-            ];
-        }
+        return $this->decision('none');
+    }
 
-        // question / faq / none → conversational answer.
-        $reply = $c['reply'] ?: $this->ai->answer($text);
+    private function fromPlan(array $plan, string $text): array
+    {
+        return match ($plan['action']) {
+            'command' => $this->decision('command', reply: $plan['reply'], command: $plan['command'] ?: 'menu'),
+            'flow' => $plan['flow']
+                ? $this->decision('flow', reply: $plan['reply'], flow: $plan['flow'], data: $this->cleanEntities($plan['entities']))
+                : $this->answerFallback($plan, $text),
+            default => $this->answerFallback($plan, $text),
+        };
+    }
 
-        return ['kind' => $reply ? 'ai' : 'none', 'reply' => $reply, 'flow' => null, 'flow_data' => []];
+    private function answerFallback(array $plan, string $text): array
+    {
+        $reply = $plan['reply'] ?: $this->ai->answer($text);
+
+        return $this->decision($reply ? 'ai' : 'none', reply: $reply);
+    }
+
+    private function decision(string $kind, ?string $reply = null, ?string $flow = null, ?string $command = null, array $data = []): array
+    {
+        return ['kind' => $kind, 'reply' => $reply, 'flow' => $flow, 'command' => $command, 'flow_data' => $data];
     }
 
     private function cleanEntities(array $entities): array
     {
-        return array_filter([
-            'order_id' => $entities['order_id'] ?? null,
-            'quantity' => $entities['quantity'] ?? null,
-            'service' => $entities['service'] ?? null,
-            'amount' => $entities['amount'] ?? null,
-        ], fn ($v) => $v !== null && $v !== '');
+        $allowed = ['order_id', 'quantity', 'service', 'platform', 'link', 'amount', 'email', 'name', 'subject', 'message'];
+
+        return array_filter(
+            array_intersect_key($entities, array_flip($allowed)),
+            fn ($v) => $v !== null && $v !== ''
+        );
     }
 }

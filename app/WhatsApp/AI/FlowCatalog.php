@@ -1,0 +1,54 @@
+<?php
+
+namespace App\WhatsApp\AI;
+
+/**
+ * Describes the flows the AI orchestrator may invoke, and the entities each can
+ * consume to fast-forward through its steps. This is the "tool schema" handed
+ * to Gemini so it can call any part of any flow with the data it extracted.
+ *
+ * Editing a flow's capabilities is a one-line change here — flows read the
+ * matching _prefill_* keys the router injects.
+ */
+class FlowCatalog
+{
+    /** @return array<string, array{desc:string, params:array<string>}> */
+    public static function all(): array
+    {
+        return [
+            'order' => ['desc' => 'Place a new order (buy followers/likes/views/etc.)', 'params' => ['platform', 'service', 'quantity', 'link']],
+            'balance' => ['desc' => 'Show the wallet balance', 'params' => []],
+            'deposit' => ['desc' => 'Add funds to the wallet', 'params' => ['amount']],
+            'history' => ['desc' => 'Show recent wallet transactions', 'params' => []],
+            'my_orders' => ['desc' => 'List the user\'s recent orders', 'params' => []],
+            'track' => ['desc' => 'Track a specific order by number', 'params' => ['order_id']],
+            'browse' => ['desc' => 'Browse available services', 'params' => ['platform']],
+            'ticket' => ['desc' => 'Open a support ticket', 'params' => ['subject', 'message']],
+            'tickets' => ['desc' => 'List the user\'s support tickets', 'params' => []],
+            'profile' => ['desc' => 'Show account/profile details', 'params' => []],
+            'settings' => ['desc' => 'View or change notification settings', 'params' => []],
+            'register' => ['desc' => 'Create a new account (guests only)', 'params' => ['name', 'email']],
+            'link' => ['desc' => 'Link this number to an existing account via email code', 'params' => ['email']],
+            'forgot' => ['desc' => 'Send a password reset email', 'params' => ['email']],
+            'faq' => ['desc' => 'Show frequently asked questions', 'params' => []],
+        ];
+    }
+
+    /** Flows any user (including guests) may start. */
+    public static function guestFlows(): array
+    {
+        return ['register', 'link', 'forgot', 'faq'];
+    }
+
+    /** Compact one-line-per-flow description for the planner prompt. */
+    public static function prompt(): string
+    {
+        $lines = [];
+        foreach (self::all() as $id => $meta) {
+            $params = $meta['params'] ? ' (params: '.implode(', ', $meta['params']).')' : '';
+            $lines[] = "- {$id}: {$meta['desc']}{$params}";
+        }
+
+        return implode("\n", $lines);
+    }
+}

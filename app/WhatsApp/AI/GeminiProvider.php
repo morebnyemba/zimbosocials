@@ -25,6 +25,67 @@ class GeminiProvider
     }
 
     /**
+     * Primary orchestration: decide what to do with the user's message. The AI
+     * may start any flow (with extracted params), answer directly, or run a
+     * universal command. It never confirms money on the user's behalf — flows
+     * still require the confirm step.
+     *
+     * @param  array{authenticated:bool, current_flow:?string}  $context
+     * @return array{action:string, flow:?string, command:?string, reply:?string, entities:array}|null
+     */
+    public function plan(string $text, array $context): ?array
+    {
+        $catalog = FlowCatalog::prompt();
+        $auth = $context['authenticated'] ? 'authenticated' : 'a guest (only register/link/forgot/faq flows allowed)';
+        $current = $context['current_flow'] ? "They are currently in the '{$context['current_flow']}' flow." : 'They are not in any flow.';
+
+        $prompt = <<<PROMPT
+        You are the orchestrating brain of a WhatsApp assistant for a social media
+        marketing (SMM) panel. Decide the single best next action for the user's message.
+
+        The user is {$auth}. {$current}
+
+        Available flows you can start:
+        {$catalog}
+
+        Reply ONLY with JSON:
+        {"action": "flow" | "answer" | "command",
+         "flow": "<flow id or null>",
+         "command": "menu" | "cancel" | "help" | null,
+         "reply": "<short friendly message to send, or null>",
+         "entities": {"platform": null, "service": null, "quantity": null, "link": null, "order_id": null, "amount": null, "email": null, "name": null, "subject": null, "message": null}}
+
+        Rules:
+        - Prefer "flow" whenever the user wants to DO something the panel supports; fill entities you can extract (leave others null). Do NOT invent order numbers, amounts or links.
+        - Use "answer" for questions/greetings/smalltalk; put the reply in "reply" (max 3 sentences, warm, concise).
+        - Use "command" only for clear navigation ("go to menu", "cancel", "help").
+        - Never place orders or move money yourself — starting the 'order'/'deposit' flow is enough; the flow will ask the user to confirm.
+
+        User message: "{$text}"
+        PROMPT;
+
+        $json = $this->client->generateJson($prompt, 0.2);
+        if (! is_array($json) || empty($json['action'])) {
+            return null;
+        }
+
+        $action = in_array($json['action'], ['flow', 'answer', 'command'], true) ? $json['action'] : 'answer';
+        $flow = $json['flow'] ?? null;
+        if ($flow !== null && ! array_key_exists($flow, FlowCatalog::all())) {
+            $flow = null;
+            $action = $action === 'flow' ? 'answer' : $action;
+        }
+
+        return [
+            'action' => $action,
+            'flow' => $flow,
+            'command' => in_array($json['command'] ?? null, ['menu', 'cancel', 'help'], true) ? $json['command'] : null,
+            'reply' => isset($json['reply']) && $json['reply'] !== '' ? (string) $json['reply'] : null,
+            'entities' => is_array($json['entities'] ?? null) ? array_filter($json['entities'], fn ($v) => $v !== null && $v !== '') : [],
+        ];
+    }
+
+    /**
      * @return array{intent:string, reply:?string, entities:array}|null
      */
     public function classify(string $text): ?array
