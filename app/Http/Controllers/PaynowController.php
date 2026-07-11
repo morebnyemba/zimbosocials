@@ -16,20 +16,10 @@ use Paynow\Util\Hash;
 
 class PaynowController extends Controller
 {
-    /**
-     * Supported mobile money providers: method key => Paynow method string + metadata.
-     * Phone prefix lists are the leading digits of a normalised 10-digit Zimbabwean number.
-     */
-    private const MOBILE_PROVIDERS = [
-        'ecocash' => ['label' => 'EcoCash',  'method' => 'ecocash',  'prefixes' => ['077', '078']],
-        'onemoney' => ['label' => 'OneMoney', 'method' => 'onemoney', 'prefixes' => ['071']],
-        'innbucks' => ['label' => 'InnBucks', 'method' => 'innbucks', 'prefixes' => []],     // any number can use InnBucks wallet
-        'omari' => ['label' => "O'mari",   'method' => 'omari',    'prefixes' => ['077', '078']],
-    ];
-
     public function __construct(
         private readonly Application $app,
         private readonly DepositService $depositService,
+        private readonly \App\Services\Paynow\PaynowMobileService $mobile,
     ) {}
 
     /**
@@ -146,156 +136,57 @@ class PaynowController extends Controller
      */
     public function initMobile(Request $request, string $provider)
     {
-        if (! array_key_exists($provider, self::MOBILE_PROVIDERS)) {
+        if (! PaynowMobileService::isProvider($provider)) {
             abort(404);
         }
 
-        $config = self::MOBILE_PROVIDERS[$provider];
-
-        $request->validate([
+        $data = $request->validate([
             'amount' => 'required|numeric|min:1',
             'phone' => 'required|string',
         ]);
 
-        // Normalize to a local 10-digit Zimbabwe number (0XXXXXXXXX)
-        $phone = $this->normalizeZwPhone((string) $request->input('phone'));
+        // Single shared implementation (also used by the WhatsApp assistant).
+        $res = $this->mobile->initiate($request->user(), $provider, (string) $data['phone'], (float) $data['amount']);
 
-        if ($phone === null) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please enter a valid Zimbabwean phone number.',
-            ], 422);
+        if (empty($res['ok'])) {
+            $status = match ($res['error'] ?? '') {
+                'invalid_phone', 'wrong_network', 'invalid_amount', 'unknown_provider', 'paynow_unconfigured' => 422,
+                'init_failed' => 400,
+                default => 500,
+            };
+
+            return response()->json(['success' => false, 'message' => $res['message'] ?? 'Payment failed.'], $status);
         }
 
-        // Validate that the number belongs to this provider's network (skip if no prefix restriction)
-        if (! empty($config['prefixes'])) {
-            $matchesProvider = false;
-            foreach ($config['prefixes'] as $prefix) {
-                if (str_starts_with($phone, $prefix)) {
-                    $matchesProvider = true;
-                    break;
-                }
-            }
-
-            if (! $matchesProvider) {
-                $expected = implode(' or ', $config['prefixes']);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => "{$config['label']} numbers must start with {$expected}.",
-                ], 422);
-            }
-        }
-
-        $user = $request->user();
-        $amount = (float) $request->input('amount');
-
-        $transaction = $this->createPendingTransaction($user, $amount, $provider);
-
-        $paynow = $this->getPaynow();
-        $payment = $paynow->createPayment((string) $transaction->id, $this->authEmail($user));
-        $payment->add('Account Deposit', $amount);
-
-        try {
-            $response = $paynow->sendMobile($payment, $phone, $config['method']);
-
-            if ($response->success()) {
-                $data = $response->data();
-
-                // Store poll URL; add provider-specific fields to gateway_meta
-                $updateFields = ['reference' => $response->pollUrl()];
-
-                if ($provider === 'innbucks') {
-                    $authCode = $data['authorizationcode'] ?? '';
-                    $authExpires = $data['authorizationexpires'] ?? '';
-                    $updateFields['gateway_meta'] = [
-                        'authorizationcode' => $authCode,
-                        'authorizationexpires' => $authExpires,
-                    ];
-                    $transaction->update($updateFields);
-
-                    // Google's Image Charts API (chart.googleapis.com) was shut down in 2019 —
-                    // this used to render a permanently broken QR image.
-                    $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='.urlencode($authCode);
-                    $deepLink = 'com.innbucks.customer://purchase?paymentToken='.$authCode;
-
-                    return response()->json([
-                        'success' => true,
-                        'flow' => 'innbucks_authcode',
-                        'authorization_code' => $authCode,
-                        'authorization_expires' => $authExpires,
-                        'qr_url' => $qrUrl,
-                        'deep_link' => $deepLink,
-                        'instructions' => $response->instructions(),
-                        'transaction_id' => $transaction->getKey(),
-                        'provider' => $provider,
-                    ]);
-                }
-
-                if ($provider === 'omari') {
-                    $otpReference = $data['otpreference'] ?? '';
-                    $remoteOtpUrl = $data['remoteotpurl'] ?? '';
-                    $updateFields['gateway_meta'] = [
-                        'otpreference' => $otpReference,
-                        'remoteotpurl' => $remoteOtpUrl,
-                    ];
-                    $transaction->update($updateFields);
-
-                    return response()->json([
-                        'success' => true,
-                        'flow' => 'omari_otp',
-                        'otp_reference' => $otpReference,
-                        'transaction_id' => $transaction->getKey(),
-                        'provider' => $provider,
-                        'message' => "An OTP has been sent to {$phone}. Please enter it below to complete the payment.",
-                    ]);
-                }
-
-                // EcoCash / OneMoney / TeleCash — standard USSD PIN push
-                $transaction->update($updateFields);
-
-                return response()->json([
-                    'success' => true,
-                    'flow' => 'ussd_pin',
-                    'message' => "Check your phone and enter your {$config['label']} PIN to complete the payment.",
-                    'instructions' => $response->instructions(),
-                    'transaction_id' => $transaction->getKey(),
-                    'provider' => $provider,
-                ]);
-            }
-
-            $this->depositService->reject($transaction, 'paynow_mobile_init_failed', 'Mobile init failed');
-
-            return response()->json(['success' => false, 'message' => 'Could not send the payment request. Please try again.'], 400);
-
-        } catch (\Throwable $e) {
-            Log::error("Paynow {$config['label']} Init Error", $this->exceptionContext($e, ['provider' => $provider, 'transaction_id' => $transaction->id]));
-            $this->depositService->reject($transaction, 'paynow_mobile_exception', 'Exception: '.$this->describeException($e));
-
-            return response()->json(['success' => false, 'message' => 'Payment gateway error. Please try again later.'], 500);
-        }
-    }
-
-    /**
-     * Normalise an input string to a 10-digit local Zimbabwe number (0XXXXXXXXX).
-     * Accepts: 0771234567 / +263771234567 / 263771234567 / 771234567
-     * Returns null if the result is not exactly 10 digits.
-     */
-    private function normalizeZwPhone(string $raw): ?string
-    {
-        $digits = preg_replace('/[^0-9]/', '', $raw);
-
-        // International with country code: 263XXXXXXXXX (12 digits)
-        if (strlen($digits) === 12 && str_starts_with($digits, '263')) {
-            $digits = '0'.substr($digits, 3);
-        }
-
-        // Without leading zero: XXXXXXXXX (9 digits)
-        if (strlen($digits) === 9) {
-            $digits = '0'.$digits;
-        }
-
-        return (strlen($digits) === 10 && str_starts_with($digits, '0')) ? $digits : null;
+        return match ($res['flow']) {
+            'innbucks_authcode' => response()->json([
+                'success' => true,
+                'flow' => 'innbucks_authcode',
+                'authorization_code' => $res['authorization_code'],
+                'authorization_expires' => $res['authorization_expires'] ?? '',
+                'qr_url' => $res['qr_url'],
+                'deep_link' => $res['deep_link'],
+                'instructions' => $res['instructions'],
+                'transaction_id' => $res['transaction_id'],
+                'provider' => $provider,
+            ]),
+            'omari_otp' => response()->json([
+                'success' => true,
+                'flow' => 'omari_otp',
+                'otp_reference' => $res['otp_reference'],
+                'transaction_id' => $res['transaction_id'],
+                'provider' => $provider,
+                'message' => $res['message'],
+            ]),
+            default => response()->json([
+                'success' => true,
+                'flow' => 'ussd_pin',
+                'message' => $res['message'],
+                'instructions' => $res['instructions'] ?? null,
+                'transaction_id' => $res['transaction_id'],
+                'provider' => $provider,
+            ]),
+        };
     }
 
     /**
@@ -319,59 +210,10 @@ class PaynowController extends Controller
             'otp' => 'required|string|min:4|max:8',
         ]);
 
-        $meta = (array) ($transaction->gateway_meta ?? []);
-        $remoteOtpUrl = $meta['remoteotpurl'] ?? null;
+        // Shared implementation (also used by the WhatsApp assistant).
+        $res = $this->mobile->submitOtp($transaction, (string) $request->input('otp'));
 
-        if (empty($remoteOtpUrl)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'OTP submission is not available for this transaction.',
-            ], 422);
-        }
-
-        $integrationId = (string) config('services.paynow.integration_id');
-        // The Paynow SDK always lowercases the integration key before hashing for
-        // mobile/express requests (see Paynow::formatInitMobile) — replicate that
-        // here since we build this hash manually rather than via the SDK. Using
-        // the raw-case key produces a hash Paynow's server can't verify, which it
-        // surfaces as a generic "Invalid OTP" regardless of the OTP itself.
-        $integrationKey = strtolower((string) config('services.paynow.integration_key'));
-        $otp = trim((string) $request->input('otp'));
-
-        // Hash per Paynow spec: SHA-512( id + otp + "Message" + integrationKey ) → uppercase
-        $hash = Hash::make([
-            'id' => $integrationId,
-            'otp' => $otp,
-            'status' => 'Message',
-        ], $integrationKey);
-
-        try {
-            $httpResponse = Http::asForm()->post($remoteOtpUrl, [
-                'id' => $integrationId,
-                'otp' => $otp,
-                'status' => 'Message',
-                'hash' => $hash,
-            ]);
-
-            parse_str($httpResponse->body(), $params);
-
-            if (isset($params['status']) && strtolower($params['status']) === 'error') {
-                $error = $params['error'] ?? 'Invalid OTP';
-
-                return response()->json(['success' => false, 'message' => $error], 422);
-            }
-
-            // OTP accepted — Paynow confirms payment via webhook or poll
-            return response()->json([
-                'success' => true,
-                'message' => 'OTP accepted. Processing your payment…',
-            ]);
-
-        } catch (\Throwable $e) {
-            Log::error("Paynow O'mari OTP error", $this->exceptionContext($e, ['transaction_id' => $transaction->id]));
-
-            return response()->json(['success' => false, 'message' => 'Could not submit OTP. Please try again.'], 500);
-        }
+        return response()->json(['success' => $res['ok'], 'message' => $res['message']], $res['ok'] ? 200 : 422);
     }
 
     /**
