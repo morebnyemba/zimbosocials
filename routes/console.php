@@ -25,7 +25,13 @@ Schedule::command('upstream:sync-services')->dailyAt('02:00')->withoutOverlappin
 // has no persistent worker on shared hosting, so this is the standard
 // cron-driven substitute: process whatever's queued, then exit — self-limited
 // to 50s so it never runs into (or blocks) the next minute's scheduler tick.
-Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=3')->everyMinute()->withoutOverlapping();
+//
+// --queue is REQUIRED: notifications (emails, WhatsApp, marketing broadcasts)
+// are dispatched onto the 'notifications' queue while order/audit jobs use
+// 'default'. Plain `queue:work` only drains 'default', which silently stranded
+// every notification email forever. List 'notifications' first so time-
+// sensitive mail (login codes, order updates) is sent ahead of bookkeeping.
+Schedule::command('queue:work --queue=notifications,default --stop-when-empty --max-time=50 --tries=3')->everyMinute()->withoutOverlapping();
 
 // Expire stale pending deposits older than 24 hours (final-polls Paynow
 // first; skips proof-submitted deposits; never touches withdrawals)

@@ -44,12 +44,22 @@ export default function MarketerShow({ marketer, stats, recent_applications }: a
     if (!marketer) return <AdminLayout><div className="p-8">Loading...</div></AdminLayout>;
 
     const adjustBalance = () => {
-        if (!balanceForm.amount) return;
-        router.post(route('admin.users.adjust-balance', { user: marketer.id }), balanceForm, {
+        const magnitude = Math.abs(Number(balanceForm.amount));
+        if (!magnitude || !balanceForm.note.trim()) return;
+
+        // Controller expects a signed `amount` and `reason`. Debit toggles the
+        // sign; the sign of the amount (not a `type` field) drives credit/debit.
+        const signed = balanceForm.type === 'subtract' ? -magnitude : magnitude;
+
+        router.post(route('admin.users.balance', { user: marketer.id }), {
+            amount: signed,
+            reason: balanceForm.note,
+        }, {
+            preserveScroll: true,
             onSuccess: () => {
                 setShowBalanceModal(false);
                 setBalanceForm({ amount: '', type: 'add', note: '' });
-            }
+            },
         });
     };
 
@@ -546,9 +556,9 @@ export default function MarketerShow({ marketer, stats, recent_applications }: a
                                     </div>
                                 </div>
                                 <div className="p-10 bg-zinc-50 border-t border-zinc-100 flex gap-4">
-                                    <button 
+                                    <button
                                         onClick={adjustBalance}
-                                        disabled={!balanceForm.amount}
+                                        disabled={!balanceForm.amount || !balanceForm.note.trim()}
                                         className="flex-1 bg-zinc-900 text-brand-green py-6 rounded-[1.8rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
                                     >
                                         Execute Transaction
