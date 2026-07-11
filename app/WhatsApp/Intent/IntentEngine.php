@@ -37,6 +37,7 @@ class IntentEngine
         return [
             'handled' => true,
             'reply' => $res['reply'],
+            'follow_up' => $res['follow_up'] ?? null,
             'flow' => $res['flow'],
             'flow_data' => $res['flow_data'],
         ];
