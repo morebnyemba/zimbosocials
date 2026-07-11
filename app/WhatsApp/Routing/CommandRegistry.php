@@ -30,9 +30,11 @@ class CommandRegistry
         'tickets' => 'tickets',
         'deposit' => 'deposit', 'topup' => 'deposit', 'fund' => 'deposit',
         'track' => 'track',
-        'profile' => 'profile',
+        'profile' => 'profile', 'account' => 'profile',
+        'settings' => 'settings',
         'history' => 'history', 'transactions' => 'history',
         'faq' => 'faq',
+        'ai' => 'ask_ai', 'ask' => 'ask_ai',
     ];
 
     public function match(?string $text): ?string

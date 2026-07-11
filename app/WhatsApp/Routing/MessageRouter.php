@@ -5,6 +5,7 @@ namespace App\WhatsApp\Routing;
 use App\Models\WhatsAppAccount;
 use App\WhatsApp\Flow\FlowEngine;
 use App\WhatsApp\Flow\FlowResult;
+use App\WhatsApp\Intent\IntentEngine;
 use App\WhatsApp\Menu\MenuProvider;
 use App\WhatsApp\Messaging\Responder;
 use App\WhatsApp\Persistence\AccountStore;
@@ -40,6 +41,7 @@ class MessageRouter
         private readonly FlowEngine $engine,
         private readonly CommandRegistry $commands,
         private readonly RateLimiter $limiter,
+        private readonly IntentEngine $intent,
     ) {}
 
     public function handle(array $msg, ?string $displayName = null): void
@@ -171,7 +173,38 @@ class MessageRouter
             return ['handled_by' => 'flow'];
         }
 
-        // 6. Fallback → menu. (Wave 5 inserts rule → KB → AI here.)
+        // 6. Free text → knowledge base → AI intent resolution.
+        if ($text !== '') {
+            $r = $this->intent->resolve($text, $phone);
+
+            if ($r['kind'] === 'kb') {
+                $this->responder->send($phone, (string) $r['reply'], ['handled_by' => 'kb', 'intent' => 'kb']);
+                $this->sendMenuFor($account, $ctx);
+
+                return ['handled_by' => 'kb', 'intent' => 'kb'];
+            }
+
+            if ($r['kind'] === 'flow' && $r['flow'] !== null) {
+                foreach ($r['flow_data'] as $k => $v) {
+                    $ctx->set('_prefill_'.$k, $v);
+                }
+                if (! empty($r['reply'])) {
+                    $this->responder->send($phone, (string) $r['reply'], ['handled_by' => 'ai', 'ai_used' => true]);
+                }
+                $this->startFlow($r['flow'], $ctx, $account);
+
+                return ['handled_by' => 'rule', 'intent' => $r['flow'], 'ai_used' => true];
+            }
+
+            if ($r['kind'] === 'ai' && ! empty($r['reply'])) {
+                $this->responder->send($phone, (string) $r['reply'], ['handled_by' => 'ai', 'ai_used' => true, 'intent' => 'ai']);
+                $this->sendMenuFor($account, $ctx);
+
+                return ['handled_by' => 'ai', 'intent' => 'ai', 'ai_used' => true];
+            }
+        }
+
+        // 7. Nothing matched → menu.
         $this->sendMenuFor($account, $ctx);
 
         return ['handled_by' => 'menu', 'intent' => 'fallback'];
@@ -214,7 +247,8 @@ class MessageRouter
             'balance' => 'balance', 'orders' => 'my_orders', 'services' => 'browse',
             'support' => 'ticket', 'tickets' => 'tickets', 'deposit' => 'deposit',
             'track' => 'track', 'profile' => 'profile', 'history' => 'history',
-            'search' => 'search', 'faq' => 'faq',
+            'search' => 'search', 'faq' => 'faq', 'settings' => 'settings',
+            'ask_ai' => 'ask_ai',
         ];
         $flowId = $flowMap[$cmd] ?? null;
         if ($flowId !== null) {
