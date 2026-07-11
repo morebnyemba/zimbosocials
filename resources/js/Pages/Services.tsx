@@ -164,9 +164,6 @@ export default function Services({ services, categories }: Props) {
                                             </div>
 
                                             <div className="space-y-2">
-                                                <div className="flex gap-2 items-center mb-1">
-                                                    <span className="text-[10px] font-black text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md uppercase">{t('order_id')}: {service.id}</span>
-                                                </div>
                                                 <h3 className="text-lg font-black text-zinc-900 leading-tight group-hover:text-emerald-600 transition-colors">{service.name}</h3>
                                                 <p className="text-zinc-500 text-xs font-medium leading-relaxed line-clamp-3">
                                                     {service.description || t('service_desc_fallback')}
@@ -191,11 +188,11 @@ export default function Services({ services, categories }: Props) {
                                             <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
                                                 {Number(service.min_qty).toLocaleString()} - {Number(service.max_qty).toLocaleString()}
                                             </div>
-                                            <Link 
+                                            <Link
                                                 href={route('orders.create', { service_id: service.id })}
-                                                className="h-10 w-10 rounded-xl bg-zinc-900 text-white flex items-center justify-center hover:bg-emerald-500 transition-all shadow-md hover:shadow-emerald-500/30"
+                                                className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 text-white pl-5 pr-4 py-2.5 text-sm font-black hover:bg-emerald-500 transition-all shadow-md hover:shadow-emerald-500/30"
                                             >
-                                                <FaArrowRight />
+                                                {t('order_now')} <FaArrowRight className="text-xs" />
                                             </Link>
                                         </div>
                                     </motion.div>

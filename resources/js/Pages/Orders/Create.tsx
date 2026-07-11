@@ -68,6 +68,11 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
     const maxQty = chosenService ? Number(chosenService.max_qty) : Infinity;
     const isQtyInvalid = Boolean(chosenService) && (!Number.isFinite(qty) || qty < minQty || qty > maxQty);
 
+    // Quick-pick amounts so buyers can tap instead of typing. Only show presets
+    // that actually fall within the chosen service's allowed range.
+    const PRESET_AMOUNTS = [100, 250, 500, 1000, 2500, 5000, 10000];
+    const presets = chosenService ? PRESET_AMOUNTS.filter((p) => p >= minQty && p <= maxQty) : [];
+
     // Reset service when category changes
     useEffect(() => {
         if (!filteredServices.find(s => s.id.toString() === data.service_id)) {
@@ -86,7 +91,7 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
         <AuthenticatedLayout>
             <Head title={t('deploy_campaign')} />
 
-            <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-7xl px-4 py-12 pb-28 lg:pb-12 sm:px-6 lg:px-8">
 
                 {/* Header */}
                 <div className="mb-10 text-center max-w-2xl mx-auto">
@@ -202,6 +207,27 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                                                 {/* Quantity Input */}
                                                 <div className="md:col-span-2">
                                                     <label className="mb-2 block text-xs font-black text-zinc-900 uppercase tracking-widest flex items-center gap-2"><FaListOl className="text-zinc-400"/> {t('order_quantity')}</label>
+                                                    {presets.length > 0 && (
+                                                        <div className="flex flex-wrap gap-2 mb-3">
+                                                            {presets.map((p) => {
+                                                                const isActive = qty === p;
+                                                                return (
+                                                                    <button
+                                                                        key={p}
+                                                                        type="button"
+                                                                        onClick={() => setData('quantity', String(p))}
+                                                                        className={`px-4 py-2 rounded-xl text-sm font-black transition-all ${
+                                                                            isActive
+                                                                                ? 'bg-zinc-900 text-white shadow-md'
+                                                                                : 'bg-zinc-50 text-zinc-600 border border-zinc-200 hover:border-zinc-300'
+                                                                        }`}
+                                                                    >
+                                                                        {p.toLocaleString()}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
                                                     <div className="relative">
                                                         <input
                                                             type="number"
@@ -212,9 +238,6 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                                                             className="w-full rounded-2xl border-2 border-zinc-100 bg-zinc-50 px-4 py-4 font-black text-zinc-900 text-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all"
                                                             required
                                                         />
-                                                        <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-                                                            <span className="text-zinc-400 font-bold uppercase text-[10px] tracking-widest">{t('metrics')}</span>
-                                                        </div>
                                                     </div>
                                                     {isQtyInvalid && !errors.quantity && (
                                                         <p className="mt-2 text-xs font-bold text-red-500 flex items-center gap-1">
@@ -314,6 +337,23 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                     </div>
 
                 </div>
+            </div>
+
+            {/* Sticky order bar — mobile only, keeps the total and buy button in reach */}
+            <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-zinc-200 bg-white/95 backdrop-blur px-4 py-3 flex items-center gap-4 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.25)]">
+                <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t('charge')}</p>
+                    <p className="text-2xl font-black text-zinc-900 leading-none">${charge}</p>
+                    {isInsufficient && <p className="text-[10px] font-bold text-red-500 mt-1">{t('insufficient_funds_campaign')}</p>}
+                </div>
+                <button
+                    type="submit"
+                    form="order-form"
+                    disabled={processing || !chosenService || isInsufficient || isQtyInvalid}
+                    className="shrink-0 py-3.5 px-8 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black uppercase tracking-widest text-sm rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {processing ? t('processing_btn') : t('confirm_payment')}
+                </button>
             </div>
         </AuthenticatedLayout>
     );
