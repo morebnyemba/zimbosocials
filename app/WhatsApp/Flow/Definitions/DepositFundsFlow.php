@@ -20,6 +20,12 @@ class DepositFundsFlow extends AbstractFlow
 {
     public function prompt(string $state, SessionContext $ctx): FlowResult
     {
+        // AI fast-forward: if an amount was extracted, go straight to the link.
+        $amount = (float) preg_replace('/[^0-9.]/', '', (string) $ctx->pullPrefill('amount'));
+        if ($amount >= 1 && $amount <= 10000) {
+            return $this->depositLink($amount, $ctx);
+        }
+
         return FlowResult::step("➕ *Add funds*\n\nHow much would you like to deposit? (enter an amount)", 'ask_amount');
     }
 
@@ -38,6 +44,11 @@ class DepositFundsFlow extends AbstractFlow
             return FlowResult::step('Maximum deposit is 10,000. Enter a smaller amount, or type *cancel*.', 'ask_amount');
         }
 
+        return $this->depositLink($amount, $ctx);
+    }
+
+    private function depositLink(float $amount, SessionContext $ctx): FlowResult
+    {
         $user = $this->user($ctx);
         $cur = $user?->currency ?? 'USD';
         $url = url('/wallet');

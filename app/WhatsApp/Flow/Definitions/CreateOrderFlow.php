@@ -33,7 +33,56 @@ class CreateOrderFlow extends AbstractFlow
 
     public function prompt(string $state, SessionContext $ctx): FlowResult
     {
+        // AI fast-forward: if the orchestrator extracted a service/platform (and
+        // maybe link/quantity), resolve it and jump to the first missing step.
+        // We always stop at the confirm step — never auto-place an order.
+        $platform = $ctx->pullPrefill('platform');
+        $serviceName = $ctx->pullPrefill('service');
+        $link = $ctx->pullPrefill('link');
+        $quantity = $ctx->pullPrefill('quantity');
+
+        if ($platform || $serviceName) {
+            $service = $this->resolveService((string) $platform, (string) $serviceName);
+            if ($service) {
+                $ctx->set('order_service_id', $service->id);
+
+                if ($link && filter_var($link, FILTER_VALIDATE_URL)) {
+                    $ctx->set('order_link', (string) $link);
+                }
+                $qty = (int) preg_replace('/\D+/', '', (string) $quantity);
+                if ($qty >= $service->min_qty && $qty <= $service->max_qty) {
+                    $ctx->set('order_quantity', $qty);
+                }
+
+                if (! $ctx->has('order_link')) {
+                    return FlowResult::step("🔗 Send the *link* for your *{$service->name}* order.", 'enter_link');
+                }
+                if (! $ctx->has('order_quantity')) {
+                    return FlowResult::step("🔢 How many? (min *{$service->min_qty}*, max *{$service->max_qty}*)", 'enter_quantity');
+                }
+
+                return $this->toConfirm($service, (int) $ctx->get('order_quantity'), $ctx);
+            }
+        }
+
         return $this->showCategories($ctx);
+    }
+
+    /** Best-effort match of a service from an AI-extracted platform + name. */
+    private function resolveService(string $platform, string $name): ?Service
+    {
+        $q = Service::active();
+        if ($platform !== '') {
+            $q->where('category', 'like', "%{$platform}%");
+        }
+        if ($name !== '') {
+            $q->where('name', 'like', "%{$name}%");
+        }
+
+        // Only auto-select when it's unambiguous.
+        $matches = $q->limit(2)->get();
+
+        return $matches->count() === 1 ? $matches->first() : null;
     }
 
     public function handle(string $state, string $input, SessionContext $ctx): FlowResult
@@ -137,6 +186,13 @@ class CreateOrderFlow extends AbstractFlow
         }
 
         $ctx->set('order_quantity', $qty);
+
+        return $this->toConfirm($service, $qty, $ctx);
+    }
+
+    /** Build the confirmation summary (shared by the manual + AI fast-forward paths). */
+    private function toConfirm(Service $service, int $qty, SessionContext $ctx): FlowResult
+    {
         $charge = $service->calculateCharge($qty);
         $user = $this->user($ctx);
         $cur = $user?->currency ?? 'USD';
@@ -150,14 +206,10 @@ class CreateOrderFlow extends AbstractFlow
             .'Balance: '.$this->money($balance, $cur)."\n\n";
 
         if ($balance < $charge) {
-            $summary .= "⚠️ Not enough balance. Type *deposit* to top up, or *cancel*.";
-
-            return FlowResult::step($summary, 'confirm');
+            return FlowResult::step($summary."⚠️ Not enough balance. Type *deposit* to top up, or *cancel*.", 'confirm');
         }
 
-        $summary .= 'Reply *YES* to place the order, or *cancel*.';
-
-        return FlowResult::step($summary, 'confirm');
+        return FlowResult::step($summary.'Reply *YES* to place the order, or *cancel*.', 'confirm');
     }
 
     private function confirm(string $input, SessionContext $ctx): FlowResult

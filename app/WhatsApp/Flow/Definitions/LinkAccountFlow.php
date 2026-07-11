@@ -34,6 +34,12 @@ class LinkAccountFlow extends AbstractFlow
             return FlowResult::step("Enter the 6-digit code we emailed you.", 'ask_otp');
         }
 
+        // AI fast-forward: if an email was extracted, send the code straight away.
+        $email = trim((string) $ctx->pullPrefill('email'));
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $this->handle('ask_email', $email, $ctx);
+        }
+
         return FlowResult::step("🔗 *Link your account*\n\nWhat's the *email* on your existing account?", 'ask_email');
     }
 

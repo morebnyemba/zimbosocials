@@ -21,6 +21,17 @@ class BrowseServicesFlow extends AbstractFlow
 
     public function prompt(string $state, SessionContext $ctx): FlowResult
     {
+        // AI fast-forward: jump straight to a platform's services if extracted.
+        $platform = trim((string) $ctx->pullPrefill('platform'));
+        if ($platform !== '') {
+            $category = Service::active()
+                ->where('category', 'like', "%{$platform}%")
+                ->value('category');
+            if ($category) {
+                return $this->listServices($category);
+            }
+        }
+
         $categories = Service::active()
             ->select('category')
             ->distinct()
@@ -63,6 +74,11 @@ class BrowseServicesFlow extends AbstractFlow
             return FlowResult::step("Please reply with a valid category number, or type *cancel*.", 'pick_category');
         }
 
+        return $this->listServices($category);
+    }
+
+    private function listServices(string $category): FlowResult
+    {
         $services = Service::active()
             ->byCategory($category)
             ->orderBy('display_order')
@@ -75,11 +91,10 @@ class BrowseServicesFlow extends AbstractFlow
 
         $lines = $services->map(function (Service $s) {
             $rate = number_format((float) $s->rate, 2);
+
             return "• *{$s->name}*\n   \${$rate}/1k · min {$s->min_qty} · max {$s->max_qty}";
         })->implode("\n\n");
 
-        $msg = "📂 *{$category}*\n\n{$lines}\n\nType *order* to place an order, or *menu* to go back.";
-
-        return FlowResult::complete($msg);
+        return FlowResult::complete("📂 *{$category}*\n\n{$lines}\n\nType *order* to place an order, or *menu* to go back.");
     }
 }

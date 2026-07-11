@@ -31,10 +31,23 @@ class RegistrationFlow extends AbstractFlow
 
     public function prompt(string $state, SessionContext $ctx): FlowResult
     {
-        return match ($state) {
-            'ask_email' => FlowResult::step("📧 Great! What's your *email address*?", 'ask_email'),
-            default => FlowResult::step("📝 *Let's create your account.*\n\nWhat's your *full name*?", 'ask_name'),
-        };
+        if ($state === 'ask_email') {
+            return FlowResult::step("📧 Great! What's your *email address*?", 'ask_email');
+        }
+
+        // AI fast-forward: consume an extracted name (and email) to skip steps.
+        $name = trim((string) $ctx->pullPrefill('name'));
+        $email = trim((string) $ctx->pullPrefill('email'));
+        if ($name !== '') {
+            $ctx->set('reg_name', $name);
+            if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return $this->handle('ask_email', $email, $ctx);
+            }
+
+            return FlowResult::step("📧 Thanks, *{$name}*! What's your *email address*?", 'ask_email');
+        }
+
+        return FlowResult::step("📝 *Let's create your account.*\n\nWhat's your *full name*?", 'ask_name');
     }
 
     public function handle(string $state, string $input, SessionContext $ctx): FlowResult

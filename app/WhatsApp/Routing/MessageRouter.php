@@ -173,9 +173,18 @@ class MessageRouter
             return ['handled_by' => 'flow'];
         }
 
-        // 6. Free text → knowledge base → AI intent resolution.
+        // 6. Free text → AI orchestrator (primary), KB fallback.
         if ($text !== '') {
-            $r = $this->intent->resolve($text, $phone);
+            $r = $this->intent->resolve($text, $phone, [
+                'authenticated' => $authenticated,
+                'current_flow' => $ctx->flow,
+            ]);
+
+            if ($r['kind'] === 'command') {
+                $this->runCommand($r['command'] ?? 'menu', $ctx, $account);
+
+                return ['handled_by' => 'ai', 'intent' => 'ai_command', 'ai_used' => true];
+            }
 
             if ($r['kind'] === 'kb') {
                 $this->responder->send($phone, (string) $r['reply'], ['handled_by' => 'kb', 'intent' => 'kb']);
