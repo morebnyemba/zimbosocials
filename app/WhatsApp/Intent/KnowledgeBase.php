@@ -5,45 +5,44 @@ namespace App\WhatsApp\Intent;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Deterministic FAQ lookup consulted before spending an AI call. Matches the
- * user's text against whatsapp_knowledge_base keywords/question with a simple
- * portable LIKE scan (works on both MySQL and the sqlite test DB).
+ * FAQ retrieval used ONLY to ground Gemini — the top matching entries are
+ * injected into the AI prompt as context, never returned to the user directly.
+ * Uses a portable keyword-overlap scan (works on MySQL and the sqlite test DB).
  */
 class KnowledgeBase
 {
-    /** @return array{title:string, answer:string}|null */
-    public function lookup(string $text): ?array
+    /**
+     * Return up to $limit relevant entries for grounding the AI.
+     *
+     * @return array<int, array{title:string, answer:string}>
+     */
+    public function search(string $text, int $limit = 3): array
     {
         $needle = mb_strtolower(trim($text));
         if (mb_strlen($needle) < 3) {
-            return null;
+            return [];
         }
 
         $rows = DB::table('whatsapp_knowledge_base')
             ->where('status', true)
             ->get(['id', 'title', 'question', 'answer', 'keywords']);
 
-        if ($rows->isEmpty()) {
-            return null;
-        }
-
-        $best = null;
-        $bestScore = 0;
+        $scored = [];
         foreach ($rows as $row) {
             $score = $this->score($needle, $row);
-            if ($score > $bestScore) {
-                $bestScore = $score;
-                $best = $row;
+            if ($score >= 1) {
+                $scored[] = ['score' => $score, 'id' => $row->id, 'title' => $row->title, 'answer' => $row->answer];
             }
         }
 
-        if (! $best || $bestScore < 2) {
-            return null;
+        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
+        $top = array_slice($scored, 0, $limit);
+
+        if ($top) {
+            DB::table('whatsapp_knowledge_base')->whereIn('id', array_column($top, 'id'))->increment('hits');
         }
 
-        DB::table('whatsapp_knowledge_base')->where('id', $best->id)->increment('hits');
-
-        return ['title' => $best->title, 'answer' => $best->answer];
+        return array_map(fn ($e) => ['title' => $e['title'], 'answer' => $e['answer']], $top);
     }
 
     private function score(string $needle, object $row): int

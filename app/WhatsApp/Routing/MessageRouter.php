@@ -173,47 +173,44 @@ class MessageRouter
             return ['handled_by' => 'flow'];
         }
 
-        // 6. Free text → AI orchestrator (primary), KB fallback.
+        // 6. Free text → AI brain. Gemini always replies and may trigger a flow;
+        //    the knowledge base is used only as grounding context inside it.
         if ($text !== '') {
+            $history = (array) $ctx->get('_ai_history', []);
             $r = $this->intent->resolve($text, $phone, [
+                'user' => $authenticated ? $account->user : null,
                 'authenticated' => $authenticated,
                 'current_flow' => $ctx->flow,
+                'history' => $history,
             ]);
 
-            if ($r['kind'] === 'command') {
-                $this->runCommand($r['command'] ?? 'menu', $ctx, $account);
+            if (! empty($r['handled'])) {
+                $reply = (string) ($r['reply'] ?? '');
+                $flow = $r['flow'] ?? null;
 
-                return ['handled_by' => 'ai', 'intent' => 'ai_command', 'ai_used' => true];
-            }
-
-            if ($r['kind'] === 'kb') {
-                $this->responder->send($phone, (string) $r['reply'], ['handled_by' => 'kb', 'intent' => 'kb']);
-                $this->sendMenuFor($account, $ctx);
-
-                return ['handled_by' => 'kb', 'intent' => 'kb'];
-            }
-
-            if ($r['kind'] === 'flow' && $r['flow'] !== null) {
-                foreach ($r['flow_data'] as $k => $v) {
-                    $ctx->set('_prefill_'.$k, $v);
+                if ($reply !== '') {
+                    // Keep short-term memory (last 2 exchanges) for follow-ups.
+                    $history[] = ['user' => $text, 'model' => $reply];
+                    $ctx->set('_ai_history', array_slice($history, -2));
+                    $this->responder->send($phone, $reply, ['handled_by' => 'ai', 'ai_used' => true, 'intent' => $flow ?? 'ai']);
                 }
-                if (! empty($r['reply'])) {
-                    $this->responder->send($phone, (string) $r['reply'], ['handled_by' => 'ai', 'ai_used' => true]);
+
+                if ($flow !== null) {
+                    foreach (($r['flow_data'] ?? []) as $k => $v) {
+                        $ctx->set('_prefill_'.$k, $v);
+                    }
+                    $this->startFlow($flow, $ctx, $account);
+
+                    return ['handled_by' => 'ai', 'intent' => $flow, 'ai_used' => true];
                 }
-                $this->startFlow($r['flow'], $ctx, $account);
 
-                return ['handled_by' => 'rule', 'intent' => $r['flow'], 'ai_used' => true];
-            }
-
-            if ($r['kind'] === 'ai' && ! empty($r['reply'])) {
-                $this->responder->send($phone, (string) $r['reply'], ['handled_by' => 'ai', 'ai_used' => true, 'intent' => 'ai']);
                 $this->sendMenuFor($account, $ctx);
 
                 return ['handled_by' => 'ai', 'intent' => 'ai', 'ai_used' => true];
             }
         }
 
-        // 7. Nothing matched → menu.
+        // 7. AI unavailable / over budget → menu.
         $this->sendMenuFor($account, $ctx);
 
         return ['handled_by' => 'menu', 'intent' => 'fallback'];
