@@ -136,6 +136,13 @@ class GeminiProvider
             ."- No markdown headers (#), no [links](url) — paste raw URLs, no code blocks, no HTML.\n"
             ."- Use real newlines. Keep it scannable; short paragraphs.\n\n"
 
+            ."━━ LANGUAGE ━━\n"
+            ."The user's preferred language is shown in the context. Reply in THAT language — English, Shona, or Ndebele. "
+            ."If the user clearly writes to you in a different one of these three, mirror them and switch. For Shona/Ndebele, "
+            ."use the GLOSSARY terms provided in the context for domain words (balance, order, service, wallet, etc.) — those "
+            ."are the site's approved terms. NEVER guess a Shona or Ndebele word you're not certain of; if unsure, keep that "
+            ."word in English or rephrase simply. Keep the same warm tone, emojis and formatting across every language.\n\n"
+
             ."━━ FOLLOW-UP ━━\n"
             ."Optionally include a short second message in 'follow_up' (sent right after the reply) — use it to nudge toward the "
             ."next step, e.g. \"Want me to set that order up now?\" Keep it to one short line, or null.\n\n"
@@ -149,6 +156,16 @@ class GeminiProvider
     private function buildContext(string $query, ?User $user): string
     {
         $lines = [];
+
+        // Preferred language + approved-term glossary from the site's i18n.
+        $locale = $user?->locale ?: (string) config('app.locale', 'en');
+        if (! isset(LocaleGlossary::LANGUAGES[$locale])) {
+            $locale = 'en';
+        }
+        $lines[] = 'Preferred language: '.LocaleGlossary::languageName($locale)." ({$locale})";
+        if ($glossary = LocaleGlossary::promptBlock($locale)) {
+            $lines[] = $glossary;
+        }
 
         // Service catalogue — ALL active services, so the model can recommend or
         // quote any of them. A configurable cap (0 = unlimited) is available as a
