@@ -34,7 +34,7 @@ return [
     'active_orders' => 'Maodha Inoshanda',
     'completed_orders' => 'Maodha Akwana',
     'total_spent' => 'Mari Yose Yashandiswa',
-    'balance' => 'Bharariro',
+    'balance' => 'Mari Iripo',
     'recent_orders' => 'Maodha Achangobva',
     'recent_tx' => 'Mabiko Achangobva',
     'view_all' => 'Ona Yose',
@@ -140,7 +140,7 @@ return [
     'dripfeed_supported' => 'Dripfeed Inobvumirwa',
 
     // ─── Wallet ───────────────────────────────────────────────────────────────
-    'my_balance' => 'Bharariro Yangu',
+    'my_balance' => 'Mari Yangu Iripo',
     'add_funds' => 'Wedzera Mari',
     'payment_method' => 'Nzira yeKubhadhara',
     'amount' => 'Huwandu',
@@ -225,7 +225,7 @@ return [
     'business_panel' => 'Bhodhi ReBhizimisi',
     'marketer_panel' => 'Bhodhi Remutengesi',
     'your_performance' => 'Performance yako nemabasa achangoburwa',
-    'wallet_balance' => 'Bharariro YeChikwama',
+    'wallet_balance' => 'Mari Iripo YeChikwama',
     'total_spend' => 'Mari Yose Yashandiswa',
     'contract_earnings' => 'Mutengo weKontiraka',
     'withdrawn' => 'Yakatorwa',
