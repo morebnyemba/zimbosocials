@@ -212,7 +212,15 @@ class CreateOrderFlow extends AbstractFlow
             .'Balance: '.$this->money($balance, $cur)."\n\n";
 
         if ($balance < $charge) {
-            return FlowResult::step($summary."⚠️ Not enough balance. Type *deposit* to top up, or *cancel*.", 'confirm');
+            $short = $charge - $balance;
+            // Pre-fill the deposit amount so "deposit" jumps straight to methods.
+            $ctx->set('_prefill_amount', (float) ceil($charge));
+
+            return FlowResult::step(
+                $summary."⚠️ You're a bit short — you need *".$this->money($short, $cur)."* more.\n\n"
+                ."Reply *deposit* to top up (I've got the amount ready 👍), then just place your order again.",
+                'confirm'
+            );
         }
 
         return FlowResult::step($summary.'Reply *YES* to place the order, or *cancel*.', 'confirm');
