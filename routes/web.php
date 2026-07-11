@@ -2,6 +2,7 @@
 
 // routes/web.php
 
+use App\Http\Controllers\Admin\AdminWhatsAppController;
 use App\Http\Controllers\Admin\WhatsAppTemplateController;
 use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Controllers\AdminCampaignController;
@@ -219,6 +220,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/whatsapp/templates', [WhatsAppTemplateController::class, 'index'])->name('whatsapp.templates');
         Route::post('/whatsapp/templates/sync', [WhatsAppTemplateController::class, 'sync'])->name('whatsapp.sync');
         Route::delete('/whatsapp/templates/{name}', [WhatsAppTemplateController::class, 'delete'])->name('whatsapp.delete');
+
+        // WhatsApp assistant — conversations, agent takeover, knowledge base
+        Route::get('/whatsapp/conversations', [AdminWhatsAppController::class, 'conversations'])->name('whatsapp.conversations');
+        Route::get('/whatsapp/conversations/{account}', [AdminWhatsAppController::class, 'conversation'])->name('whatsapp.conversation');
+        Route::post('/whatsapp/conversations/{account}/reply', [AdminWhatsAppController::class, 'reply'])->name('whatsapp.conversation.reply');
+        Route::post('/whatsapp/conversations/{account}/handoff', [AdminWhatsAppController::class, 'toggleHandoff'])->name('whatsapp.conversation.handoff');
+        Route::post('/whatsapp/conversations/{account}/reset', [AdminWhatsAppController::class, 'resetSession'])->name('whatsapp.conversation.reset');
+        Route::get('/whatsapp/knowledge-base', [AdminWhatsAppController::class, 'knowledgeBase'])->name('whatsapp.kb');
+        Route::post('/whatsapp/knowledge-base', [AdminWhatsAppController::class, 'storeKb'])->name('whatsapp.kb.store');
+        Route::put('/whatsapp/knowledge-base/{kb}', [AdminWhatsAppController::class, 'updateKb'])->name('whatsapp.kb.update');
+        Route::delete('/whatsapp/knowledge-base/{kb}', [AdminWhatsAppController::class, 'destroyKb'])->name('whatsapp.kb.destroy');
 
         // Marketing Campaigns (email/whatsapp/in-app)
         Route::get('/campaigns', [AdminCampaignController::class, 'index'])->name('campaigns.index');
