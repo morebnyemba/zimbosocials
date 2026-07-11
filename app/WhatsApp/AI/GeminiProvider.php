@@ -101,10 +101,17 @@ class GeminiProvider
     {
         $lines = [];
 
-        // Service catalogue — lets the model recommend and quote real services.
-        $services = Service::active()->orderBy('category')->orderBy('display_order')->limit(60)->get();
+        // Service catalogue — ALL active services, so the model can recommend or
+        // quote any of them. A configurable cap (0 = unlimited) is available as a
+        // safety valve for very large catalogues that would bloat the prompt.
+        $query = Service::active()->orderBy('category')->orderBy('display_order');
+        $max = (int) config('services.whatsapp.ai_max_services', 0);
+        if ($max > 0) {
+            $query->limit($max);
+        }
+        $services = $query->get(['id', 'name', 'category', 'rate', 'min_qty', 'max_qty']);
         if ($services->isNotEmpty()) {
-            $lines[] = '=== SERVICE CATALOGUE (use for recommendations/quotes) ===';
+            $lines[] = '=== SERVICE CATALOGUE (all active services — recommend/quote any) ===';
             foreach ($services->groupBy('category') as $category => $group) {
                 $lines[] = "[{$category}]";
                 foreach ($group as $s) {
