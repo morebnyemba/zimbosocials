@@ -24,7 +24,8 @@ import {
     Search,
     Bell,
     PenTool,
-    Languages
+    Languages,
+    Bot
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -55,6 +56,7 @@ export default function AdminLayout({
         { href: route('admin.payment-details.index'), name: 'admin.payment-details.index', label: 'Payment Methods', icon: CreditCard },
         { href: route('admin.upstream-providers.index'), name: 'admin.upstream-providers.index', label: 'API Providers', icon: Plug },
         { href: route('admin.whatsapp.templates'), name: 'admin.whatsapp.templates', label: 'WhatsApp', icon: MessageSquare },
+        { href: route('admin.whatsapp.conversations'), name: 'admin.whatsapp.conversations', label: 'WA Assistant', icon: Bot },
         { href: route('admin.campaigns.index'), name: 'admin.campaigns.*', label: 'Campaigns', icon: Megaphone },
         { href: route('admin.seo.index'), name: 'admin.seo.index', label: 'AI SEO', icon: PenTool },
         { href: route('admin.translations.index'), name: 'admin.translations.index', label: t('translation_review'), icon: Languages },
