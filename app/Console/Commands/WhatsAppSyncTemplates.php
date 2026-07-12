@@ -53,7 +53,7 @@ class WhatsAppSyncTemplates extends Command
             }
 
             // Build Meta template payload
-            $payload = $this->buildTemplatePayload($name, $tpl, $language);
+            $payload = \App\Models\WhatsAppTemplate::metaPayload($name, $tpl, $language);
 
             if ($this->option('dry-run')) {
                 $this->line("  ⏳ <comment>{$name}</comment> — would be created (dry-run)");
@@ -136,68 +136,4 @@ class WhatsAppSyncTemplates extends Command
         return self::SUCCESS;
     }
 
-    /**
-     * Build the Meta API payload for creating a template.
-     */
-    private function buildTemplatePayload(string $name, array $tpl, string $language): array
-    {
-        $components = [];
-
-        // Header (optional)
-        if (! empty($tpl['header'])) {
-            $components[] = [
-                'type' => 'HEADER',
-                'format' => 'TEXT',
-                'text' => $tpl['header'],
-            ];
-        }
-
-        // Body (required)
-        $components[] = [
-            'type' => 'BODY',
-            'text' => $tpl['body'],
-        ];
-
-        // Footer (optional)
-        if (! empty($tpl['footer'])) {
-            $components[] = [
-                'type' => 'FOOTER',
-                'text' => $tpl['footer'],
-            ];
-        }
-
-        // Buttons (optional)
-        if (! empty($tpl['buttons'])) {
-            $btnComponents = [];
-            foreach ($tpl['buttons'] as $btn) {
-                $btnComponents[] = match ($btn['type'] ?? 'QUICK_REPLY') {
-                    'URL' => [
-                        'type' => 'URL',
-                        'text' => $btn['text'],
-                        'url' => $btn['url'],
-                    ],
-                    'PHONE_NUMBER' => [
-                        'type' => 'PHONE_NUMBER',
-                        'text' => $btn['text'],
-                        'phone_number' => $btn['phone'],
-                    ],
-                    default => [
-                        'type' => 'QUICK_REPLY',
-                        'text' => $btn['text'],
-                    ],
-                };
-            }
-            $components[] = [
-                'type' => 'BUTTONS',
-                'buttons' => $btnComponents,
-            ];
-        }
-
-        return [
-            'name' => $name,
-            'language' => $language,
-            'category' => $tpl['category'] ?? 'UTILITY',
-            'components' => $components,
-        ];
-    }
 }

@@ -218,6 +218,10 @@ Route::middleware('auth')->group(function () {
 
         // WhatsApp Management
         Route::get('/whatsapp/templates', [WhatsAppTemplateController::class, 'index'])->name('whatsapp.templates');
+        Route::post('/whatsapp/templates', [WhatsAppTemplateController::class, 'store'])->name('whatsapp.templates.store');
+        Route::put('/whatsapp/templates/{template}', [WhatsAppTemplateController::class, 'update'])->name('whatsapp.templates.update');
+        Route::post('/whatsapp/templates/{template}/push', [WhatsAppTemplateController::class, 'push'])->name('whatsapp.templates.push');
+        Route::delete('/whatsapp/templates/{template}/local', [WhatsAppTemplateController::class, 'destroyLocal'])->name('whatsapp.templates.destroy-local');
         Route::post('/whatsapp/templates/sync', [WhatsAppTemplateController::class, 'sync'])->name('whatsapp.sync');
         Route::delete('/whatsapp/templates/{name}', [WhatsAppTemplateController::class, 'delete'])->name('whatsapp.delete');
 
