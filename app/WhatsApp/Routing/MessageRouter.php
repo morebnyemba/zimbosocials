@@ -118,6 +118,30 @@ class MessageRouter
     {
         $phone = $ctx->phone;
 
+        // 0. Very first message from an unknown number: if it's just a greeting,
+        //    welcome them and go straight into guided sign-up (name → email →
+        //    account created automatically). A substantive first message ("I
+        //    want 1000 followers") skips this — the normal ladder handles it,
+        //    and the auth gate starts this same sign-up with their request
+        //    remembered as _pending_flow.
+        if ($account->wasRecentlyCreated && ! $account->isLinked() && $selection === null) {
+            $greetings = ['', 'hi', 'hello', 'hey', 'hie', 'menu', 'start', 'hesi', 'mhoro', 'makadii', 'sawubona', 'salibonani'];
+            if (in_array(mb_strtolower($text), $greetings, true)) {
+                $name = $account->display_name ? " {$account->display_name}" : '';
+                $this->responder->send(
+                    $phone,
+                    "👋 Hi{$name}! Welcome to ".config('app.name').' — followers, likes, views and more, right here on WhatsApp.'
+                    ."\n\nLet me set up your account real quick (takes ~30 seconds), then you can order and track everything in this chat."
+                    ."\n\n_Type *cancel* anytime to skip._",
+                    ['handled_by' => 'system', 'intent' => 'first_contact']
+                );
+                $res = $this->engine->start($ctx, 'register');
+                $this->emit($account, $ctx, $res);
+
+                return ['handled_by' => 'system', 'intent' => 'first_contact_signup'];
+            }
+        }
+
         // 1. Resume / restart buttons.
         if ($selection === 'wa_resume') {
             $res = $this->engine->resume($ctx);
