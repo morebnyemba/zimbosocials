@@ -21,6 +21,7 @@ class MenuProvider
 
     /** Leaf action id → flow id. */
     public static array $actionFlow = [
+        'fl_support' => 'tickets',
         'fl_order' => 'order',
         'fl_orders' => 'my_orders',
         'fl_track' => 'track',
@@ -53,30 +54,29 @@ class MenuProvider
             $body .= "\n\n💰 Wallet: *{$balanceText}*";
         }
 
+        // WhatsApp allows AT MOST 10 rows across all sections — an 11-row list
+        // is rejected by the API and the user gets the plain-text fallback.
         return [
             'header' => 'Main Menu',
             'body' => $body,
             'button' => 'Open menu',
-            'footer' => 'Type *menu* anytime',
+            'footer' => 'Or just tell me what you need',
             'sections' => [
                 ['title' => 'Orders', 'rows' => [
-                    ['id' => 'fl_order', 'title' => '🚀 New order', 'description' => 'Place a new order'],
-                    ['id' => 'fl_orders', 'title' => '📦 My orders', 'description' => 'Recent orders & status'],
-                    ['id' => 'fl_track', 'title' => '🔎 Track order', 'description' => 'Track by order ID'],
+                    ['id' => 'fl_order', 'title' => '🚀 New order', 'description' => 'Followers, likes, views & more'],
+                    ['id' => 'fl_orders', 'title' => '📦 My orders', 'description' => 'Recent orders & their status'],
+                    ['id' => 'fl_track', 'title' => '🔎 Track order', 'description' => 'Check progress by order number'],
                 ]],
                 ['title' => 'Wallet', 'rows' => [
                     ['id' => 'fl_balance', 'title' => '💰 Balance', 'description' => 'Your wallet balance'],
-                    ['id' => 'fl_deposit', 'title' => '➕ Deposit', 'description' => 'Add funds'],
-                    ['id' => 'fl_history', 'title' => '🧾 History', 'description' => 'Transactions'],
+                    ['id' => 'fl_deposit', 'title' => '➕ Deposit', 'description' => 'Top up via EcoCash & more'],
+                    ['id' => 'fl_history', 'title' => '🧾 History', 'description' => 'Deposits, orders & refunds'],
                 ]],
-                ['title' => 'Services', 'rows' => [
-                    ['id' => 'fl_browse', 'title' => '📂 Browse', 'description' => 'Browse services'],
-                    ['id' => 'fl_search', 'title' => '🔍 Search', 'description' => 'Find a service'],
-                ]],
-                ['title' => 'Help', 'rows' => [
-                    ['id' => 'fl_ticket', 'title' => '🆘 Support', 'description' => 'Open a ticket'],
-                    ['id' => 'fl_faq', 'title' => '❓ FAQ', 'description' => 'Common questions'],
-                    ['id' => 'fl_ai', 'title' => '🤖 Ask AI', 'description' => 'Ask a question'],
+                ['title' => 'More', 'rows' => [
+                    ['id' => 'fl_browse', 'title' => '📂 Services', 'description' => 'Browse the full catalogue'],
+                    ['id' => 'fl_support', 'title' => '🆘 Support', 'description' => 'Your tickets & our replies'],
+                    ['id' => 'fl_profile', 'title' => '👤 My account', 'description' => 'Profile & settings'],
+                    ['id' => 'fl_ai', 'title' => '🤖 Ask AI', 'description' => 'Ask me anything about us'],
                 ]],
             ],
         ];

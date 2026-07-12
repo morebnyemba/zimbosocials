@@ -41,6 +41,12 @@ class DepositFundsFlow extends AbstractFlow
             return $this->methodMenu($amount, $ctx);
         }
 
+        // Mid-flow AI redirect back into 'deposit': keep the amount already given.
+        $existing = (float) $ctx->get('deposit_amount', 0);
+        if ($existing >= 1) {
+            return $this->methodMenu($existing, $ctx);
+        }
+
         return FlowResult::step("➕ *Add funds*\n\nHow much would you like to deposit? (enter an amount)", 'ask_amount');
     }
 
@@ -59,10 +65,10 @@ class DepositFundsFlow extends AbstractFlow
     {
         $amount = (float) preg_replace('/[^0-9.]/', '', $input);
         if ($amount < 1) {
-            return FlowResult::step('Please enter an amount of at least 1, or type *cancel*.', 'ask_amount');
+            return FlowResult::retry('Please enter an amount of at least 1, or type *cancel*.', 'ask_amount');
         }
         if ($amount > 10000) {
-            return FlowResult::step('Maximum deposit is 10,000. Enter a smaller amount, or type *cancel*.', 'ask_amount');
+            return FlowResult::retry('Maximum deposit is 10,000. Enter a smaller amount, or type *cancel*.', 'ask_amount');
         }
         $ctx->set('deposit_amount', $amount);
 
@@ -72,18 +78,16 @@ class DepositFundsFlow extends AbstractFlow
     private function methodMenu(float $amount, SessionContext $ctx): FlowResult
     {
         $cur = $this->user($ctx)?->currency ?? 'USD';
-        $lines = [];
+        $rows = [];
         $i = 1;
         foreach (self::MENU as $key) {
-            $lines[] = $i.'. '.PaynowMobileService::PROVIDERS[$key]['label'];
+            $rows[] = ['id' => 'fs:'.$i, 'title' => PaynowMobileService::PROVIDERS[$key]['label']];
             $i++;
         }
-        $lines[] = $i.'. Card / Other (website)';
+        $rows[] = ['id' => 'fs:'.$i, 'title' => 'Card / Other', 'description' => 'Pay on the website'];
 
-        return FlowResult::step(
-            "💳 *Deposit ".$this->money($amount, $cur)."*\n\nHow would you like to pay? Reply with a number:\n\n".implode("\n", $lines),
-            'choose_method'
-        );
+        return FlowResult::step('💳 Deposit *'.$this->money($amount, $cur).'* — how would you like to pay?', 'choose_method')
+            ->withList('Payment method', [['title' => 'Pay with', 'rows' => $rows]], 'Add funds');
     }
 
     private function chooseMethod(string $input, SessionContext $ctx): FlowResult
@@ -100,15 +104,22 @@ class DepositFundsFlow extends AbstractFlow
 
         $provider = self::MENU[$idx] ?? null;
         if (! $provider) {
-            return FlowResult::step('Please reply with a valid number, or type *cancel*.', 'choose_method');
+            return FlowResult::retry('Please reply with a valid number, or type *cancel*.', 'choose_method');
         }
 
         $ctx->set('deposit_provider', $provider);
         $label = PaynowMobileService::PROVIDERS[$provider]['label'];
         $default = $this->paynow->normalizeZwPhone($ctx->phone);
-        $hint = $default ? "\n\nOr reply *ok* to use your WhatsApp number *{$default}*." : '';
 
-        return FlowResult::step("📱 Enter the *{$label}* mobile number to charge (e.g. 0771234567).{$hint}", 'ask_phone');
+        $res = FlowResult::step(
+            "📱 Enter the *{$label}* mobile number to charge (e.g. 0771234567)."
+            .($default ? "\n\nOr use your WhatsApp number *{$default}*:" : ''),
+            'ask_phone'
+        );
+
+        return $default
+            ? $res->withButtons([['id' => 'fs:ok', 'title' => 'Use my number']])
+            : $res;
     }
 
     private function askPhone(string $input, SessionContext $ctx): FlowResult
@@ -119,7 +130,7 @@ class DepositFundsFlow extends AbstractFlow
             : $this->paynow->normalizeZwPhone($input);
 
         if ($phone === null) {
-            return FlowResult::step("That doesn't look like a valid number. Enter it as *0771234567*, or type *cancel*.", 'ask_phone');
+            return FlowResult::retry("That doesn't look like a valid number. Enter it as *0771234567*, or type *cancel*.", 'ask_phone');
         }
 
         $ctx->set('deposit_phone', $phone);
@@ -128,15 +139,30 @@ class DepositFundsFlow extends AbstractFlow
         $label = PaynowMobileService::PROVIDERS[$ctx->get('deposit_provider')]['label'];
 
         return FlowResult::step(
-            "🧾 *Confirm*\n\nAmount: *".$this->money($amount, $cur)."*\nMethod: *{$label}*\nNumber: *{$phone}*\n\nReply *YES* to send the payment request, or *cancel*.",
+            "🧾 *Confirm*\n\nAmount: *".$this->money($amount, $cur)."*\nMethod: *{$label}*\nNumber: *{$phone}*\n\nSend the payment request?",
             'confirm'
-        );
+        )->withButtons([
+            ['id' => 'fs:yes', 'title' => '✅ Send request'],
+            ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
+        ]);
     }
 
     private function confirm(string $input, SessionContext $ctx): FlowResult
     {
-        if (! in_array(mb_strtolower(trim($input)), ['yes', 'y', 'send', 'ok', 'confirm'], true)) {
-            return FlowResult::fail('No problem — deposit cancelled. Type *deposit* to start again.');
+        $t = mb_strtolower(trim($input));
+
+        if (! in_array($t, ['yes', 'y', 'send', 'ok', 'confirm'], true)) {
+            // Only an explicit "no" cancels; anything else (e.g. "use $50
+            // instead") is handed to the AI, which can adjust and re-confirm.
+            if (in_array($t, ['no', 'n', 'cancel', 'stop', 'kwete', 'hatshi'], true)) {
+                return FlowResult::fail('No problem — deposit cancelled. Type *deposit* to start again.');
+            }
+
+            return FlowResult::retry('Tap *✅ Send request* (or reply *YES*) to confirm — or *✖ Cancel* to stop.', 'confirm')
+                ->withButtons([
+                    ['id' => 'fs:yes', 'title' => '✅ Send request'],
+                    ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
+                ]);
         }
 
         $user = $this->user($ctx);

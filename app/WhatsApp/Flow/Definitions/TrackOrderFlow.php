@@ -33,7 +33,7 @@ class TrackOrderFlow extends AbstractFlow
     {
         $id = (int) preg_replace('/\D+/', '', $input);
         if ($id <= 0) {
-            return FlowResult::step("Please send a valid order number, or type *cancel*.", 'awaiting_id');
+            return FlowResult::retry("Please send a valid order number, or type *cancel*.", 'awaiting_id');
         }
 
         return $this->lookup($id, $ctx);

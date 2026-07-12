@@ -24,7 +24,7 @@ class FlowCatalog
             'track' => ['desc' => 'Track a specific order by number', 'params' => ['order_id']],
             'browse' => ['desc' => 'Browse available services', 'params' => ['platform']],
             'ticket' => ['desc' => 'Open a support ticket', 'params' => ['subject', 'message']],
-            'tickets' => ['desc' => 'List the user\'s support tickets', 'params' => []],
+            'tickets' => ['desc' => 'View support tickets, read the team\'s responses, and reply to a ticket', 'params' => ['ticket_id']],
             'profile' => ['desc' => 'Show account/profile details', 'params' => []],
             'settings' => ['desc' => 'View or change notification settings', 'params' => []],
             'register' => ['desc' => 'Create a new account (guests only)', 'params' => ['name', 'email']],

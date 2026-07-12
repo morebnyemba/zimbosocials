@@ -135,7 +135,7 @@ class OrderStatusSyncService
                     'order_status_changed',
                     "Order #{$order->id} Updated",
                     "Your order #{$order->id} is now {$newStatus}.",
-                    ['order_id' => $order->id, 'status' => $newStatus, 'service_name' => $order->service->name, 'quantity' => $order->quantity]
+                    ['order_id' => $order->id, 'status' => $newStatus, 'service_name' => $order->service?->name ?? 'Service', 'quantity' => $order->quantity]
                 );
             }
 
@@ -149,7 +149,7 @@ class OrderStatusSyncService
                 NotificationService::notifyAdmins(
                     'admin_order_completed',
                     "Order #{$order->id} {$newStatus}",
-                    "Order #{$order->id} ({$order->service->name}) for {$user?->name} is now {$newStatus} via {$source}.",
+                    "Order #{$order->id} (".($order->service?->name ?? 'Service').") for {$user?->name} is now {$newStatus} via {$source}.",
                     ['order_id' => $order->id, 'status' => $newStatus, 'source' => $source]
                 );
             }
@@ -177,10 +177,18 @@ class OrderStatusSyncService
         $statuses = $client->getStatus([$order->external_order_id]);
         $data = $statuses[$order->external_order_id] ?? null;
 
-        if (! $data || isset($data['error'])) {
-            $message = $data['error'] ?? 'Provider returned no status for this order.';
+        // Providers report per-order errors in different shapes: a fresh order
+        // they haven't indexed yet often comes back as a plain STRING (e.g.
+        // "Incorrect order ID") rather than ['error' => ...]. Treat anything
+        // that isn't a status array as "no status yet" instead of crashing.
+        if (! is_array($data)) {
+            $message = is_string($data) && trim($data) !== '' ? trim($data) : 'Provider returned no status for this order.';
 
-            return ['changed' => false, 'message' => "Upstream error: {$message}"];
+            return ['changed' => false, 'message' => "Upstream error: {$message} (a just-placed order can take a minute to appear — try again shortly)."];
+        }
+
+        if (isset($data['error'])) {
+            return ['changed' => false, 'message' => "Upstream error: {$data['error']}"];
         }
 
         $localStatus = $this->resolveLocalStatus($data);
@@ -194,7 +202,7 @@ class OrderStatusSyncService
 
             return [
                 'changed' => false,
-                'message' => "No status change (upstream reports \"{$data['status']}\"" . (isset($data['remains']) ? ", remains {$data['remains']}" : '') . ').',
+                'message' => 'No status change (upstream reports "'.($data['status'] ?? 'unknown').'"' . (isset($data['remains']) ? ", remains {$data['remains']}" : '') . ').',
             ];
         }
 

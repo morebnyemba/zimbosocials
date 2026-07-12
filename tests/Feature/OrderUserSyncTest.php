@@ -90,6 +90,59 @@ class OrderUserSyncTest extends TestCase
         $this->assertSame('completed', $order->fresh()->status);
     }
 
+    /**
+     * Regression: a just-placed order's first sync often gets a plain STRING
+     * error from the provider ("Incorrect order ID") because the order isn't
+     * indexed upstream yet. This used to TypeError → HTTP 500 on the order
+     * page's auto-sync. It must degrade to a friendly redirect instead.
+     */
+    public function test_first_sync_string_error_from_provider_does_not_500(): void
+    {
+        $user = User::factory()->create(['balance' => 0]);
+        $order = $this->makePushedOrder($user, $this->makeService());
+
+        $mock = Mockery::mock(UpstreamProviderClient::class);
+        $mock->shouldReceive('setProvider')->andReturnSelf();
+        $mock->shouldReceive('getStatus')->with(['EXT-1'])->andReturn([
+            'EXT-1' => 'Incorrect order ID',
+        ]);
+        $this->app->instance(UpstreamProviderClient::class, $mock);
+
+        $this->actingAs($user)
+            ->from(route('orders.show', $order))
+            ->post(route('orders.sync-status', $order))
+            ->assertRedirect(route('orders.show', $order));
+
+        $this->assertSame('processing', $order->fresh()->status); // untouched
+    }
+
+    public function test_scheduled_sync_survives_string_error_and_still_updates_others(): void
+    {
+        $user = User::factory()->create(['balance' => 0]);
+        $service = $this->makeService();
+        $fresh = $this->makePushedOrder($user, $service); // EXT-1 → string error
+        $done = Order::create([
+            'user_id' => $user->id, 'service_id' => $service->id,
+            'link' => 'https://instagram.com/p/y', 'quantity' => 1000,
+            'charge' => 10, 'rate_at_order' => 10, 'status' => 'processing',
+            'pushed_to_upstream' => true, 'external_order_id' => 'EXT-2',
+            'upstream_provider_id' => $fresh->upstream_provider_id,
+        ]);
+
+        $mock = Mockery::mock(UpstreamProviderClient::class);
+        $mock->shouldReceive('setProvider')->andReturnSelf();
+        $mock->shouldReceive('getStatus')->andReturn([
+            'EXT-1' => 'Incorrect order ID',
+            'EXT-2' => ['status' => 'Completed', 'remains' => 0, 'start_count' => 500],
+        ]);
+        $this->app->instance(UpstreamProviderClient::class, $mock);
+
+        $this->artisan('upstream:sync-orders')->assertSuccessful();
+
+        $this->assertSame('processing', $fresh->fresh()->status);
+        $this->assertSame('completed', $done->fresh()->status); // run wasn't killed
+    }
+
     public function test_sync_is_gated_per_order(): void
     {
         $user = User::factory()->create(['balance' => 0]);

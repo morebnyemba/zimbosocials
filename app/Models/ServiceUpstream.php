@@ -15,15 +15,30 @@ class ServiceUpstream extends Model
         'upstream_provider_id',
         'external_service_id',
         'external_rate',
+        'markup_type',
+        'markup_value',
         'priority',
         'is_active',
     ];
 
     protected $casts = [
         'external_rate' => 'decimal:4',
+        'markup_value' => 'decimal:4',
         'priority' => 'integer',
         'is_active' => 'boolean',
     ];
+
+    /**
+     * Apply this pivot's stored markup to an upstream cost to get the local sell rate.
+     */
+    public function applyMarkup(float $upstreamRate): float
+    {
+        $local = $this->markup_type === 'fixed'
+            ? $upstreamRate + (float) $this->markup_value
+            : $upstreamRate * (1 + ((float) $this->markup_value / 100));
+
+        return round($local, 4);
+    }
 
     public function service(): BelongsTo
     {

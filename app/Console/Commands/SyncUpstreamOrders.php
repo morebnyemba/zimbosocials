@@ -65,8 +65,11 @@ class SyncUpstreamOrders extends Command
                 }
 
                 foreach ($statuses as $externalId => $data) {
-                    if (isset($data['error'])) {
-                        continue; // e.g. "Incorrect order ID"
+                    // Per-order errors come back either as ['error' => ...] or a
+                    // plain string ("Incorrect order ID") for orders the provider
+                    // hasn't indexed yet — skip both, never crash the whole run.
+                    if (! is_array($data) || isset($data['error'])) {
+                        continue;
                     }
 
                     $order = $orderMap->get($externalId);

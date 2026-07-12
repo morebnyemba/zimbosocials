@@ -4,6 +4,7 @@ namespace App\WhatsApp\Intent;
 
 use App\WhatsApp\AI\AIGuard;
 use App\WhatsApp\AI\GeminiProvider;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Thin gate around the AI brain. Gemini is the sole resolver for free text; the
@@ -24,15 +25,31 @@ class IntentEngine
      */
     public function resolve(string $text, string $phone, array $context): array
     {
-        if (! $this->ai->isConfigured() || ! $this->guard->allow($phone)) {
-            return ['handled' => false];
+        if (! $this->ai->isConfigured()) {
+            return ['handled' => false, 'reason' => 'not_configured'];
+        }
+
+        if (! $this->guard->allow($phone)) {
+            Log::info('WhatsApp AI skipped: daily limit reached', ['phone' => $phone]);
+
+            return ['handled' => false, 'reason' => 'over_daily_limit'];
+        }
+
+        // An AI failure must degrade to the menu, never break the conversation —
+        // and it shouldn't count against the user's daily AI budget either.
+        try {
+            $res = $this->ai->respond($text, $context);
+        } catch (\Throwable $e) {
+            Log::error('WhatsApp AI resolve failed', ['message' => $e->getMessage()]);
+
+            return ['handled' => false, 'reason' => 'error'];
+        }
+
+        if (! $res) {
+            return ['handled' => false, 'reason' => 'empty_response'];
         }
 
         $this->guard->record($phone);
-        $res = $this->ai->respond($text, $context);
-        if (! $res) {
-            return ['handled' => false];
-        }
 
         return [
             'handled' => true,

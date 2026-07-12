@@ -34,6 +34,7 @@ class AppServiceProvider extends ServiceProvider
         $this->registerRateLimiters();
         $this->registerPolicies();
         $this->loadSettings();
+        $this->loadWhatsAppTemplates();
     }
 
     protected function registerPolicies(): void
@@ -101,6 +102,33 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perDay(5)->by('referral-share:'.$key),
             ];
         });
+    }
+
+    /**
+     * Admin-edited WhatsApp templates (whatsapp_templates table) override the
+     * defaults in config/whatsapp-templates.php, so every consumer — the send
+     * job, fallback interpolation, the Meta sync — uses the edited versions.
+     */
+    protected function loadWhatsAppTemplates(): void
+    {
+        try {
+            $templates = Cache::remember('wa:templates:config', 300, function () {
+                if (! Schema::hasTable('whatsapp_templates')) {
+                    return [];
+                }
+
+                return \App\Models\WhatsAppTemplate::where('is_active', true)
+                    ->get()
+                    ->mapWithKeys(fn ($t) => [$t->name => $t->toConfigShape()])
+                    ->toArray();
+            });
+
+            if (! empty($templates)) {
+                config(['whatsapp-templates.templates' => $templates]);
+            }
+        } catch (\Throwable $e) {
+            // Never let template loading break the app (e.g. mid-migration).
+        }
     }
 
     protected function loadSettings(): void

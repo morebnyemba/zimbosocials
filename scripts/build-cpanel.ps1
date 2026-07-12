@@ -68,6 +68,7 @@ New-Item -ItemType Directory -Path $appStage, $publicStage -Force | Out-Null
 # Application -> my-app (exclude local-only, dev, and the public/ webroot)
 $excludeDirs = @(
     (Join-Path $root '.git'),
+    (Join-Path $root '.claude'),
     (Join-Path $root 'node_modules'),
     (Join-Path $root 'dist'),
     (Join-Path $root 'public'),
@@ -79,7 +80,9 @@ $excludeDirs = @(
     (Join-Path $root '.nova')
 )
 # robocopy: /E recurse incl. empty, /XD exclude dirs (full paths), /XF exclude files
-& robocopy $root $appStage /E /XD $excludeDirs /XF '.env' '*.zip' '.phpunit.result.cache' 'auth.json' /NFL /NDL /NJH /NJS /NP | Out-Null
+# *.sqlite: NEVER ship the local dev database — it contains real user rows and
+# would overwrite the live DB if production ever runs on sqlite.
+& robocopy $root $appStage /E /XD $excludeDirs /XF '.env' '*.zip' '*.sqlite' '.phpunit.result.cache' 'auth.json' /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy (app) failed with code $LASTEXITCODE." }
 
 # Never ship secrets or local logs; keep an empty log file so the dir exists.
