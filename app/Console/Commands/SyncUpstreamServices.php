@@ -25,7 +25,6 @@ class SyncUpstreamServices extends Command
             return self::SUCCESS;
         }
 
-        $profitMargin = (float) config('upstream.profit_margin', 1.20); // Default 20% margin
         $updatedCount = 0;
 
         foreach ($providers as $provider) {
@@ -77,7 +76,9 @@ class SyncUpstreamServices extends Command
                 $primaryUpstream = $service->upstreams()->first();
 
                 if ($primaryUpstream && $primaryUpstream->id === $pivot->id) {
-                    $newRate = round($upstreamRate * $profitMargin, 4);
+                    // Preserve the operator's per-service markup stored on the pivot
+                    // rather than forcing a flat margin. The pivot was refreshed above.
+                    $newRate = $pivot->applyMarkup($upstreamRate);
 
                     $updates = [
                         'rate' => $newRate,

@@ -202,6 +202,18 @@ class AdminServiceController extends Controller
                 $service->upstreams()->delete();
             }
 
+            // Make the manually entered rate durable: recompute the primary upstream's
+            // stored markup from it so the nightly sync reproduces this price instead
+            // of resetting it. Skipped when the provider cost is unknown (repointed → 0).
+            $primary = $service->upstreams()->first();
+            if ($primary && (float) $primary->external_rate > 0 && (float) $data['rate'] > 0) {
+                $markup = round((((float) $data['rate'] / (float) $primary->external_rate) - 1) * 100, 4);
+                $primary->update([
+                    'markup_type' => 'percentage',
+                    'markup_value' => max($markup, 0),
+                ]);
+            }
+
             AuditLog::log('service.updated', Auth::id(), Service::class, $service->id, $old, $data);
         });
 

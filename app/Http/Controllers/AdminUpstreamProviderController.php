@@ -174,6 +174,8 @@ class AdminUpstreamProviderController extends Controller
                 'upstream_provider_id' => $upstreamProvider->id,
                 'external_service_id' => (string) $s['service'],
                 'external_rate' => (float) $s['rate'],
+                'markup_type' => $markupType,
+                'markup_value' => $markupValue,
                 'priority' => 1,
                 'is_active' => true,
             ]);
