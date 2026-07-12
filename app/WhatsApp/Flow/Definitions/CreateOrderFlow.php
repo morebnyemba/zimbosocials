@@ -60,8 +60,8 @@ class CreateOrderFlow extends AbstractFlow
         if ($service) {
             $ctx->set('order_service_id', $service->id);
 
-            if ($link && filter_var($link, FILTER_VALIDATE_URL)) {
-                $ctx->set('order_link', (string) $link);
+            if ($link && ($normalized = $this->normalizeLink((string) $link))) {
+                $ctx->set('order_link', $normalized);
             }
             $qty = (int) preg_replace('/\D+/', '', (string) $quantity);
             if ($qty >= $service->min_qty && $qty <= $service->max_qty) {
@@ -190,9 +190,9 @@ class CreateOrderFlow extends AbstractFlow
 
     private function enterLink(string $input, SessionContext $ctx): FlowResult
     {
-        $link = trim($input);
-        if (! filter_var($link, FILTER_VALIDATE_URL)) {
-            return FlowResult::retry("That doesn't look like a valid URL. Send the full link (starting with https://), or type *cancel*.", 'enter_link');
+        $link = $this->normalizeLink($input);
+        if ($link === null) {
+            return FlowResult::retry("That doesn't look like a valid link. Send the profile/post URL (e.g. tiktok.com/@yourname), or type *cancel*.", 'enter_link');
         }
 
         $ctx->set('order_link', $link);
@@ -312,6 +312,26 @@ class CreateOrderFlow extends AbstractFlow
         }
 
         return FlowResult::fail('⚠️ '.($res['error'] ?? 'Could not place the order.').' Type *menu* to go back.');
+    }
+
+    /**
+     * Accept links the way people actually type them on WhatsApp —
+     * "tiktok.com/@name" gets an https:// prefix before validation.
+     */
+    private function normalizeLink(string $link): ?string
+    {
+        $link = trim($link);
+        if ($link === '' || preg_match('/\s/', $link)) {
+            return null;
+        }
+        if (! preg_match('#^https?://#i', $link)) {
+            $link = 'https://'.$link;
+        }
+
+        $valid = filter_var($link, FILTER_VALIDATE_URL)
+            && str_contains((string) parse_url($link, PHP_URL_HOST), '.');
+
+        return $valid ? $link : null;
     }
 
     private function resolveChoice(string $input, $collection)

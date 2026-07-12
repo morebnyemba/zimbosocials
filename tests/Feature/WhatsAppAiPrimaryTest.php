@@ -244,6 +244,46 @@ class WhatsAppAiPrimaryTest extends TestCase
         $this->assertSame('ask_amount', $ctx->state); // no AI prefill — flow asks
     }
 
+    /**
+     * "Ndoda uise matiktok followers 100 pa link iyi tiktok.com/@mamaanitah" —
+     * the AI extracts service + bare link + quantity; the flow must normalize
+     * the scheme-less link and fast-forward all the way to confirm.
+     */
+    public function test_bare_link_from_ai_is_normalized_and_flow_jumps_to_confirm(): void
+    {
+        $user = $this->seedUserAndAccount();
+        $service = $this->makeService('TikTok', 'TikTok Followers', 2.0);
+
+        $ctx = new SessionContext(self::PHONE);
+        $ctx->set('_user_id', $user->id);
+        $ctx->set('_prefill_service_id', $service->id);
+        $ctx->set('_prefill_link', 'tiktok.com/@mamaanitah');
+        $ctx->set('_prefill_quantity', 100);
+
+        $res = app(FlowEngine::class)->start($ctx, 'order');
+
+        $this->assertSame('confirm', $ctx->state);
+        $this->assertSame('https://tiktok.com/@mamaanitah', $ctx->get('order_link'));
+        $this->assertStringContainsString('Confirm your order', (string) $res->reply);
+    }
+
+    public function test_typed_bare_link_is_accepted_at_enter_link(): void
+    {
+        $user = $this->seedUserAndAccount();
+        $this->makeService('TikTok', 'TikTok Followers');
+
+        $ctx = new SessionContext(self::PHONE);
+        $ctx->set('_user_id', $user->id);
+        $engine = app(FlowEngine::class);
+        $engine->start($ctx, 'order');
+        $engine->advance($ctx, '1');
+        $engine->advance($ctx, '1');
+        $engine->advance($ctx, 'tiktok.com/@mamaanitah');
+
+        $this->assertSame('enter_quantity', $ctx->state);
+        $this->assertSame('https://tiktok.com/@mamaanitah', $ctx->get('order_link'));
+    }
+
     public function test_ai_can_adjust_quantity_at_confirm_without_losing_progress(): void
     {
         $user = $this->seedUserAndAccount();
