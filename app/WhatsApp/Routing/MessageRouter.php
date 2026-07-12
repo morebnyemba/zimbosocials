@@ -117,7 +117,6 @@ class MessageRouter
     private function dispatch(SessionContext $ctx, WhatsAppAccount $account, string $text, ?string $selection): array
     {
         $phone = $ctx->phone;
-        $authenticated = $account->isLinked();
 
         // 1. Resume / restart buttons.
         if ($selection === 'wa_resume') {
@@ -155,7 +154,23 @@ class MessageRouter
             return ['handled_by' => 'system', 'intent' => 'resume_offer'];
         }
 
-        // 4. Any selection navigates (cancel an active flow first).
+        // 4a. Flow-internal selection (fs:<value>) — a tapped list row / button
+        //     that belongs to the active flow. Feed the value to the flow as if
+        //     the user had typed it. A stale tap (flow already ended) → menu.
+        if ($selection !== null && str_starts_with($selection, 'fs:')) {
+            if ($ctx->inFlow()) {
+                $res = $this->engine->advance($ctx, substr($selection, 3));
+                $this->emit($account, $ctx, $res);
+
+                return ['handled_by' => 'flow', 'intent' => $selection];
+            }
+
+            $this->sendMenuFor($account, $ctx);
+
+            return ['handled_by' => 'menu', 'intent' => 'stale_selection'];
+        }
+
+        // 4b. Any global selection navigates (cancel an active flow first).
         if ($selection !== null) {
             if ($ctx->inFlow()) {
                 $this->engine->cancel($ctx);
@@ -165,9 +180,17 @@ class MessageRouter
             return ['handled_by' => 'menu', 'intent' => $selection];
         }
 
-        // 5. Active flow consumes free text.
+        // 5. Active flow consumes free text. When the flow doesn't understand
+        //    the input, the AI brain gets first crack at it — it can answer,
+        //    adjust the current flow's data, or switch to another flow. The
+        //    flow's own error text is only sent when the AI can't help.
         if ($ctx->inFlow() && $text !== '') {
             $res = $this->engine->advance($ctx, $text);
+
+            if ($res->isRetry() && $this->consultAi($ctx, $account, $text, inFlow: true)) {
+                return ['handled_by' => 'ai', 'intent' => 'flow_rescue', 'ai_used' => true];
+            }
+
             $this->emit($account, $ctx, $res);
 
             return ['handled_by' => 'flow'];
@@ -175,50 +198,73 @@ class MessageRouter
 
         // 6. Free text → AI brain. Gemini always replies and may trigger a flow;
         //    the knowledge base is used only as grounding context inside it.
-        if ($text !== '') {
-            $history = (array) $ctx->get('_ai_history', []);
-            $r = $this->intent->resolve($text, $phone, [
-                'user' => $authenticated ? $account->user : null,
-                'authenticated' => $authenticated,
-                'current_flow' => $ctx->flow,
-                'history' => $history,
-            ]);
-
-            if (! empty($r['handled'])) {
-                $reply = (string) ($r['reply'] ?? '');
-                $flow = $r['flow'] ?? null;
-
-                if ($reply !== '') {
-                    // Keep short-term memory (last 2 exchanges) for follow-ups.
-                    $history[] = ['user' => $text, 'model' => $reply];
-                    $ctx->set('_ai_history', array_slice($history, -2));
-                    $this->responder->send($phone, $reply, ['handled_by' => 'ai', 'ai_used' => true, 'intent' => $flow ?? 'ai']);
-                }
-
-                // Optional AI follow-up nudge, sent as a second message.
-                if (! empty($r['follow_up'])) {
-                    $this->responder->send($phone, (string) $r['follow_up'], ['handled_by' => 'ai', 'ai_used' => true, 'intent' => 'follow_up']);
-                }
-
-                if ($flow !== null) {
-                    foreach (($r['flow_data'] ?? []) as $k => $v) {
-                        $ctx->set('_prefill_'.$k, $v);
-                    }
-                    $this->startFlow($flow, $ctx, $account);
-
-                    return ['handled_by' => 'ai', 'intent' => $flow, 'ai_used' => true];
-                }
-
-                $this->sendMenuFor($account, $ctx);
-
-                return ['handled_by' => 'ai', 'intent' => 'ai', 'ai_used' => true];
-            }
+        if ($text !== '' && $this->consultAi($ctx, $account, $text, inFlow: false)) {
+            return ['handled_by' => 'ai', 'intent' => 'ai', 'ai_used' => true];
         }
 
         // 7. AI unavailable / over budget → menu.
         $this->sendMenuFor($account, $ctx);
 
         return ['handled_by' => 'menu', 'intent' => 'fallback'];
+    }
+
+    /**
+     * Hand a message to the AI brain. It always replies and decides what runs
+     * next: trigger a flow (with extracted data as prefills — flows fast-forward
+     * to the right step), or just answer. Mid-flow, an answer-only outcome
+     * re-renders the current step so the user isn't left stranded; outside a
+     * flow it shows the menu. Returns false when AI is unavailable/over budget
+     * so the caller can fall back deterministically.
+     */
+    private function consultAi(SessionContext $ctx, WhatsAppAccount $account, string $text, bool $inFlow): bool
+    {
+        $authenticated = $account->isLinked();
+        $history = (array) $ctx->get('_ai_history', []);
+
+        $r = $this->intent->resolve($text, $ctx->phone, [
+            'user' => $authenticated ? $account->user : null,
+            'authenticated' => $authenticated,
+            'current_flow' => $ctx->flow,
+            'current_state' => $ctx->state,
+            'history' => $history,
+        ]);
+
+        if (empty($r['handled'])) {
+            return false;
+        }
+
+        $reply = (string) ($r['reply'] ?? '');
+        $flow = $r['flow'] ?? null;
+
+        if ($reply !== '') {
+            // Keep short-term memory (last 2 exchanges) for follow-ups.
+            $history[] = ['user' => $text, 'model' => $reply];
+            $ctx->set('_ai_history', array_slice($history, -2));
+            $this->responder->send($ctx->phone, $reply, ['handled_by' => 'ai', 'ai_used' => true, 'intent' => $flow ?? 'ai']);
+        }
+
+        // Optional AI follow-up nudge, sent as a second message.
+        if (! empty($r['follow_up'])) {
+            $this->responder->send($ctx->phone, (string) $r['follow_up'], ['handled_by' => 'ai', 'ai_used' => true, 'intent' => 'follow_up']);
+        }
+
+        if ($flow !== null) {
+            foreach (($r['flow_data'] ?? []) as $k => $v) {
+                $ctx->set('_prefill_'.$k, $v);
+            }
+            $this->startFlow($flow, $ctx, $account);
+
+            return true;
+        }
+
+        if ($inFlow && $ctx->inFlow()) {
+            // Answered a side-question mid-flow → re-render the step they were on.
+            $this->emit($account, $ctx, $this->engine->resume($ctx));
+        } else {
+            $this->sendMenuFor($account, $ctx);
+        }
+
+        return true;
     }
 
     private function runCommand(string $cmd, SessionContext $ctx, WhatsAppAccount $account): void
@@ -322,8 +368,20 @@ class MessageRouter
 
     private function emit(WhatsAppAccount $account, SessionContext $ctx, FlowResult $res): void
     {
-        if ($res->reply !== null && $res->reply !== '') {
-            $this->responder->send($ctx->phone, $res->reply, ['flow' => $ctx->flow, 'handled_by' => 'flow']);
+        $meta = ['flow' => $ctx->flow, 'handled_by' => 'flow'];
+
+        if ($res->buttons !== null && $res->reply !== null) {
+            $this->responder->sendButtons($ctx->phone, $res->reply, $res->buttons, $meta);
+        } elseif ($res->list !== null) {
+            $this->responder->sendMenu($ctx->phone, [
+                'body' => (string) $res->reply,
+                'button' => $res->list['button'],
+                'sections' => $res->list['sections'],
+                'header' => $res->list['header'] ?? null,
+                'footer' => $res->list['footer'] ?? null,
+            ], $meta);
+        } elseif ($res->reply !== null && $res->reply !== '') {
+            $this->responder->send($ctx->phone, $res->reply, $meta);
         }
 
         if (! $res->isDone()) {

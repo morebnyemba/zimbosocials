@@ -43,6 +43,7 @@ class GeminiProvider
 
         $prompt = $this->systemPrompt()
             ."\n\n=== CONTEXT ===\n".$this->buildContext($text, $context['user'] ?? null)
+            .$this->activeFlowBlock($context)
             .$this->historyBlock($context['history'] ?? [])
             ."\n\n=== USER MESSAGE ===\n".$text
             ."\n\nRespond with ONLY the JSON object.";
@@ -205,12 +206,12 @@ class GeminiProvider
         // Service catalogue — ALL active services, so the model can recommend or
         // quote any of them. A configurable cap (0 = unlimited) is available as a
         // safety valve for very large catalogues that would bloat the prompt.
-        $query = Service::active()->orderBy('category')->orderBy('display_order');
+        $catalog = Service::active()->orderBy('category')->orderBy('display_order');
         $max = (int) config('services.whatsapp.ai_max_services', 0);
         if ($max > 0) {
-            $query->limit($max);
+            $catalog->limit($max);
         }
-        $services = $query->get(['id', 'name', 'category', 'rate', 'min_qty', 'max_qty']);
+        $services = $catalog->get(['id', 'name', 'category', 'rate', 'min_qty', 'max_qty']);
         if ($services->isNotEmpty()) {
             $lines[] = '=== SERVICE CATALOGUE (all active services — recommend/quote any) ===';
             foreach ($services->groupBy('category') as $category => $group) {
@@ -249,6 +250,30 @@ class GeminiProvider
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * When the user is mid-flow, tell the model where they are so it can decide:
+     * continue/adjust that flow (set flow to it with updated params — the flow
+     * fast-forwards and keeps already-collected data), switch task, or just
+     * answer (flow null → the user is returned to the step they were on).
+     */
+    private function activeFlowBlock(array $context): string
+    {
+        $flow = $context['current_flow'] ?? null;
+        if (! $flow) {
+            return '';
+        }
+        $state = $context['current_state'] ?? 'unknown';
+
+        return "\n\n=== ACTIVE TASK ===\n"
+            ."The user is currently in the '{$flow}' flow at step '{$state}', and their message wasn't a direct answer "
+            ."to that step. Decide what they want:\n"
+            ."- Adjusting/continuing this task (new quantity, different link, changed their mind about an option) → set "
+            ."flow to '{$flow}' and put the updated values in flow_data; already-collected details are kept.\n"
+            ."- Switching to a different task → set that flow instead.\n"
+            ."- Just asking a side question → answer it and set flow to null; they'll be returned to the step they were on.\n"
+            ."Never confirm/place the order or payment yourself — the flow re-asks for confirmation.";
     }
 
     private function historyBlock(array $history): string

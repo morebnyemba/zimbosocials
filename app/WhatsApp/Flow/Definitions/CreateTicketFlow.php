@@ -33,7 +33,7 @@ class CreateTicketFlow extends AbstractFlow
 
         if ($state === 'ask_subject') {
             if (mb_strlen($input) < 3) {
-                return FlowResult::step('Please give a short subject (at least 3 characters).', 'ask_subject');
+                return FlowResult::retry('Please give a short subject (at least 3 characters).', 'ask_subject');
             }
             $ctx->set('ticket_subject', mb_substr($input, 0, 150));
 
@@ -42,7 +42,7 @@ class CreateTicketFlow extends AbstractFlow
 
         if ($state === 'ask_message') {
             if (mb_strlen($input) < 5) {
-                return FlowResult::step('Please add a bit more detail (at least 5 characters).', 'ask_message');
+                return FlowResult::retry('Please add a bit more detail (at least 5 characters).', 'ask_message');
             }
 
             $user = $this->user($ctx);

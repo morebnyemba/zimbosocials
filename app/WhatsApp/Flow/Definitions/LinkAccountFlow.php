@@ -49,7 +49,7 @@ class LinkAccountFlow extends AbstractFlow
 
         if ($state === 'ask_email') {
             if (! filter_var($input, FILTER_VALIDATE_EMAIL)) {
-                return FlowResult::step("That doesn't look like a valid email. Try again, or type *cancel*.", 'ask_email');
+                return FlowResult::retry("That doesn't look like a valid email. Try again, or type *cancel*.", 'ask_email');
             }
 
             $user = User::where('email', mb_strtolower($input))->first();

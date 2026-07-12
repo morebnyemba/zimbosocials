@@ -23,11 +23,12 @@ class SettingsFlow extends AbstractFlow
         $account = WhatsAppAccount::where('wa_phone', $ctx->phone)->first();
         $notifs = $account && $account->opted_in ? 'On ✅' : 'Off 🔕';
 
-        $msg = "⚙️ *Settings*\n\n";
-        $msg .= "Notifications: {$notifs}\n\n";
-        $msg .= "Reply *1* to ".($account && $account->opted_in ? 'turn OFF' : 'turn ON')." notifications, or *menu* to go back.";
+        $on = $account && $account->opted_in;
 
-        return FlowResult::step($msg, 'toggle');
+        return FlowResult::step("⚙️ *Settings*\n\nNotifications: {$notifs}", 'toggle')->withButtons([
+            ['id' => 'fs:1', 'title' => $on ? '🔕 Turn off' : '🔔 Turn on'],
+            ['id' => 'fs:back', 'title' => '↩ Back'],
+        ]);
     }
 
     public function handle(string $state, string $input, SessionContext $ctx): FlowResult

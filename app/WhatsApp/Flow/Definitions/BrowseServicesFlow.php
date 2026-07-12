@@ -46,6 +46,18 @@ class BrowseServicesFlow extends AbstractFlow
 
         $ctx->set('browse_categories', $categories->all());
 
+        // WhatsApp lists carry at most 10 rows — larger catalogues fall back
+        // to a numbered text list (typing a number/name still works).
+        if ($categories->count() <= 10) {
+            $rows = $categories->map(fn ($c, $i) => [
+                'id' => 'fs:'.($i + 1),
+                'title' => (string) $c,
+            ])->all();
+
+            return FlowResult::step('📂 Which platform would you like to browse?', 'pick_category')
+                ->withList('Choose platform', [['title' => 'Platforms', 'rows' => $rows]], 'Browse services', 'Or type its name');
+        }
+
         $list = $categories->map(fn ($c, $i) => ($i + 1).". {$c}")->implode("\n");
 
         return FlowResult::step(
@@ -71,7 +83,7 @@ class BrowseServicesFlow extends AbstractFlow
         }
 
         if (! $category) {
-            return FlowResult::step("Please reply with a valid category number, or type *cancel*.", 'pick_category');
+            return FlowResult::retry("Please reply with a valid category number, or type *cancel*.", 'pick_category');
         }
 
         return $this->listServices($category);

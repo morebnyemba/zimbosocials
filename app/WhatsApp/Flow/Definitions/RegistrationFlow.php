@@ -56,7 +56,7 @@ class RegistrationFlow extends AbstractFlow
 
         if ($state === 'ask_name') {
             if (mb_strlen($input) < 2) {
-                return FlowResult::step("Please enter your full name (at least 2 characters).", 'ask_name');
+                return FlowResult::retry("Please enter your full name (at least 2 characters).", 'ask_name');
             }
             $ctx->set('reg_name', $input);
 
@@ -65,7 +65,7 @@ class RegistrationFlow extends AbstractFlow
 
         if ($state === 'ask_email') {
             if (! filter_var($input, FILTER_VALIDATE_EMAIL)) {
-                return FlowResult::step("That doesn't look like a valid email. Please try again, or type *cancel*.", 'ask_email');
+                return FlowResult::retry("That doesn't look like a valid email. Please try again, or type *cancel*.", 'ask_email');
             }
 
             $res = $this->registrar->register($ctx->phone, (string) $ctx->get('reg_name', 'WhatsApp User'), $input);

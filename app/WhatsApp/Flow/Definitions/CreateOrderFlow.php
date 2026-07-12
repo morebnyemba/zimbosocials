@@ -47,28 +47,35 @@ class CreateOrderFlow extends AbstractFlow
             ? Service::active()->find((int) $serviceId)
             : null;
 
-        if ($service || $platform || $serviceName) {
-            $service ??= $this->resolveService((string) $platform, (string) $serviceName);
-            if ($service) {
-                $ctx->set('order_service_id', $service->id);
+        if (! $service && ($platform || $serviceName)) {
+            $service = $this->resolveService((string) $platform, (string) $serviceName);
+        }
 
-                if ($link && filter_var($link, FILTER_VALIDATE_URL)) {
-                    $ctx->set('order_link', (string) $link);
-                }
-                $qty = (int) preg_replace('/\D+/', '', (string) $quantity);
-                if ($qty >= $service->min_qty && $qty <= $service->max_qty) {
-                    $ctx->set('order_quantity', $qty);
-                }
+        // Mid-flow AI redirect back into 'order' (e.g. "make it 2000 instead"):
+        // keep the service the user already chose so their progress survives.
+        if (! $service && ! $platform && ! $serviceName && $ctx->has('order_service_id')) {
+            $service = Service::active()->find((int) $ctx->get('order_service_id'));
+        }
 
-                if (! $ctx->has('order_link')) {
-                    return FlowResult::step("🔗 Send the *link* for your *{$service->name}* order.", 'enter_link');
-                }
-                if (! $ctx->has('order_quantity')) {
-                    return FlowResult::step("🔢 How many? (min *{$service->min_qty}*, max *{$service->max_qty}*)", 'enter_quantity');
-                }
+        if ($service) {
+            $ctx->set('order_service_id', $service->id);
 
-                return $this->toConfirm($service, (int) $ctx->get('order_quantity'), $ctx);
+            if ($link && filter_var($link, FILTER_VALIDATE_URL)) {
+                $ctx->set('order_link', (string) $link);
             }
+            $qty = (int) preg_replace('/\D+/', '', (string) $quantity);
+            if ($qty >= $service->min_qty && $qty <= $service->max_qty) {
+                $ctx->set('order_quantity', $qty);
+            }
+
+            if (! $ctx->has('order_link')) {
+                return FlowResult::step("🔗 Send the *link* for your *{$service->name}* order.", 'enter_link');
+            }
+            if (! $ctx->has('order_quantity')) {
+                return FlowResult::step("🔢 How many? (min *{$service->min_qty}*, max *{$service->max_qty}*)", 'enter_quantity');
+            }
+
+            return $this->toConfirm($service, (int) $ctx->get('order_quantity'), $ctx);
         }
 
         return $this->showCategories($ctx);
@@ -113,6 +120,19 @@ class CreateOrderFlow extends AbstractFlow
         }
 
         $ctx->set('order_categories', $categories->all());
+
+        // WhatsApp lists carry at most 10 rows — fall back to a numbered text
+        // list for larger catalogues (typing a number/name still works).
+        if ($categories->count() <= 10) {
+            $rows = $categories->map(fn ($c, $i) => [
+                'id' => 'fs:'.($i + 1),
+                'title' => (string) $c,
+            ])->all();
+
+            return FlowResult::step('🚀 Which platform would you like to grow?', 'pick_category')
+                ->withList('Choose platform', [['title' => 'Platforms', 'rows' => $rows]], 'New order', 'Or type its name');
+        }
+
         $list = $categories->map(fn ($c, $i) => ($i + 1).". {$c}")->implode("\n");
 
         return FlowResult::step("🚀 *New order*\n\nWhich platform? Reply with a number:\n\n{$list}", 'pick_category');
@@ -123,7 +143,7 @@ class CreateOrderFlow extends AbstractFlow
         $categories = collect($ctx->get('order_categories', []));
         $category = $this->resolveChoice($input, $categories);
         if (! $category) {
-            return FlowResult::step('Please reply with a valid number, or type *cancel*.', 'pick_category');
+            return FlowResult::retry('Please reply with a valid number, or type *cancel*.', 'pick_category');
         }
 
         $services = Service::active()->byCategory($category)->orderBy('display_order')->limit(10)->get();
@@ -132,13 +152,18 @@ class CreateOrderFlow extends AbstractFlow
         }
 
         $ctx->set('order_service_ids', $services->pluck('id')->all());
-        $lines = $services->values()->map(function (Service $s, $i) {
+        $rows = $services->values()->map(function (Service $s, $i) {
             $rate = number_format((float) $s->rate, 2);
 
-            return ($i + 1).". *{$s->name}* — \${$rate}/1k (min {$s->min_qty}, max {$s->max_qty})";
-        })->implode("\n");
+            return [
+                'id' => 'fs:'.($i + 1),
+                'title' => $s->name,
+                'description' => "\${$rate}/1k · min {$s->min_qty} · max {$s->max_qty}",
+            ];
+        })->all();
 
-        return FlowResult::step("*{$category}*\n\nChoose a service:\n\n{$lines}", 'pick_service');
+        return FlowResult::step("Pick a *{$category}* service:", 'pick_service')
+            ->withList('Choose service', [['title' => $category, 'rows' => $rows]], null, 'Prices are per 1,000');
     }
 
     private function pickService(string $input, SessionContext $ctx): FlowResult
@@ -147,7 +172,7 @@ class CreateOrderFlow extends AbstractFlow
         $idx = (int) preg_replace('/\D+/', '', $input) - 1;
         $serviceId = $ids->get($idx);
         if (! $serviceId) {
-            return FlowResult::step('Please reply with a valid service number, or type *cancel*.', 'pick_service');
+            return FlowResult::retry('Please reply with a valid service number, or type *cancel*.', 'pick_service');
         }
 
         $service = Service::active()->find($serviceId);
@@ -167,7 +192,7 @@ class CreateOrderFlow extends AbstractFlow
     {
         $link = trim($input);
         if (! filter_var($link, FILTER_VALIDATE_URL)) {
-            return FlowResult::step("That doesn't look like a valid URL. Send the full link (starting with https://), or type *cancel*.", 'enter_link');
+            return FlowResult::retry("That doesn't look like a valid URL. Send the full link (starting with https://), or type *cancel*.", 'enter_link');
         }
 
         $ctx->set('order_link', $link);
@@ -188,7 +213,7 @@ class CreateOrderFlow extends AbstractFlow
         }
 
         if ($qty < $service->min_qty || $qty > $service->max_qty) {
-            return FlowResult::step("Please enter a number between *{$service->min_qty}* and *{$service->max_qty}*.", 'enter_quantity');
+            return FlowResult::retry("Please enter a number between *{$service->min_qty}* and *{$service->max_qty}*.", 'enter_quantity');
         }
 
         $ctx->set('order_quantity', $qty);
@@ -218,18 +243,36 @@ class CreateOrderFlow extends AbstractFlow
 
             return FlowResult::step(
                 $summary."⚠️ You're a bit short — you need *".$this->money($short, $cur)."* more.\n\n"
-                ."Reply *deposit* to top up (I've got the amount ready 👍), then just place your order again.",
+                .'Top up first (I\'ve got the amount ready 👍), then just place your order again.',
                 'confirm'
-            );
+            )->withButtons([
+                ['id' => 'fl_deposit', 'title' => '💰 Deposit'],
+                ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
+            ]);
         }
 
-        return FlowResult::step($summary.'Reply *YES* to place the order, or *cancel*.', 'confirm');
+        return FlowResult::step($summary.'Ready to place it?', 'confirm')->withButtons([
+            ['id' => 'fs:yes', 'title' => '✅ Place order'],
+            ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
+        ]);
     }
 
     private function confirm(string $input, SessionContext $ctx): FlowResult
     {
-        if (! in_array(mb_strtolower(trim($input)), ['yes', 'y', 'confirm', 'ok', 'yebo'], true)) {
-            return FlowResult::fail('Order not placed. Type *order* to start over or *menu* to go back.');
+        $t = mb_strtolower(trim($input));
+
+        if (! in_array($t, ['yes', 'y', 'confirm', 'ok', 'yebo'], true)) {
+            // Only an explicit "no" cancels; anything else (e.g. "make it 2000
+            // instead") is handed to the AI, which can adjust and re-confirm.
+            if (in_array($t, ['no', 'n', 'cancel', 'stop', 'kwete', 'hatshi'], true)) {
+                return FlowResult::fail('Order not placed. Type *order* to start over or *menu* to go back.');
+            }
+
+            return FlowResult::retry('Tap *✅ Place order* (or reply *YES*) to confirm — or *✖ Cancel* to stop.', 'confirm')
+                ->withButtons([
+                    ['id' => 'fs:yes', 'title' => '✅ Place order'],
+                    ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
+                ]);
         }
 
         $user = $this->user($ctx);
