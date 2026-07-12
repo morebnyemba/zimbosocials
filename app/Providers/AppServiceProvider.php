@@ -141,6 +141,10 @@ class AppServiceProvider extends ServiceProvider
                     config(["services.whatsapp.{$setting['key']}" => $setting['value']]);
                 }
 
+                if ($setting['group'] === 'gemini') {
+                    config(["services.gemini.{$setting['key']}" => $setting['value']]);
+                }
+
                 if ($setting['group'] === 'app') {
                     config(["app.{$setting['key']}" => $setting['value']]);
                 }

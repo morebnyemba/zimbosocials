@@ -64,6 +64,11 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
             { key: 'api_token', value: getSetting('whatsapp', 'api_token'), group: 'whatsapp' },
             { key: 'phone_number_id', value: getSetting('whatsapp', 'phone_number_id'), group: 'whatsapp' },
             { key: 'waba_id', value: getSetting('whatsapp', 'waba_id'), group: 'whatsapp' },
+            { key: 'webhook_verify_token', value: getSetting('whatsapp', 'webhook_verify_token'), group: 'whatsapp' },
+            { key: 'app_secret', value: getSetting('whatsapp', 'app_secret'), group: 'whatsapp' },
+            { key: 'assistant_enabled', value: getSetting('whatsapp', 'assistant_enabled') || '1', group: 'whatsapp' },
+            { key: 'ai_max_services', value: getSetting('whatsapp', 'ai_max_services') || '0', group: 'whatsapp' },
+            { key: 'api_key', value: getSetting('gemini', 'api_key'), group: 'gemini' },
             // Tawk
             { key: 'property_id', value: getSetting('tawk', 'property_id'), group: 'tawk' },
             { key: 'widget_id', value: getSetting('tawk', 'widget_id'), group: 'tawk' },
@@ -291,6 +296,24 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
                                         <SettingInput label="API Token" value={data.settings.find(s => s.key === 'api_token')?.value} onChange={(v: string) => updateSetting('api_token', v)} placeholder="EAAG..." type="password" />
                                         <SettingInput label="Phone Number ID" value={data.settings.find(s => s.key === 'phone_number_id')?.value} onChange={(v: string) => updateSetting('phone_number_id', v)} placeholder="102..." />
                                         <SettingInput label="WABA ID" value={data.settings.find(s => s.key === 'waba_id')?.value} onChange={(v: string) => updateSetting('waba_id', v)} placeholder="105..." />
+                                    </div>
+
+                                    <div className="p-8 rounded-[2rem] bg-emerald-50 border border-emerald-100 mb-8">
+                                        <h3 className="text-emerald-800 font-black text-sm uppercase tracking-widest flex items-center gap-2 mb-2">
+                                            <FaShieldAlt /> Conversational Assistant (Inbound)
+                                        </h3>
+                                        <p className="text-emerald-600/70 text-xs font-medium leading-relaxed">
+                                            Powers the in-chat bot. The verify token and app secret must match your Meta webhook config
+                                            (callback URL: <span className="font-mono">/webhooks/whatsapp</span>). The Gemini key turns on AI replies —
+                                            without it the bot still works with menus and the knowledge base.
+                                        </p>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <SettingInput label="Webhook Verify Token" value={data.settings.find(s => s.key === 'webhook_verify_token')?.value} onChange={(v: string) => updateSetting('webhook_verify_token', v)} placeholder="a random string you choose" />
+                                        <SettingInput label="App Secret (X-Hub signature)" value={data.settings.find(s => s.key === 'app_secret')?.value} onChange={(v: string) => updateSetting('app_secret', v)} placeholder="Meta app secret" type="password" />
+                                        <SettingInput label="Gemini API Key (AI)" value={data.settings.find(s => s.key === 'api_key')?.value} onChange={(v: string) => updateSetting('api_key', v)} placeholder="AIza..." type="password" />
+                                        <SettingInput label="Assistant Enabled (1 / 0)" value={data.settings.find(s => s.key === 'assistant_enabled')?.value} onChange={(v: string) => updateSetting('assistant_enabled', v)} placeholder="1" />
+                                        <SettingInput label="AI Max Services (0 = all)" value={data.settings.find(s => s.key === 'ai_max_services')?.value} onChange={(v: string) => updateSetting('ai_max_services', v)} placeholder="0" />
                                     </div>
                                 </div>
                             )}
