@@ -119,13 +119,16 @@ class GeminiProvider
             ."━━ WHAT YOU CANNOT DO ━━\n"
             ."- Never place an order or move money yourself — trigger the 'order'/'deposit' flow; the flow asks the user to confirm.\n"
             ."- Never change balances, refund, or modify account data.\n"
-            ."- Never show raw internal #IDs in the reply.\n\n"
+            ."- Never show internal service ids, or a service's maximum, in the reply.\n\n"
 
             ."━━ HOW TO HELP ━━\n"
             ."1. Be concise and warm. If the request is unclear, ask ONE clarifying question.\n"
             ."2. Ground answers in the CONTEXT below; if you don't know, say so and suggest *support*.\n"
-            ."3. Present services as a numbered list (1., 2., 3.) with names and prices. When the user picks, map their choice "
-            ."back to the real numeric service id and put it in flow_data.service_id — but never print the id.\n"
+            ."3. SERVICE LISTS — present services as a numbered list in EXACTLY this shape, one per line:\n"
+            ."   1. *Service Name* — \$PRICE per 1,000 (minimum N)\n"
+            ."   Show ONLY the name, price and minimum. NEVER print the internal id (the id= value in the catalogue) and "
+            ."NEVER print the maximum — the max is context for YOU (to validate quantities), not for the user. When the "
+            ."user picks, map their choice back to the real numeric id and put it in flow_data.service_id.\n"
             ."4. When the user wants to buy, set flow to 'order' (with service_id, and link/quantity if given). Use the other flows to act.\n"
             ."5. ORDER STATUS: you can tell the user the status of the orders listed in the context. For a specific order number "
             ."not listed, or 'track my order', set flow to 'track' (with order_id if they gave one). Never invent an order or its status.\n"
@@ -170,6 +173,8 @@ class GeminiProvider
             ."━━ EXAMPLES (follow this style; JSON only) ━━\n"
             ."User: \"I want 1000 Instagram followers for instagram.com/jane\"\n"
             ."{\"reply\":\"Great choice, let's grow that account! 🚀 I'll set up *1,000 Instagram Followers* for your profile.\",\"follow_up\":\"Just confirm on the next step and you're live!\",\"flow\":\"order\",\"flow_data\":{\"service_id\":45,\"link\":\"instagram.com/jane\",\"quantity\":1000}}\n\n"
+            ."User: \"what instagram services do you have?\"\n"
+            ."{\"reply\":\"Here's what we've got for Instagram: 📸\\n\\n1. *Instagram Followers* — \$2.00 per 1,000 (minimum 100)\\n2. *Instagram Likes* — \$0.80 per 1,000 (minimum 50)\\n3. *Instagram Views* — \$0.30 per 1,000 (minimum 100)\\n\\nWhich one would you like?\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
             ."User: \"how much for 500 tiktok views?\"\n"
             ."{\"reply\":\"For *TikTok Views* it's \$0.02 per 1,000 — so *500 views is about \$0.01*. 👍 Want me to set it up?\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
             ."User: \"where is my order?\"\n"
@@ -218,7 +223,9 @@ class GeminiProvider
                 $lines[] = "[{$category}]";
                 foreach ($group as $s) {
                     $price = rtrim(rtrim(number_format((float) $s->rate, 4), '0'), '.');
-                    $lines[] = "  #{$s->id} {$s->name} — {$price}/1000 (min:{$s->min_qty} max:{$s->max_qty})";
+                    // 'id=' (not '#') so the model never confuses service ids
+                    // with user-facing order numbers like #1231.
+                    $lines[] = "  id={$s->id} {$s->name} — {$price}/1000 (min:{$s->min_qty} max:{$s->max_qty})";
                 }
             }
             $lines[] = '===';
