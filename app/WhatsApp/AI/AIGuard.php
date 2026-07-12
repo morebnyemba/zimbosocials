@@ -11,11 +11,20 @@ use Illuminate\Support\Facades\Cache;
  */
 class AIGuard
 {
-    private const DAILY_LIMIT = 40;
-
     public function allow(string $phone): bool
     {
-        return (int) Cache::get($this->key($phone), 0) < self::DAILY_LIMIT;
+        $limit = $this->dailyLimit();
+        if ($limit <= 0) {
+            return true; // 0 = unlimited
+        }
+
+        return (int) Cache::get($this->key($phone), 0) < $limit;
+    }
+
+    /** Admin-tunable via Settings → WhatsApp (ai_daily_limit) or env. */
+    private function dailyLimit(): int
+    {
+        return (int) config('services.whatsapp.ai_daily_limit', 40);
     }
 
     public function record(string $phone): void
