@@ -156,10 +156,20 @@ class MessageRouter
             return ['handled_by' => 'command', 'intent' => 'restart'];
         }
 
-        // 2. Typed universal command / data shortcut.
+        // 2. Typed keyword. Conversation controls (menu/cancel/stop/help) act
+        //    instantly — never via AI. Data shortcuts ("balance", "deposit",
+        //    "hi", ...) give the AI first crack so the user gets a warm,
+        //    contextual reply; the mapped command is the deterministic
+        //    fallback when AI is off or over budget.
         if ($selection === null) {
             $cmd = $this->commands->match($text);
             if ($cmd !== null) {
+                if (! $this->commands->isControl($text)
+                    && $this->consultAi($ctx, $account, $text, inFlow: $ctx->inFlow())
+                ) {
+                    return ['handled_by' => 'ai', 'intent' => $cmd, 'ai_used' => true];
+                }
+
                 $this->runCommand($cmd, $ctx, $account);
 
                 return ['handled_by' => 'command', 'intent' => $cmd];

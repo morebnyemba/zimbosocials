@@ -62,6 +62,12 @@ class WhatsAppAiPrimaryTest extends TestCase
         ];
     }
 
+    /** An interactive tap (menu row / button) — deterministic, never AI. */
+    private function tap(string $id): array
+    {
+        return array_merge($this->msg(''), ['type' => 'interactive', 'interactive_id' => $id]);
+    }
+
     private function mockIntent(array $resolveResult): void
     {
         $intent = Mockery::mock(IntentEngine::class);
@@ -83,7 +89,7 @@ class WhatsAppAiPrimaryTest extends TestCase
         ]);
 
         $router = app(MessageRouter::class);
-        $router->handle($this->msg('order'));                       // → order flow, pick_category
+        $router->handle($this->tap('fl_order')); // menu tap → order flow, pick_category
         $router->handle($this->msg('actually I want to deposit')); // invalid pick → AI → deposit
 
         $ctx = app(SessionManager::class)->load(self::PHONE);
@@ -107,7 +113,7 @@ class WhatsAppAiPrimaryTest extends TestCase
         ]);
 
         $router = app(MessageRouter::class);
-        $router->handle($this->msg('order'));
+        $router->handle($this->tap('fl_order'));
         $router->handle($this->msg('what does refill mean?'));
 
         // Answered, but the user is still exactly where they were.
@@ -130,7 +136,7 @@ class WhatsAppAiPrimaryTest extends TestCase
         $this->mockIntent(['handled' => false]);
 
         $router = app(MessageRouter::class);
-        $router->handle($this->msg('order'));
+        $router->handle($this->tap('fl_order'));
         $router->handle($this->msg('gibberish input'));
 
         $ctx = app(SessionManager::class)->load(self::PHONE);
@@ -142,6 +148,55 @@ class WhatsAppAiPrimaryTest extends TestCase
             'direction' => 'out',
             'body' => 'Please reply with a valid number, or type *cancel*.',
         ]);
+    }
+
+    public function test_control_keywords_never_consult_the_ai(): void
+    {
+        $this->seedUserAndAccount();
+
+        $intent = Mockery::mock(IntentEngine::class);
+        $intent->shouldNotReceive('resolve');
+        $this->app->instance(IntentEngine::class, $intent);
+
+        $router = app(MessageRouter::class);
+        $router->handle($this->msg('menu'));
+        $router->handle($this->msg('cancel'));
+        $router->handle($this->msg('help'));
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertNull($ctx->flow);
+    }
+
+    public function test_shortcut_keywords_go_through_ai_first(): void
+    {
+        $this->seedUserAndAccount();
+
+        $this->mockIntent([
+            'handled' => true,
+            'reply' => "Let's top up your wallet! 💰",
+            'follow_up' => null,
+            'flow' => 'deposit',
+            'flow_data' => ['amount' => 10],
+        ]);
+
+        app(MessageRouter::class)->handle($this->msg('deposit'));
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('deposit', $ctx->flow);
+        $this->assertSame('choose_method', $ctx->state); // AI's $10 prefill applied
+    }
+
+    public function test_shortcut_keywords_fall_back_to_deterministic_command_when_ai_unavailable(): void
+    {
+        $this->seedUserAndAccount();
+
+        $this->mockIntent(['handled' => false]);
+
+        app(MessageRouter::class)->handle($this->msg('deposit'));
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('deposit', $ctx->flow);
+        $this->assertSame('ask_amount', $ctx->state); // no AI prefill — flow asks
     }
 
     public function test_ai_can_adjust_quantity_at_confirm_without_losing_progress(): void

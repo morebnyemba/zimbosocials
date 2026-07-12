@@ -9,6 +9,14 @@ namespace App\WhatsApp\Routing;
  */
 class CommandRegistry
 {
+    /**
+     * Conversation-control keywords that must act instantly and deterministically
+     * — never routed through the AI (opt-out compliance, escape hatches, UI).
+     */
+    private const CONTROL = [
+        'menu', 'home', 'start', 'help', '?', 'back', 'cancel', 'exit', 'quit', 'stop', 'unsubscribe',
+    ];
+
     /** Exact-word triggers → command id. */
     private array $map = [
         'menu' => 'menu', 'home' => 'menu', 'start' => 'menu', 'hi' => 'menu', 'hello' => 'menu',
@@ -39,14 +47,31 @@ class CommandRegistry
 
     public function match(?string $text): ?string
     {
+        $key = $this->normalize($text);
+
+        return $key !== null ? ($this->map[$key] ?? null) : null;
+    }
+
+    /**
+     * Whether the typed keyword is a conversation control (instant, no AI).
+     * Data shortcuts like "balance" or greetings like "hi" return false — the
+     * router gives the AI first crack at those, falling back to the mapped
+     * command when AI is unavailable.
+     */
+    public function isControl(?string $text): bool
+    {
+        $key = $this->normalize($text);
+
+        return $key !== null && in_array($key, self::CONTROL, true);
+    }
+
+    private function normalize(?string $text): ?string
+    {
         if ($text === null) {
             return null;
         }
         $key = preg_replace('/[^a-z?]/', '', mb_strtolower(trim($text)));
-        if ($key === '') {
-            return null;
-        }
 
-        return $this->map[$key] ?? null;
+        return $key === '' ? null : $key;
     }
 }
