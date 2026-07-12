@@ -134,6 +134,21 @@ if (is_dir($appTarget)) {
 }
 echo "<p>✅ Core files secured.</p>";
 
+// 2b. Purge stale Laravel caches. The release zip doesn't ship these files,
+// and the merge above never deletes them — so a route/config/view cache from
+// a PREVIOUS release would keep serving old routes (phantom 404s on pages
+// that work locally) and old config until someone clears it by hand.
+$staleCaches = array_merge(
+    glob($appTarget . '/bootstrap/cache/routes-*.php') ?: [],
+    glob($appTarget . '/bootstrap/cache/config.php') ?: [],
+    glob($appTarget . '/bootstrap/cache/events.php') ?: [],
+    glob($appTarget . '/storage/framework/views/*.php') ?: []
+);
+foreach ($staleCaches as $staleFile) {
+    @unlink($staleFile);
+}
+echo '<p>✅ Stale framework caches purged (' . count($staleCaches) . ' files).</p>';
+
 // 3. Move public_html files to current directory
 echo "<p>Moving public assets...</p>";
 $sourcePublic = $tempDir . '/public_html';
