@@ -90,8 +90,13 @@ class WhatsAppTemplateAdminTest extends TestCase
         $mock->shouldReceive('listTemplates')->andReturn(['ok' => true, 'templates' => []]);
         $mock->shouldReceive('createTemplate')
             ->withArgs(function (array $payload) {
+                $body = collect($payload['components'])->firstWhere('type', 'BODY');
+
+                // Meta rejects variable templates without sample values — the
+                // body has {{1}}, so example.body_text must carry one sample.
                 return $payload['name'] === 'welcome_message'
-                    && collect($payload['components'])->contains(fn ($c) => $c['type'] === 'BODY');
+                    && $body !== null
+                    && count($body['example']['body_text'][0] ?? []) === 1;
             })
             ->andReturn(['ok' => true]);
         $this->app->instance(WhatsAppService::class, $mock);
@@ -102,21 +107,58 @@ class WhatsAppTemplateAdminTest extends TestCase
             ->assertSessionHas('success');
     }
 
-    public function test_push_refuses_when_template_already_on_meta(): void
+    public function test_push_refuses_when_template_approved_on_meta(): void
     {
         $template = WhatsAppTemplate::where('name', 'welcome_message')->firstOrFail();
 
         $mock = Mockery::mock(WhatsAppService::class);
         $mock->shouldReceive('listTemplates')->andReturn([
             'ok' => true,
-            'templates' => [['name' => 'welcome_message', 'status' => 'APPROVED']],
+            'templates' => [['id' => '111', 'name' => 'welcome_message', 'status' => 'APPROVED']],
         ]);
         $mock->shouldNotReceive('createTemplate');
+        $mock->shouldNotReceive('updateTemplate');
         $this->app->instance(WhatsAppService::class, $mock);
 
         $this->actingAs($this->admin())
             ->post(route('admin.whatsapp.templates.push', $template))
             ->assertSessionHas('error');
+    }
+
+    public function test_push_resubmits_rejected_template_via_update(): void
+    {
+        $template = WhatsAppTemplate::where('name', 'welcome_message')->firstOrFail();
+
+        $mock = Mockery::mock(WhatsAppService::class);
+        $mock->shouldReceive('listTemplates')->andReturn([
+            'ok' => true,
+            'templates' => [['id' => '222', 'name' => 'welcome_message', 'status' => 'REJECTED']],
+        ]);
+        $mock->shouldNotReceive('createTemplate');
+        $mock->shouldReceive('updateTemplate')
+            ->withArgs(fn (string $id, array $payload) => $id === '222'
+                && collect($payload['components'])->firstWhere('type', 'BODY') !== null)
+            ->andReturn(['ok' => true]);
+        $this->app->instance(WhatsAppService::class, $mock);
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.whatsapp.templates.push', $template))
+            ->assertSessionHas('success');
+    }
+
+    public function test_meta_payload_samples_match_placeholder_count(): void
+    {
+        // deposit_confirmed has 4 placeholders: user_name, amount, new_balance, date.
+        $tpl = WhatsAppTemplate::where('name', 'deposit_confirmed')->firstOrFail();
+        $payload = WhatsAppTemplate::metaPayload($tpl->name, $tpl->toConfigShape(), 'en');
+        $body = collect($payload['components'])->firstWhere('type', 'BODY');
+
+        $this->assertCount(4, $body['example']['body_text'][0]);
+        $this->assertSame('Tendai Moyo', $body['example']['body_text'][0][0]);
+
+        // A no-variable template must NOT carry an example block.
+        $noVars = WhatsAppTemplate::metaPayload('static', ['body' => 'Hello there!', 'params' => []], 'en');
+        $this->assertArrayNotHasKey('example', collect($noVars['components'])->firstWhere('type', 'BODY'));
     }
 
     public function test_non_admins_cannot_manage_templates(): void

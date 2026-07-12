@@ -240,9 +240,11 @@ export default function WhatsAppTemplates({ remoteTemplates, localTemplates, err
                                             </td>
                                             <td className="py-3 px-5 text-right font-medium whitespace-nowrap space-x-3">
                                                 <button onClick={() => setEditing(t)} className="text-brand-green hover:underline">Edit</button>
-                                                {provider === 'meta' && !remote && (
+                                                {provider === 'meta' && (!remote || ['REJECTED', 'PAUSED'].includes(remote.status)) && (
                                                     <button onClick={() => router.post(route('admin.whatsapp.templates.push', t.id), {}, { preserveScroll: true })}
-                                                        className="text-amber-600 hover:underline">Push to Meta</button>
+                                                        className="text-amber-600 hover:underline">
+                                                        {remote ? 'Resubmit' : 'Push to Meta'}
+                                                    </button>
                                                 )}
                                                 {provider === 'meta' && remote && (
                                                     <button onClick={() => setPendingDelete(t.name)} className="text-red-500 hover:underline">Delete on Meta</button>

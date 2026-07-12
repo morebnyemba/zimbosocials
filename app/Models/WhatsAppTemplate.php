@@ -48,10 +48,31 @@ class WhatsAppTemplate extends Model
         $components = [];
 
         if (! empty($tpl['header'])) {
-            $components[] = ['type' => 'HEADER', 'format' => 'TEXT', 'text' => $tpl['header']];
+            $header = ['type' => 'HEADER', 'format' => 'TEXT', 'text' => $tpl['header']];
+            // Meta requires sample text for any variable in the header.
+            if (preg_match('/\{\{1\}\}/', (string) $tpl['header'])) {
+                $header['example'] = ['header_text' => [self::sampleFor(($tpl['params'] ?? [])[0] ?? '', 1)]];
+            }
+            $components[] = $header;
         }
 
-        $components[] = ['type' => 'BODY', 'text' => $tpl['body']];
+        $body = ['type' => 'BODY', 'text' => $tpl['body']];
+
+        // Meta REJECTS templates whose body has {{n}} variables but no sample
+        // values ("Template variables without sample text") — provide one
+        // sample per placeholder, derived from the param labels.
+        preg_match_all('/\{\{(\d+)\}\}/', (string) $tpl['body'], $m);
+        $placeholderCount = $m[1] === [] ? 0 : max(array_map('intval', $m[1]));
+        if ($placeholderCount > 0) {
+            $labels = array_values($tpl['params'] ?? []);
+            $samples = [];
+            for ($i = 0; $i < $placeholderCount; $i++) {
+                $samples[] = self::sampleFor($labels[$i] ?? '', $i + 1);
+            }
+            $body['example'] = ['body_text' => [$samples]];
+        }
+
+        $components[] = $body;
 
         if (! empty($tpl['footer'])) {
             $components[] = ['type' => 'FOOTER', 'text' => $tpl['footer']];
@@ -75,5 +96,28 @@ class WhatsAppTemplate extends Model
             'category' => $tpl['category'] ?? 'UTILITY',
             'components' => $components,
         ];
+    }
+
+    /** A realistic sample value for a param label — shown to Meta's reviewers. */
+    private static function sampleFor(string $label, int $position): string
+    {
+        $label = mb_strtolower($label);
+
+        return match (true) {
+            str_contains($label, 'email') => 'tendai@example.com',
+            str_contains($label, 'name') => 'Tendai Moyo',
+            str_contains($label, 'amount') || str_contains($label, 'balance') || str_contains($label, 'total') || str_contains($label, 'charge') || str_contains($label, 'refund') => '10.00 USD',
+            str_contains($label, 'date') || str_contains($label, 'time') => '13 Jul 2026',
+            str_contains($label, 'order') => '1234',
+            str_contains($label, 'ticket') => '56',
+            str_contains($label, 'quantity') || str_contains($label, 'qty') => '1000',
+            str_contains($label, 'status') => 'Completed',
+            str_contains($label, 'service') => 'Instagram Followers',
+            str_contains($label, 'code') || str_contains($label, 'otp') || str_contains($label, 'pin') => '123456',
+            str_contains($label, 'link') || str_contains($label, 'url') => 'https://example.com',
+            str_contains($label, 'reply') || str_contains($label, 'message') => 'We have escalated this to our team.',
+            str_contains($label, 'subject') => 'Order delivery question',
+            default => 'Sample '.$position,
+        };
     }
 }

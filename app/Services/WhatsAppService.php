@@ -188,6 +188,37 @@ class WhatsAppService
     }
 
     /**
+     * Update an existing template by its Meta template id. Editing a REJECTED
+     * (or PAUSED) template resubmits it for review — preferable to delete +
+     * recreate, since a deleted name is blocked for 30 days.
+     */
+    public function updateTemplate(string $templateId, array $templateDef): array
+    {
+        if (empty($this->apiToken)) {
+            return ['ok' => false, 'error' => 'API token not configured'];
+        }
+
+        try {
+            $response = Http::withToken($this->apiToken)
+                ->timeout(30)
+                ->post("https://graph.facebook.com/v21.0/{$templateId}", [
+                    'category' => $templateDef['category'],
+                    'components' => $templateDef['components'],
+                ]);
+
+            if ($response->successful()) {
+                Log::info("WhatsApp Template Updated: {$templateId}", $response->json());
+
+                return ['ok' => true, 'data' => $response->json()];
+            }
+
+            return ['ok' => false, 'error' => $response->json('error.message', $response->body())];
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * List all templates from the WhatsApp Business Account.
      */
     public function listTemplates(): array

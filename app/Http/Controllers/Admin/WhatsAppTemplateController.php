@@ -53,19 +53,35 @@ class WhatsAppTemplateController extends Controller
         return back()->with('success', "Template '{$template->name}' updated.{$note}");
     }
 
-    /** Push one local template to Meta for approval. */
+    /**
+     * Push one local template to Meta. New templates are created; REJECTED or
+     * PAUSED remote versions are updated in place (which resubmits them for
+     * review — deleting instead would block the name for 30 days).
+     */
     public function push(WhatsAppTemplate $template, WhatsAppService $whatsapp): RedirectResponse
     {
-        $remote = $whatsapp->listTemplates();
-        if ($remote['ok'] && collect($remote['templates'])->firstWhere('name', $template->name)) {
-            return back()->with('error', "'{$template->name}' already exists on Meta. Delete the remote version first, then push — the new version will need re-approval.");
-        }
-
         $payload = WhatsAppTemplate::metaPayload(
             $template->name,
             $template->toConfigShape(),
             (string) config('whatsapp-templates.language', 'en')
         );
+
+        $remote = $whatsapp->listTemplates();
+        $existing = $remote['ok'] ? collect($remote['templates'])->firstWhere('name', $template->name) : null;
+
+        if ($existing) {
+            $status = strtoupper((string) ($existing['status'] ?? ''));
+
+            if (! in_array($status, ['REJECTED', 'PAUSED'], true)) {
+                return back()->with('error', "'{$template->name}' is already on Meta ({$status}). To change its wording, delete the remote version first — but note a deleted name is blocked for 30 days.");
+            }
+
+            $result = $whatsapp->updateTemplate((string) $existing['id'], $payload);
+
+            return $result['ok']
+                ? back()->with('success', "'{$template->name}' was {$status} — resubmitted to Meta with the current content for a fresh review.")
+                : back()->with('error', "Meta rejected the update: {$result['error']}");
+        }
 
         $result = $whatsapp->createTemplate($payload);
 
