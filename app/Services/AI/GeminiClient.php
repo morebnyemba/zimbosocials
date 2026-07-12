@@ -44,7 +44,13 @@ class GeminiClient
 
         $decoded = json_decode($text, true);
 
-        return is_array($decoded) ? $decoded : null;
+        if (! is_array($decoded)) {
+            Log::warning('Gemini returned non-JSON despite JSON mime type', ['text' => mb_substr($text, 0, 300)]);
+
+            return null;
+        }
+
+        return $decoded;
     }
 
     /**

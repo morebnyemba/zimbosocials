@@ -282,8 +282,14 @@ class MessageRouter
             $this->responder->send($ctx->phone, (string) $r['follow_up'], ['handled_by' => 'ai', 'ai_used' => true, 'intent' => 'follow_up']);
         }
 
-        if ($flow !== null) {
-            foreach (($r['flow_data'] ?? []) as $k => $v) {
+        $flowData = array_filter((array) ($r['flow_data'] ?? []), fn ($v) => $v !== null && $v !== '');
+
+        // The model sometimes re-names the active flow for what is really just
+        // a side answer. Only a *different* flow or *new data* warrants a
+        // (re)start — otherwise re-render the step so it doesn't look like the
+        // flow keeps calling itself.
+        if ($flow !== null && ($flow !== $ctx->flow || $flowData !== [])) {
+            foreach ($flowData as $k => $v) {
                 $ctx->set('_prefill_'.$k, $v);
             }
             $this->startFlow($flow, $ctx, $account);
@@ -294,9 +300,10 @@ class MessageRouter
         if ($inFlow && $ctx->inFlow()) {
             // Answered a side-question mid-flow → re-render the step they were on.
             $this->emit($account, $ctx, $this->engine->resume($ctx));
-        } else {
-            $this->sendMenuFor($account, $ctx);
         }
+        // Outside a flow the AI reply stands on its own — no menu chaser. The
+        // menu still appears via 'menu', after flows finish, and as the
+        // fallback when the AI is unavailable.
 
         return true;
     }

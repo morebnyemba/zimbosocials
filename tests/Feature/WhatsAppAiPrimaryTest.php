@@ -150,6 +150,51 @@ class WhatsAppAiPrimaryTest extends TestCase
         ]);
     }
 
+    public function test_ai_answer_outside_flow_is_not_followed_by_menu(): void
+    {
+        $this->seedUserAndAccount();
+
+        $this->mockIntent([
+            'handled' => true,
+            'reply' => 'We deliver most orders within a few hours. ⏱️',
+            'follow_up' => null,
+            'flow' => null,
+            'flow_data' => [],
+        ]);
+
+        app(MessageRouter::class)->handle($this->msg('how fast is delivery?'));
+
+        // Exactly one outbound message: the AI reply. No menu chaser.
+        $this->assertSame(
+            1,
+            \Illuminate\Support\Facades\DB::table('whatsapp_messages')->where('direction', 'out')->count()
+        );
+    }
+
+    public function test_ai_naming_current_flow_without_data_does_not_restart_it(): void
+    {
+        $this->seedUserAndAccount();
+        $this->makeService('Instagram', 'Instagram Followers');
+
+        // Model echoes the active flow (a common failure mode) with no new data.
+        $this->mockIntent([
+            'handled' => true,
+            'reply' => 'Instagram Followers are our most popular! 🚀',
+            'follow_up' => null,
+            'flow' => 'order',
+            'flow_data' => [],
+        ]);
+
+        $router = app(MessageRouter::class);
+        $router->handle($this->tap('fl_order'));
+        $router->handle($this->msg('which one is most popular?'));
+
+        // Still in the same flow at the same step — re-rendered, not restarted.
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('order', $ctx->flow);
+        $this->assertSame('pick_category', $ctx->state);
+    }
+
     public function test_control_keywords_never_consult_the_ai(): void
     {
         $this->seedUserAndAccount();

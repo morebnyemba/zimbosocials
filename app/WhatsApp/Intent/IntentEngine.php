@@ -25,8 +25,14 @@ class IntentEngine
      */
     public function resolve(string $text, string $phone, array $context): array
     {
-        if (! $this->ai->isConfigured() || ! $this->guard->allow($phone)) {
-            return ['handled' => false];
+        if (! $this->ai->isConfigured()) {
+            return ['handled' => false, 'reason' => 'not_configured'];
+        }
+
+        if (! $this->guard->allow($phone)) {
+            Log::info('WhatsApp AI skipped: daily limit reached', ['phone' => $phone]);
+
+            return ['handled' => false, 'reason' => 'over_daily_limit'];
         }
 
         // An AI failure must degrade to the menu, never break the conversation —
@@ -36,11 +42,11 @@ class IntentEngine
         } catch (\Throwable $e) {
             Log::error('WhatsApp AI resolve failed', ['message' => $e->getMessage()]);
 
-            return ['handled' => false];
+            return ['handled' => false, 'reason' => 'error'];
         }
 
         if (! $res) {
-            return ['handled' => false];
+            return ['handled' => false, 'reason' => 'empty_response'];
         }
 
         $this->guard->record($phone);

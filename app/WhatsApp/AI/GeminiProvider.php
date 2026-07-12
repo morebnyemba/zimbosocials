@@ -276,10 +276,12 @@ class GeminiProvider
         return "\n\n=== ACTIVE TASK ===\n"
             ."The user is currently in the '{$flow}' flow at step '{$state}', and their message wasn't a direct answer "
             ."to that step. Decide what they want:\n"
-            ."- Adjusting/continuing this task (new quantity, different link, changed their mind about an option) → set "
-            ."flow to '{$flow}' and put the updated values in flow_data; already-collected details are kept.\n"
+            ."- Adjusting this task with NEW values (new quantity, different link, changed option) → set "
+            ."flow to '{$flow}' and put ONLY the new values in flow_data; already-collected details are kept.\n"
             ."- Switching to a different task → set that flow instead.\n"
-            ."- Just asking a side question → answer it and set flow to null; they'll be returned to the step they were on.\n"
+            ."- Anything else — a question, a doubt, small talk — answer it and set flow to null; the system "
+            ."automatically returns them to the step they were on. Do NOT set flow to '{$flow}' just because the task "
+            ."is active: without new flow_data that only makes the flow repeat itself.\n"
             ."Never confirm/place the order or payment yourself — the flow re-asks for confirmation.";
     }
 
