@@ -11,6 +11,25 @@ import { registerServiceWorker } from './registerSW';
 
 const appName = 'Zimbo Socials';
 
+// cPanel/LiteSpeed hosts commonly block PUT/PATCH/DELETE at the web-server
+// level (mod_security serves its own 404 before Laravel ever runs — seen as
+// "The resource requested could not be found on this server!" on every save
+// or delete action). Tunnel those verbs through POST + _method, which the
+// server allows and Laravel natively resolves back to the intended method.
+const SPOOFED_METHODS = ['put', 'patch', 'delete'];
+const originalVisit = router.visit.bind(router);
+(router as any).visit = (href: any, options: any = {}) => {
+    const method = String(options.method ?? 'get').toLowerCase();
+    if (SPOOFED_METHODS.includes(method)) {
+        options = {
+            ...options,
+            method: 'post',
+            data: { ...(options.data ?? {}), _method: method },
+        };
+    }
+    return originalVisit(href, options);
+};
+
 createInertiaApp({
     title: (title) => (title.includes(appName) ? title : `${title} - ${appName}`),
     resolve: (name) =>
