@@ -39,6 +39,12 @@ class AccountStore
         return $account;
     }
 
+    /** Pause the bot for this chat so a human can take over (AI escalation). */
+    public function startAgentHandoff(string $phone, int $hours = 2): void
+    {
+        WhatsAppAccount::where('wa_phone', $phone)->update(['agent_handoff_until' => now()->addHours($hours)]);
+    }
+
     public function setOptOut(string $phone, bool $optedIn): void
     {
         WhatsAppAccount::where('wa_phone', $phone)->update(['opted_in' => $optedIn]);

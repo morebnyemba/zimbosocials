@@ -274,10 +274,36 @@ class MessageRouter
         $flow = $r['flow'] ?? null;
 
         if ($reply !== '') {
-            // Keep short-term memory (last 2 exchanges) for follow-ups.
+            // Keep short-term memory (last 6 exchanges) for follow-ups.
             $history[] = ['user' => $text, 'model' => $reply];
-            $ctx->set('_ai_history', array_slice($history, -2));
-            $this->responder->send($ctx->phone, $reply, ['handled_by' => 'ai', 'ai_used' => true, 'intent' => $flow ?? 'ai']);
+            $ctx->set('_ai_history', array_slice($history, -6));
+            $this->responder->send($ctx->phone, $reply, [
+                'handled_by' => 'ai', 'ai_used' => true, 'intent' => $flow ?? 'ai',
+                // Full decision, kept for offline accuracy analysis (ai-eval).
+                'payload' => [
+                    'flow' => $flow,
+                    'flow_data' => $r['flow_data'] ?? [],
+                    'prompt_version' => $r['prompt_version'] ?? null,
+                    'in_flow' => $inFlow ? $ctx->flow : null,
+                ],
+            ]);
+        }
+
+        // The model escalated to a human: pause the bot for this chat (same
+        // window as the admin takeover button) and alert the team.
+        if ($flow === 'handoff') {
+            if ($ctx->inFlow()) {
+                $this->engine->cancel($ctx);
+            }
+            $this->accounts->startAgentHandoff($ctx->phone);
+            \App\Services\NotificationService::notifyAdmins(
+                'admin_whatsapp_handoff',
+                'WhatsApp chat needs a human',
+                "The assistant escalated +{$ctx->phone} to a human agent. Reply from Admin → WA Assistant → Conversations.",
+                ['wa_phone' => $ctx->phone]
+            );
+
+            return true;
         }
 
         // Optional AI follow-up nudge, sent as a second message.

@@ -20,6 +20,12 @@ use App\WhatsApp\Messaging\WhatsAppFormatter;
  */
 class GeminiProvider
 {
+    /**
+     * Bumped on every behavioural prompt change; stamped into logged decisions
+     * so accuracy can be compared across versions (see whatsapp:ai-eval).
+     */
+    public const PROMPT_VERSION = '2026-07-13.1';
+
     public function __construct(
         private readonly GeminiClient $client,
         private readonly KnowledgeBase $kb,
@@ -41,20 +47,28 @@ class GeminiProvider
             return null;
         }
 
-        $prompt = $this->systemPrompt()
-            ."\n\n=== CONTEXT ===\n".$this->buildContext($text, $context['user'] ?? null)
+        // Static instructions ride in systemInstruction (cleaner injection
+        // boundary, better cache reuse); only the dynamic context + the user's
+        // message form the user turn.
+        $prompt = '=== CONTEXT ==='."\n".$this->buildContext($text, $context['user'] ?? null)
             .$this->activeFlowBlock($context)
             .$this->historyBlock($context['history'] ?? [])
-            ."\n\n=== USER MESSAGE ===\n".$text
-            ."\n\nRespond with ONLY the JSON object.";
+            ."\n\n=== USER MESSAGE ===\n".$text;
 
-        $json = $this->client->generateJson($prompt, 0.4);
+        $json = $this->client->generateJson(
+            $prompt,
+            0.4,
+            schema: self::responseSchema(),
+            system: $this->systemPrompt(),
+            timeout: (int) config('services.gemini.chat_timeout', 10),
+        );
         if (! is_array($json) || empty($json['reply'])) {
             return null;
         }
 
+        // Schema uses 'none' for "no flow" (enums can't hold null cleanly).
         $flow = ($json['flow'] ?? null) ?: null;
-        if ($flow !== null && ! array_key_exists($flow, FlowCatalog::all())) {
+        if ($flow === 'none' || ($flow !== null && $flow !== 'handoff' && ! array_key_exists($flow, FlowCatalog::all()))) {
             $flow = null;
         }
 
@@ -69,6 +83,44 @@ class GeminiProvider
             'flow_data' => is_array($json['flow_data'] ?? null)
                 ? array_filter($json['flow_data'], fn ($v) => $v !== null && $v !== '')
                 : [],
+            'prompt_version' => self::PROMPT_VERSION,
+        ];
+    }
+
+    /**
+     * Gemini responseSchema — constrains the decision server-side: the flow is
+     * an enum of real ids (+ 'handoff' and 'none'), entities are typed. This
+     * turns "invalid flow name" and "malformed JSON" into non-events.
+     */
+    public static function responseSchema(): array
+    {
+        $flows = array_merge(array_keys(FlowCatalog::all()), ['handoff', 'none']);
+
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'reply' => ['type' => 'STRING'],
+                'follow_up' => ['type' => 'STRING', 'nullable' => true],
+                'flow' => ['type' => 'STRING', 'enum' => $flows, 'nullable' => true],
+                'flow_data' => [
+                    'type' => 'OBJECT',
+                    'nullable' => true,
+                    'properties' => [
+                        'service_id' => ['type' => 'INTEGER', 'nullable' => true],
+                        'platform' => ['type' => 'STRING', 'nullable' => true],
+                        'service' => ['type' => 'STRING', 'nullable' => true],
+                        'link' => ['type' => 'STRING', 'nullable' => true],
+                        'quantity' => ['type' => 'INTEGER', 'nullable' => true],
+                        'amount' => ['type' => 'NUMBER', 'nullable' => true],
+                        'order_id' => ['type' => 'INTEGER', 'nullable' => true],
+                        'ticket_id' => ['type' => 'INTEGER', 'nullable' => true],
+                        'email' => ['type' => 'STRING', 'nullable' => true],
+                        'name' => ['type' => 'STRING', 'nullable' => true],
+                        'subject' => ['type' => 'STRING', 'nullable' => true],
+                    ],
+                ],
+            ],
+            'required' => ['reply'],
         ];
     }
 
@@ -143,7 +195,10 @@ class GeminiProvider
             ."pick — only put flow_data.service_id when you're sure which one. Respect each service's min/max; if they ask for less "
             ."than the minimum, tell them the minimum and offer it.\n"
             ."10. GUESTS: if the context says the user is a guest and they want to order, deposit, or see their orders, help warmly "
-            ."and STILL set the flow — the system walks them through a quick signup/login first. Don't send them to the website to register.\n\n"
+            ."and STILL set the flow — the system walks them through a quick signup/login first. Don't send them to the website to register.\n"
+            ."11. HUMAN HANDOFF: if the user is clearly upset, disputes money (missing deposit, wrong charge, refund complaint), or "
+            ."explicitly asks for a person/agent/human, set flow to 'handoff' — a team member takes over this chat. Reassure them "
+            ."warmly that a human will reply here shortly. Don't use it for ordinary questions you can answer.\n\n"
 
             ."━━ WHATSAPP FORMATTING (reply and follow_up only) ━━\n"
             ."WhatsApp does NOT use markdown. Use ONLY:\n"
@@ -171,6 +226,10 @@ class GeminiProvider
             ."AVAILABLE FLOWS — set \"flow\" to one of these ids (or null):\n{$flows}\n\n"
 
             ."━━ EXAMPLES (follow this style; JSON only) ━━\n"
+            ."User: \"hi\"\n"
+            ."{\"reply\":\"Hey! 👋 Great to hear from you. What are we growing today — followers, likes, views? Or ask me anything about your orders or wallet.\",\"follow_up\":null,\"flow\":\"none\",\"flow_data\":{}}\n\n"
+            ."User: \"i deposited yesterday and my money is NOT there, this is a scam!!\"\n"
+            ."{\"reply\":\"I'm really sorry about that — I understand how worrying that is. 🙏 I'm bringing in a team member right now to look into your deposit personally; they'll reply here shortly.\",\"follow_up\":null,\"flow\":\"handoff\",\"flow_data\":{}}\n\n"
             ."User: \"I want 1000 Instagram followers for instagram.com/jane\"\n"
             ."{\"reply\":\"Great choice, let's grow that account! 🚀 I'll set up *1,000 Instagram Followers* for your profile.\",\"follow_up\":\"Just confirm on the next step and you're live!\",\"flow\":\"order\",\"flow_data\":{\"service_id\":45,\"link\":\"instagram.com/jane\",\"quantity\":1000}}\n\n"
             ."User: \"what instagram services do you have?\"\n"
@@ -191,7 +250,7 @@ class GeminiProvider
             ."{\"reply\":\"Awesome, YouTube views coming right up! 🎬 I'll get it started — you'll just do a quick signup first, takes a sec.\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"platform\":\"youtube\"}}\n\n"
 
             ."RESPONSE FORMAT — return ONLY valid JSON, no markdown fences:\n"
-            ."{\"reply\":\"your message\",\"follow_up\":\"short nudge or null\",\"flow\":\"flow id or null\",\"flow_data\":{\"service_id\":null,\"link\":null,\"quantity\":null,\"amount\":null,\"order_id\":null,\"platform\":null,\"email\":null,\"name\":null,\"subject\":null}}";
+            ."{\"reply\":\"your message\",\"follow_up\":\"short nudge or null\",\"flow\":\"a flow id, 'handoff', or 'none'\",\"flow_data\":{\"service_id\":null,\"link\":null,\"quantity\":null,\"amount\":null,\"order_id\":null,\"ticket_id\":null,\"platform\":null,\"email\":null,\"name\":null,\"subject\":null}}";
     }
 
     private function buildContext(string $query, ?User $user): string
@@ -218,7 +277,7 @@ class GeminiProvider
         }
         $services = $catalog->get(['id', 'name', 'category', 'rate', 'min_qty', 'max_qty']);
         if ($services->isNotEmpty()) {
-            $lines[] = '=== SERVICE CATALOGUE (all active services — recommend/quote any) ===';
+            $lines[] = '=== SERVICE CATALOGUE (all active services — recommend/quote any; prices are per 1,000 in USD) ===';
             foreach ($services->groupBy('category') as $category => $group) {
                 $lines[] = "[{$category}]";
                 foreach ($group as $s) {

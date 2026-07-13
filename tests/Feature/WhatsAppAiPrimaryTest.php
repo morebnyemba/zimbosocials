@@ -210,6 +210,87 @@ class WhatsAppAiPrimaryTest extends TestCase
         );
     }
 
+    public function test_response_schema_constrains_flow_to_real_ids(): void
+    {
+        $schema = \App\WhatsApp\AI\GeminiProvider::responseSchema();
+        $enum = $schema['properties']['flow']['enum'];
+
+        $this->assertContains('order', $enum);
+        $this->assertContains('handoff', $enum);
+        $this->assertContains('none', $enum);
+        $this->assertNotContains('nonexistent_flow', $enum);
+        $this->assertSame(['reply'], $schema['required']);
+    }
+
+    public function test_provider_normalizes_none_flow_and_passes_handoff(): void
+    {
+        $kb = app(\App\WhatsApp\Intent\KnowledgeBase::class);
+
+        $client = Mockery::mock(\App\Services\AI\GeminiClient::class);
+        $client->shouldReceive('isConfigured')->andReturn(true);
+        $client->shouldReceive('generateJson')->andReturn(
+            ['reply' => 'Hey there!', 'flow' => 'none', 'flow_data' => []],
+            ['reply' => 'A human will reply shortly.', 'flow' => 'handoff', 'flow_data' => []],
+        );
+
+        $provider = new \App\WhatsApp\AI\GeminiProvider($client, $kb);
+        $ctx = ['user' => null, 'authenticated' => true, 'history' => []];
+
+        $this->assertNull($provider->respond('hi', $ctx)['flow']);
+        $res = $provider->respond('i need a human', $ctx);
+        $this->assertSame('handoff', $res['flow']);
+        $this->assertSame(\App\WhatsApp\AI\GeminiProvider::PROMPT_VERSION, $res['prompt_version']);
+    }
+
+    public function test_handoff_pauses_bot_and_alerts_admins_without_starting_a_flow(): void
+    {
+        $this->seedUserAndAccount();
+
+        $this->mockIntent([
+            'handled' => true,
+            'reply' => "I'm bringing in a team member right now. 🙏",
+            'follow_up' => null,
+            'flow' => 'handoff',
+            'flow_data' => [],
+        ]);
+
+        app(MessageRouter::class)->handle($this->msg('my deposit is missing, this is a scam!!'));
+
+        $account = \App\Models\WhatsAppAccount::where('wa_phone', self::PHONE)->first();
+        $this->assertTrue($account->inAgentHandoff());
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertNull($ctx->flow);
+
+        // Follow-up messages are now left for the human agent (bot silent).
+        app(MessageRouter::class)->handle($this->msg('hello??'));
+        $this->assertSame(
+            1,
+            \Illuminate\Support\Facades\DB::table('whatsapp_messages')->where('direction', 'out')->count()
+        );
+    }
+
+    public function test_ai_decision_is_logged_with_prompt_version(): void
+    {
+        $this->seedUserAndAccount();
+
+        $this->mockIntent([
+            'handled' => true,
+            'reply' => 'Let me set that up! 🚀',
+            'follow_up' => null,
+            'flow' => 'deposit',
+            'flow_data' => ['amount' => 20],
+            'prompt_version' => \App\WhatsApp\AI\GeminiProvider::PROMPT_VERSION,
+        ]);
+
+        app(MessageRouter::class)->handle($this->msg('deposit 20'));
+
+        $out = \App\Models\WhatsAppMessage::where('direction', 'out')->where('handled_by', 'ai')->first();
+        $this->assertNotNull($out);
+        $this->assertSame('deposit', $out->payload['flow']);
+        $this->assertSame(\App\WhatsApp\AI\GeminiProvider::PROMPT_VERSION, $out->payload['prompt_version']);
+    }
+
     public function test_stale_button_tap_after_completed_flow_gets_nudge_not_menu(): void
     {
         $this->seedUserAndAccount();

@@ -29,34 +29,45 @@ class GeminiClient
     /**
      * Send a prompt and decode the model's JSON reply (or null on failure).
      *
+     * @param  array|null  $schema  Optional Gemini responseSchema — constrains the
+     *                              output shape server-side (enums, types), which
+     *                              eliminates malformed decisions at the source.
+     * @param  string|null  $system  Optional system instruction, sent as its own
+     *                               field so user text stays a plain data turn.
+     * @param  int|null  $timeout  Per-call timeout override (seconds).
      * @return array<mixed>|null
      */
-    public function generateJson(string $prompt, float $temperature = 0.2): ?array
+    public function generateJson(string $prompt, float $temperature = 0.2, ?array $schema = null, ?string $system = null, ?int $timeout = null): ?array
     {
-        $text = $this->send($prompt, [
-            'responseMimeType' => 'application/json',
-            'temperature' => $temperature,
-        ]);
-
-        if (! is_string($text)) {
-            return null;
+        $config = ['responseMimeType' => 'application/json', 'temperature' => $temperature];
+        if ($schema !== null) {
+            $config['responseSchema'] = $schema;
         }
 
-        $decoded = json_decode($text, true);
+        // One retry: a transient malformed body is common enough to be worth
+        // a single second attempt before giving up to the deterministic path.
+        foreach ([1, 2] as $attempt) {
+            $text = $this->send($prompt, $config, $system, $timeout);
 
-        if (! is_array($decoded)) {
-            Log::warning('Gemini returned non-JSON despite JSON mime type', ['text' => mb_substr($text, 0, 300)]);
+            if (! is_string($text)) {
+                return null; // transport-level failure — already logged, no retry
+            }
 
-            return null;
+            $decoded = json_decode($text, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+
+            Log::warning("Gemini returned non-JSON despite JSON mime type (attempt {$attempt})", ['text' => mb_substr($text, 0, 300)]);
         }
 
-        return $decoded;
+        return null;
     }
 
     /**
      * @param  array<string, mixed>  $generationConfig
      */
-    private function send(string $prompt, array $generationConfig): ?string
+    private function send(string $prompt, array $generationConfig, ?string $system = null, ?int $timeout = null): ?string
     {
         if (! $this->isConfigured()) {
             return null;
@@ -66,17 +77,22 @@ class GeminiClient
         $baseUrl = rtrim((string) config('services.gemini.base_url'), '/');
         $endpoint = "{$baseUrl}/models/{$model}:generateContent";
 
+        $payload = [
+            'contents' => [[
+                'role' => 'user',
+                'parts' => [['text' => $prompt]],
+            ]],
+            'generationConfig' => $generationConfig,
+        ];
+        if ($system !== null) {
+            $payload['systemInstruction'] = ['parts' => [['text' => $system]]];
+        }
+
         try {
-            $response = Http::timeout((int) config('services.gemini.timeout', 30))
+            $response = Http::timeout($timeout ?? (int) config('services.gemini.timeout', 30))
                 ->withHeaders(['x-goog-api-key' => config('services.gemini.api_key')])
                 ->asJson()
-                ->post($endpoint, [
-                    'contents' => [[
-                        'role' => 'user',
-                        'parts' => [['text' => $prompt]],
-                    ]],
-                    'generationConfig' => $generationConfig,
-                ]);
+                ->post($endpoint, $payload);
 
             if ($response->failed()) {
                 Log::warning('Gemini request failed', [
