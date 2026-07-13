@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Log;
  */
 class GeminiClient
 {
+    /** HTTP status of the most recent failed request (schema-rejection detection). */
+    private ?int $lastStatus = null;
+
     public function isConfigured(): bool
     {
         return filled(config('services.gemini.api_key'));
@@ -48,6 +51,15 @@ class GeminiClient
         // a single second attempt before giving up to the deterministic path.
         foreach ([1, 2] as $attempt) {
             $text = $this->send($prompt, $config, $system, $timeout);
+
+            // Safety net: if the API rejects the schema itself (endpoint/version
+            // quirks), degrade to a schema-less JSON call instead of turning
+            // every AI request into a hard failure.
+            if (! is_string($text) && isset($config['responseSchema']) && $this->lastStatus === 400) {
+                Log::warning('Gemini rejected responseSchema — retrying without it');
+                unset($config['responseSchema']);
+                $text = $this->send($prompt, $config, $system, $timeout);
+            }
 
             if (! is_string($text)) {
                 return null; // transport-level failure — already logged, no retry
@@ -93,6 +105,8 @@ class GeminiClient
                 ->withHeaders(['x-goog-api-key' => config('services.gemini.api_key')])
                 ->asJson()
                 ->post($endpoint, $payload);
+
+            $this->lastStatus = $response->status();
 
             if ($response->failed()) {
                 Log::warning('Gemini request failed', [
