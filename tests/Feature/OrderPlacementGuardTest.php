@@ -34,7 +34,7 @@ class OrderPlacementGuardTest extends TestCase
 
         $response = $this->actingAs($user)->from('/orders/new')->post('/orders', [
             'service_id' => $service->id,
-            'link' => 'https://instagram.com/p/test123',
+            'link' => 'https://instagram.com/testuser',
             'quantity' => 100,
         ]);
 
@@ -67,7 +67,7 @@ class OrderPlacementGuardTest extends TestCase
         // charge = (100 / 1000) * 1.00 = 0.10, balance = 0.05
         $response = $this->actingAs($user)->from('/orders/new')->post('/orders', [
             'service_id' => $service->id,
-            'link' => 'https://instagram.com/p/test123',
+            'link' => 'https://instagram.com/testuser',
             'quantity' => 100,
         ]);
 

@@ -65,7 +65,7 @@ class ReferralOrderCommissionTest extends TestCase
         // charge = (300 / 1000) * 100 = 30 (> 20), but this is first order
         $this->actingAs($referred)->post('/orders', [
             'service_id' => $service->getKey(),
-            'link' => 'https://instagram.com/p/firsthigh',
+            'link' => 'https://instagram.com/firsthigh',
             'quantity' => 300,
         ]);
 
@@ -109,7 +109,7 @@ class ReferralOrderCommissionTest extends TestCase
         // First order (charge 1) -> no commission (first order and below threshold)
         $this->actingAs($referred)->post('/orders', [
             'service_id' => $service->getKey(),
-            'link' => 'https://instagram.com/p/firstsmall',
+            'link' => 'https://instagram.com/firstsmall',
             'quantity' => 10,
         ]);
         $this->completeOrder(Order::latest('id')->firstOrFail());
@@ -117,7 +117,7 @@ class ReferralOrderCommissionTest extends TestCase
         // Second order (charge 30) -> eligible commission 2% of 30 = 0.6 on completion
         $this->actingAs($referred)->post('/orders', [
             'service_id' => $service->getKey(),
-            'link' => 'https://instagram.com/p/secondlarge',
+            'link' => 'https://instagram.com/secondlarge',
             'quantity' => 300,
         ]);
         $this->completeOrder(Order::latest('id')->firstOrFail());
@@ -167,7 +167,7 @@ class ReferralOrderCommissionTest extends TestCase
         // First order
         $this->actingAs($referred)->post('/orders', [
             'service_id' => $service->getKey(),
-            'link' => 'https://instagram.com/p/firstedge',
+            'link' => 'https://instagram.com/firstedge',
             'quantity' => 10,
         ]);
         $this->completeOrder(Order::latest('id')->firstOrFail());
@@ -176,7 +176,7 @@ class ReferralOrderCommissionTest extends TestCase
         // (The minimum is inclusive — exactly $20 WOULD qualify per ReferralService.)
         $this->actingAs($referred)->post('/orders', [
             'service_id' => $service->getKey(),
-            'link' => 'https://instagram.com/p/secondedge',
+            'link' => 'https://instagram.com/secondedge',
             'quantity' => 190,
         ]);
         $this->completeOrder(Order::latest('id')->firstOrFail());
