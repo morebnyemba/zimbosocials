@@ -76,6 +76,21 @@ class SyncUpstreamServices extends Command
                 $primaryUpstream = $service->upstreams()->first();
 
                 if ($primaryUpstream && $primaryUpstream->id === $pivot->id) {
+                    // No established margin yet (new/repointed pivot, or a
+                    // deploy that hasn't stored one): lock in the margin the
+                    // CURRENT price implies instead of applying any default —
+                    // the admin's price must never move because of this sync.
+                    if ($pivot->markup_value === null) {
+                        $currentRate = (float) $service->rate;
+                        if ($currentRate <= 0) {
+                            continue; // nothing trustworthy to derive from
+                        }
+                        $pivot->update([
+                            'markup_type' => 'percentage',
+                            'markup_value' => max(round((($currentRate / $upstreamRate) - 1) * 100, 4), 0),
+                        ]);
+                    }
+
                     // Preserve the operator's per-service markup stored on the pivot
                     // rather than forcing a flat margin. The pivot was refreshed above.
                     $newRate = $pivot->applyMarkup($upstreamRate);

@@ -188,9 +188,15 @@ class AdminServiceController extends Controller
                     // Repointing a route at a different provider service makes the
                     // cached provider cost belong to the old one — reset it to 0
                     // ("unknown") so the admin UI doesn't show a wrong cost until
-                    // the nightly service sync fetches the real rate.
+                    // the nightly service sync fetches the real rate. The margin is
+                    // unknown too (NULL): the sync derives it from the current
+                    // price on first fetch, so the price never resets to a default.
                     if ($existing && (string) $existing->external_service_id !== (string) $upstream['external_service_id']) {
                         $values['external_rate'] = 0;
+                        $values['markup_value'] = null;
+                    }
+                    if (! $existing) {
+                        $values['markup_value'] = null;
                     }
 
                     $service->upstreams()->updateOrCreate(
