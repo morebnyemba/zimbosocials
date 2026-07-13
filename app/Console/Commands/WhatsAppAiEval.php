@@ -16,7 +16,7 @@ use Illuminate\Console\Command;
 class WhatsAppAiEval extends Command
 {
     protected $signature = 'whatsapp:ai-eval
-                            {--set= : Path to a golden-set JSON file (defaults to tests/Fixtures/whatsapp-ai-golden.json)}
+                            {--set= : Path to a golden-set JSON file (defaults to database/data/whatsapp-ai-golden.json)}
                             {--filter= : Only run cases whose message contains this text}';
 
     protected $description = 'Score the WhatsApp AI prompt against the golden set of expected flow decisions';
@@ -29,7 +29,7 @@ class WhatsAppAiEval extends Command
             return self::FAILURE;
         }
 
-        $path = $this->option('set') ?: base_path('tests/Fixtures/whatsapp-ai-golden.json');
+        $path = $this->option('set') ?: base_path('database/data/whatsapp-ai-golden.json');
         $cases = json_decode((string) file_get_contents($path), true);
         if (! is_array($cases)) {
             $this->error("Could not read golden set at {$path}");
