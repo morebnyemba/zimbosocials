@@ -446,9 +446,9 @@ class MessageRouter
             }
         }
 
-        if ($res->showMenuAfter()) {
-            $this->sendMenuFor($account, $ctx);
-        }
+        // A finished flow's closing message stands on its own — no menu chaser.
+        // The menu appears when asked for ('menu' / a tap) and as the fallback
+        // when the AI can't handle free text.
     }
 
     private function sendMenuFor(WhatsAppAccount $account, SessionContext $ctx): void

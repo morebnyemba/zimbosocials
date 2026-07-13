@@ -195,6 +195,21 @@ class WhatsAppAiPrimaryTest extends TestCase
         $this->assertSame('pick_category', $ctx->state);
     }
 
+    public function test_completed_flow_is_not_followed_by_menu(): void
+    {
+        $this->seedUserAndAccount();
+        $this->mockIntent(['handled' => false]); // deterministic path
+
+        // 'balance' completes in one step: exactly one outbound (the balance
+        // card) — no menu chaser after the flow finishes.
+        app(MessageRouter::class)->handle($this->msg('balance'));
+
+        $this->assertSame(
+            1,
+            \Illuminate\Support\Facades\DB::table('whatsapp_messages')->where('direction', 'out')->count()
+        );
+    }
+
     public function test_control_keywords_never_consult_the_ai(): void
     {
         $this->seedUserAndAccount();

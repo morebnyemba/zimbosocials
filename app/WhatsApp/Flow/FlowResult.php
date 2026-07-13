@@ -94,10 +94,4 @@ class FlowResult
     {
         return $this->type !== self::STEP;
     }
-
-    /** Whether the router should render the main menu after this result. */
-    public function showMenuAfter(): bool
-    {
-        return $this->isDone() && empty($this->meta['skipMenu']);
-    }
 }

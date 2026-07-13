@@ -58,7 +58,7 @@ class ViewTicketsFlow extends AbstractFlow
             ->get();
 
         if ($tickets->isEmpty()) {
-            return FlowResult::complete('🆘 You have no support tickets yet. Need help with something?', ['skipMenu' => true])
+            return FlowResult::complete('🆘 You have no support tickets yet. Need help with something?')
                 ->withButtons([['id' => 'fl_ticket', 'title' => '➕ New ticket']]);
         }
 
