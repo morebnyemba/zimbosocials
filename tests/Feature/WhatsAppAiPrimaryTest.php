@@ -210,6 +210,19 @@ class WhatsAppAiPrimaryTest extends TestCase
         );
     }
 
+    public function test_stale_button_tap_after_completed_flow_gets_nudge_not_menu(): void
+    {
+        $this->seedUserAndAccount();
+
+        // Tap a flow-internal button with NO active flow (e.g. double-tapping
+        // ✅ Place order after the first tap already completed the order).
+        app(MessageRouter::class)->handle($this->tap('fs:yes'));
+
+        $out = \Illuminate\Support\Facades\DB::table('whatsapp_messages')->where('direction', 'out')->get();
+        $this->assertCount(1, $out);
+        $this->assertStringContainsString('expired', $out[0]->body);
+    }
+
     public function test_control_keywords_never_consult_the_ai(): void
     {
         $this->seedUserAndAccount();

@@ -199,9 +199,12 @@ class MessageRouter
                 return ['handled_by' => 'flow', 'intent' => $selection];
             }
 
-            $this->sendMenuFor($account, $ctx);
+            // Tap on a button/list from an already-finished flow (e.g. a
+            // double-tap on ✅ Place order). A quiet nudge beats dumping the
+            // whole menu on them right after they completed something.
+            $this->responder->send($ctx->phone, "That button has expired 👍 Just tell me what you'd like to do, or type *menu*.", ['handled_by' => 'system', 'intent' => 'stale_selection']);
 
-            return ['handled_by' => 'menu', 'intent' => 'stale_selection'];
+            return ['handled_by' => 'system', 'intent' => 'stale_selection'];
         }
 
         // 4b. Any global selection navigates (cancel an active flow first).
@@ -319,8 +322,8 @@ class MessageRouter
 
                 return;
             case 'help':
+                // The help text already lists every command — no menu on top.
                 $this->responder->send($phone, $this->helpText());
-                $this->sendMenuFor($account, $ctx);
 
                 return;
             case 'back':
