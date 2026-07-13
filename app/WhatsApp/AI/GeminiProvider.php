@@ -357,15 +357,17 @@ class GeminiProvider
         return $out;
     }
 
-    /** Light prompt-injection mitigation; the real defense is structural (no tools/DB access). */
+    /**
+     * The injection defense is structural: instructions live in
+     * systemInstruction, the user's text is a plain data turn, the model has
+     * no tools, and every extracted id/amount is re-validated by flows. Here
+     * we only bound the length (token cost) — regex blacklists were removed
+     * as trivially bypassable false confidence.
+     */
     private function sanitize(string $text): string
     {
         $text = trim($text);
-        if (mb_strlen($text) > 500) {
-            $text = mb_substr($text, 0, 500);
-        }
-        $text = preg_replace('/\b(ignore|disregard|forget)\b[^.\n]*\b(previous|above|prior|all)\b[^.\n]*\b(instructions?|prompts?|rules?)\b/i', '[removed]', $text);
 
-        return (string) preg_replace('/\b(system prompt|you are now|act as (an? )?(admin|developer|root))\b/i', '[removed]', $text);
+        return mb_strlen($text) > 1000 ? mb_substr($text, 0, 1000) : $text;
     }
 }

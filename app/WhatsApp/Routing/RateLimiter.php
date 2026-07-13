@@ -17,8 +17,10 @@ class RateLimiter
     public function check(string $phone): array
     {
         $key = 'wa:rl:'.$phone;
-        $count = (int) Cache::get($key, 0) + 1;
-        Cache::put($key, $count, self::WINDOW);
+        // add() is atomic (first caller seeds the window); increment preserves
+        // the TTL — avoids the get/put read-modify-write race under bursts.
+        Cache::add($key, 0, self::WINDOW);
+        $count = (int) Cache::increment($key);
 
         if ($count > self::MAX) {
             return ['allowed' => false, 'warn' => $count === self::MAX + 1];

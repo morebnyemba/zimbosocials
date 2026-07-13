@@ -69,6 +69,7 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
             { key: 'assistant_enabled', value: getSetting('whatsapp', 'assistant_enabled') || '1', group: 'whatsapp' },
             { key: 'ai_max_services', value: getSetting('whatsapp', 'ai_max_services') || '0', group: 'whatsapp' },
             { key: 'ai_daily_limit', value: getSetting('whatsapp', 'ai_daily_limit') || '40', group: 'whatsapp' },
+            { key: 'ai_global_daily_limit', value: getSetting('whatsapp', 'ai_global_daily_limit') || '0', group: 'whatsapp' },
             { key: 'api_key', value: getSetting('gemini', 'api_key'), group: 'gemini' },
             // Tawk
             { key: 'property_id', value: getSetting('tawk', 'property_id'), group: 'tawk' },
@@ -316,6 +317,7 @@ export default function SettingsIndex({ settings, providers, referralDefaults, m
                                         <SettingInput label="Assistant Enabled (1 / 0)" value={data.settings.find(s => s.key === 'assistant_enabled')?.value} onChange={(v: string) => updateSetting('assistant_enabled', v)} placeholder="1" />
                                         <SettingInput label="AI Max Services (0 = all)" value={data.settings.find(s => s.key === 'ai_max_services')?.value} onChange={(v: string) => updateSetting('ai_max_services', v)} placeholder="0" />
                                         <SettingInput label="AI Daily Limit / user (0 = unlimited)" value={data.settings.find(s => s.key === 'ai_daily_limit')?.value} onChange={(v: string) => updateSetting('ai_daily_limit', v)} placeholder="40" />
+                                        <SettingInput label="AI Global Daily Limit (0 = unlimited)" value={data.settings.find(s => s.key === 'ai_global_daily_limit')?.value} onChange={(v: string) => updateSetting('ai_global_daily_limit', v)} placeholder="0" />
                                     </div>
                                 </div>
                             )}

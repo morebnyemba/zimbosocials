@@ -50,8 +50,11 @@ return [
         'webhook_verify_token' => env('WHATSAPP_WEBHOOK_VERIFY_TOKEN'),  // GET handshake token you set in Meta
         'app_secret' => env('WHATSAPP_APP_SECRET'),                       // signs X-Hub-Signature-256 on POSTs
         'assistant_enabled' => env('WHATSAPP_ASSISTANT_ENABLED', true),
-        'ai_max_services' => (int) env('WHATSAPP_AI_MAX_SERVICES', 0),  // 0 = give the AI every active service
-        'ai_daily_limit' => (int) env('WHATSAPP_AI_DAILY_LIMIT', 40),   // AI calls per phone per day; 0 = unlimited
+        // Catalogue lines injected into each AI prompt. 0 = every active
+        // service; the default bounds token cost for large imported catalogues.
+        'ai_max_services' => (int) env('WHATSAPP_AI_MAX_SERVICES', 150),
+        'ai_daily_limit' => (int) env('WHATSAPP_AI_DAILY_LIMIT', 40),          // AI calls per phone per day; 0 = unlimited
+        'ai_global_daily_limit' => (int) env('WHATSAPP_AI_GLOBAL_DAILY_LIMIT', 0), // AI calls per day across ALL users; 0 = unlimited
         'twilio_sid' => env('TWILIO_SID'),
         'twilio_from' => env('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
     ],

@@ -210,6 +210,35 @@ class WhatsAppAiPrimaryTest extends TestCase
         );
     }
 
+    public function test_global_ai_budget_caps_spend_across_all_users(): void
+    {
+        config(['services.whatsapp.ai_global_daily_limit' => 2]);
+        $guard = app(\App\WhatsApp\AI\AIGuard::class);
+
+        $guard->record('263770000001');
+        $guard->record('263770000002');
+
+        // Two calls consumed the global budget — a third phone is refused
+        // even though its own per-phone counter is zero.
+        $this->assertFalse($guard->allow('263770000003'));
+
+        config(['services.whatsapp.ai_global_daily_limit' => 0]);
+        $this->assertTrue($guard->allow('263770000003')); // 0 = unlimited
+    }
+
+    public function test_session_lock_is_released_after_handling(): void
+    {
+        $this->seedUserAndAccount();
+        $this->mockIntent(['handled' => false]);
+
+        app(MessageRouter::class)->handle($this->msg('menu'));
+
+        // The per-phone lock must be free again for the next message.
+        $lock = \Illuminate\Support\Facades\Cache::lock('wa:sess-lock:'.self::PHONE, 1);
+        $this->assertTrue($lock->get());
+        $lock->release();
+    }
+
     public function test_response_schema_constrains_flow_to_real_ids(): void
     {
         $schema = \App\WhatsApp\AI\GeminiProvider::responseSchema();

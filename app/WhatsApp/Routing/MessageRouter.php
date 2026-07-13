@@ -12,6 +12,7 @@ use App\WhatsApp\Persistence\AccountStore;
 use App\WhatsApp\Persistence\MessageStore;
 use App\WhatsApp\Session\SessionContext;
 use App\WhatsApp\Session\SessionManager;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -93,25 +94,44 @@ class MessageRouter
             }
         }
 
-        $ctx = $this->sessions->load($phone);
-        if ($account->isLinked()) {
-            $ctx->set('_user_id', $account->user_id);
+        // Serialize processing per phone: session persistence is last-write-wins,
+        // and a slow AI call widens the load→save race window when the user
+        // double-sends. If the lock can't be acquired in time (previous message
+        // stuck on a slow upstream), proceed unlocked — losing a session write
+        // beats silently dropping the user's message.
+        $lock = Cache::lock('wa:sess-lock:'.$phone, 20);
+        $locked = false;
+        try {
+            $locked = $lock->block(8);
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException) {
+            Log::warning('WhatsApp session lock timeout — processing unlocked', ['phone' => $phone]);
         }
-
-        $selection = $msg['interactive_id'] ?? null;
 
         try {
-            $tag = $this->dispatch($ctx, $account, $text, $selection);
-        } catch (\Throwable $e) {
-            Log::error('WhatsApp dispatch error', ['message' => $e->getMessage()]);
-            $ctx->resetFlow();
-            $this->responder->send($phone, "⚠️ Something went wrong. Let's go back to the menu.");
-            $this->sendMenuFor($account, $ctx);
-            $tag = ['handled_by' => 'system', 'intent' => 'error'];
-        }
+            $ctx = $this->sessions->load($phone);
+            if ($account->isLinked()) {
+                $ctx->set('_user_id', $account->user_id);
+            }
 
-        $this->sessions->save($ctx);
-        $this->messages->tagInbound($inboundId, array_merge(['flow' => $ctx->flow], $tag));
+            $selection = $msg['interactive_id'] ?? null;
+
+            try {
+                $tag = $this->dispatch($ctx, $account, $text, $selection);
+            } catch (\Throwable $e) {
+                Log::error('WhatsApp dispatch error', ['message' => $e->getMessage()]);
+                $ctx->resetFlow();
+                $this->responder->send($phone, "⚠️ Something went wrong. Let's go back to the menu.");
+                $this->sendMenuFor($account, $ctx);
+                $tag = ['handled_by' => 'system', 'intent' => 'error'];
+            }
+
+            $this->sessions->save($ctx);
+            $this->messages->tagInbound($inboundId, array_merge(['flow' => $ctx->flow], $tag));
+        } finally {
+            if ($locked) {
+                $lock->release();
+            }
+        }
     }
 
     private function dispatch(SessionContext $ctx, WhatsAppAccount $account, string $text, ?string $selection): array
