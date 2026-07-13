@@ -66,6 +66,117 @@ class OrderService
     }
 
     /**
+     * What the link must point at, judged from the service wording:
+     * 'profile' (followers/subscribers grow an account) or 'post' (likes/views/
+     * comments act on one post/video). Null = ambiguous, never police it.
+     */
+    private function linkTarget(Service $service): ?string
+    {
+        $text = strtolower($service->name.' '.$service->type);
+
+        // Product types whose links legitimately go either way.
+        if (preg_match('/story|stories|live|page|group|website|traffic|play|stream|listen/', $text)) {
+            return null;
+        }
+        if (preg_match('/follower|subscriber|member|friend/', $text)) {
+            return 'profile';
+        }
+        if (preg_match('/like|view|comment|share|retweet|repost|save|impression|reach/', $text)) {
+            return 'post';
+        }
+
+        return null;
+    }
+
+    /** Classify a link as 'post' | 'profile' | null (unrecognized) per platform. */
+    private function linkShape(string $host, string $link): ?string
+    {
+        $path = strtolower((string) (parse_url($link, PHP_URL_PATH) ?: '/'));
+        $query = strtolower((string) parse_url($link, PHP_URL_QUERY));
+        $is = fn (string $domain): bool => $host === $domain || str_ends_with($host, '.'.$domain);
+
+        if ($is('instagram.com') || $is('instagr.am')) {
+            if (preg_match('#^/(p|reel|reels|tv)/#', $path)) {
+                return 'post';
+            }
+
+            return preg_match('#^/[a-z0-9._]+/?$#', $path) ? 'profile' : null;
+        }
+
+        if ($is('tiktok.com')) {
+            if (str_contains($path, '/video/') || str_contains($path, '/photo/')) {
+                return 'post';
+            }
+
+            return preg_match('#^/@[^/]+/?$#', $path) ? 'profile' : null;
+        }
+
+        if ($is('youtu.be')) {
+            return 'post';
+        }
+        if ($is('youtube.com')) {
+            if ((str_starts_with($path, '/watch') && str_contains($query, 'v=')) || str_starts_with($path, '/shorts/')) {
+                return 'post';
+            }
+
+            return preg_match('#^/(@|channel/|c/|user/)#', $path) ? 'profile' : null;
+        }
+
+        if ($is('x.com') || $is('twitter.com')) {
+            if (str_contains($path, '/status/')) {
+                return 'post';
+            }
+
+            return preg_match('#^/[a-z0-9_]+/?$#', $path) ? 'profile' : null;
+        }
+
+        if ($is('fb.watch')) {
+            return 'post';
+        }
+        if ($is('facebook.com') || $is('fb.com')) {
+            if (preg_match('#/(posts|videos|photos?|reel|share|watch)/#', $path) || str_contains($path, 'story.php')) {
+                return 'post';
+            }
+            if (str_contains($path, '/groups/')) {
+                return null;
+            }
+
+            return (preg_match('#^/[a-z0-9.\-]+/?$#', $path) || str_contains($path, 'profile.php')) ? 'profile' : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Null when the link points at the right kind of target for the service;
+     * otherwise a user-facing error. Catches "followers order with a post
+     * link" (and the reverse) BEFORE money is taken and the upstream dispatch
+     * fails or misdelivers. Only clear mismatches block — anything ambiguous
+     * passes through.
+     */
+    private function validateLinkTarget(Service $service, string $link): ?string
+    {
+        $target = $this->linkTarget($service);
+        if ($target === null) {
+            return null;
+        }
+
+        $host = strtolower((string) parse_url($link, PHP_URL_HOST));
+        if ($host === '') {
+            return null;
+        }
+
+        $shape = $this->linkShape($host, $link);
+        if ($shape === null || $shape === $target) {
+            return null;
+        }
+
+        return $target === 'profile'
+            ? "This service delivers to an account, so it needs your *profile* link (e.g. instagram.com/yourname) — the link you sent points to a single post."
+            : "This service delivers to a specific post/video, so it needs the *post's* link — the link you sent points to a profile.";
+    }
+
+    /**
      * Atomically validate, create, and charge an order.
      *
      * Returns an array:
@@ -97,6 +208,17 @@ class OrderService
             return [
                 'ok' => false,
                 'error' => $linkError,
+                'field' => 'link',
+                'code' => 422,
+            ];
+        }
+
+        // --- Validate the link points at the right kind of target
+        //     (profile link for followers, post link for likes/views) ---
+        if ($targetError = $this->validateLinkTarget($service, $link)) {
+            return [
+                'ok' => false,
+                'error' => $targetError,
                 'field' => 'link',
                 'code' => 422,
             ];
