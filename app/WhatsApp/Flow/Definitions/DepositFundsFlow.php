@@ -31,23 +31,46 @@ class DepositFundsFlow extends AbstractFlow
         return 'deposit';
     }
 
+    /** Loose user/AI wording → provider key. */
+    private const METHOD_ALIASES = [
+        'ecocash' => 'ecocash', 'eco' => 'ecocash',
+        'onemoney' => 'onemoney', 'one money' => 'onemoney', 'netone' => 'onemoney',
+        'innbucks' => 'innbucks', 'inn bucks' => 'innbucks',
+        'omari' => 'omari', "o'mari" => 'omari', 'o mari' => 'omari',
+    ];
+
     public function prompt(string $state, SessionContext $ctx): FlowResult
     {
-        // AI fast-forward: an extracted amount jumps to the method menu.
+        // AI fast-forward: consume whatever was extracted (amount, method,
+        // phone) and jump to the first missing step — stopping at confirm;
+        // the payment request is only ever sent on the user's explicit yes.
         $amount = (float) preg_replace('/[^0-9.]/', '', (string) $ctx->pullPrefill('amount'));
         if ($amount >= 1 && $amount <= 10000) {
             $ctx->set('deposit_amount', $amount);
-
-            return $this->methodMenu($amount, $ctx);
         }
 
-        // Mid-flow AI redirect back into 'deposit': keep the amount already given.
-        $existing = (float) $ctx->get('deposit_amount', 0);
-        if ($existing >= 1) {
-            return $this->methodMenu($existing, $ctx);
+        $method = mb_strtolower(trim((string) $ctx->pullPrefill('method')));
+        if ($method !== '' && isset(self::METHOD_ALIASES[$method])) {
+            $ctx->set('deposit_provider', self::METHOD_ALIASES[$method]);
         }
 
-        return FlowResult::step("➕ *Add funds*\n\nHow much would you like to deposit? (enter an amount)", 'ask_amount');
+        $phonePrefill = trim((string) $ctx->pullPrefill('phone'));
+        if ($phonePrefill !== '' && ($normalized = $this->paynow->normalizeZwPhone($phonePrefill)) !== null) {
+            $ctx->set('deposit_phone', $normalized);
+        }
+
+        $knownAmount = (float) $ctx->get('deposit_amount', 0);
+        if ($knownAmount < 1) {
+            return FlowResult::step("➕ *Add funds*\n\nHow much would you like to deposit? (enter an amount)", 'ask_amount');
+        }
+        if (! $ctx->has('deposit_provider')) {
+            return $this->methodMenu($knownAmount, $ctx);
+        }
+        if (! $ctx->has('deposit_phone')) {
+            return $this->askPhonePrompt((string) $ctx->get('deposit_provider'), $ctx);
+        }
+
+        return $this->confirmPrompt($ctx);
     }
 
     public function handle(string $state, string $input, SessionContext $ctx): FlowResult
@@ -108,6 +131,12 @@ class DepositFundsFlow extends AbstractFlow
         }
 
         $ctx->set('deposit_provider', $provider);
+
+        return $this->askPhonePrompt($provider, $ctx);
+    }
+
+    private function askPhonePrompt(string $provider, SessionContext $ctx): FlowResult
+    {
         $label = PaynowMobileService::PROVIDERS[$provider]['label'];
         $default = $this->paynow->normalizeZwPhone($ctx->phone);
 
@@ -134,7 +163,14 @@ class DepositFundsFlow extends AbstractFlow
         }
 
         $ctx->set('deposit_phone', $phone);
+
+        return $this->confirmPrompt($ctx);
+    }
+
+    private function confirmPrompt(SessionContext $ctx): FlowResult
+    {
         $amount = (float) $ctx->get('deposit_amount', 0);
+        $phone = (string) $ctx->get('deposit_phone');
         $cur = $this->user($ctx)?->currency ?? 'USD';
         $label = PaynowMobileService::PROVIDERS[$ctx->get('deposit_provider')]['label'];
 

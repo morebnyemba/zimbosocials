@@ -86,6 +86,47 @@ class WhatsAppInteractiveFlowTest extends TestCase
         $this->assertContains('fl_deposit', $ids);
     }
 
+    public function test_deposit_prefills_fast_forward_to_confirm(): void
+    {
+        $user = User::factory()->create(['balance' => 0]);
+        $ctx = new SessionContext('263771234567');
+        $ctx->set('_user_id', $user->id);
+        $ctx->set('_prefill_amount', 10);
+        $ctx->set('_prefill_method', 'ecocash');
+        $ctx->set('_prefill_phone', '0771234567');
+
+        $res = app(FlowEngine::class)->start($ctx, 'deposit');
+
+        // Everything extracted → straight to confirm; never past it.
+        $this->assertSame('confirm', $ctx->state);
+        $this->assertStringContainsString('EcoCash', (string) $res->reply);
+        $this->assertStringContainsString('10.00', (string) $res->reply);
+        $this->assertSame('fs:yes', $res->buttons[0]['id']);
+    }
+
+    public function test_partial_deposit_prefills_stop_at_first_missing_step(): void
+    {
+        $user = User::factory()->create(['balance' => 0]);
+        $engine = app(FlowEngine::class);
+
+        // Amount + method, no phone → ask_phone.
+        $ctx = new SessionContext('263771234567');
+        $ctx->set('_user_id', $user->id);
+        $ctx->set('_prefill_amount', 10);
+        $ctx->set('_prefill_method', 'omari');
+        $engine->start($ctx, 'deposit');
+        $this->assertSame('ask_phone', $ctx->state);
+
+        // Unrecognized method is ignored → method menu.
+        $ctx2 = new SessionContext('263771234568');
+        $ctx2->set('_user_id', $user->id);
+        $ctx2->set('_prefill_amount', 10);
+        $ctx2->set('_prefill_method', 'paypal');
+        $res = $engine->start($ctx2, 'deposit');
+        $this->assertSame('choose_method', $ctx2->state);
+        $this->assertNotNull($res->list);
+    }
+
     /**
      * Regression: buildContext() used to clobber its string $query param with an
      * Eloquent builder and pass it to KnowledgeBase::search(string) — a TypeError

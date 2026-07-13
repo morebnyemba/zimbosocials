@@ -18,7 +18,7 @@ class FlowCatalog
         return [
             'order' => ['desc' => 'Place a new order (buy followers/likes/views/etc.)', 'params' => ['platform', 'service', 'quantity', 'link']],
             'balance' => ['desc' => 'Show the wallet balance', 'params' => []],
-            'deposit' => ['desc' => 'Add funds to the wallet', 'params' => ['amount']],
+            'deposit' => ['desc' => 'Add funds to the wallet (method: ecocash|onemoney|innbucks|omari; phone: the mobile-money number)', 'params' => ['amount', 'method', 'phone']],
             'history' => ['desc' => 'Show recent wallet transactions', 'params' => []],
             'my_orders' => ['desc' => 'List the user\'s recent orders', 'params' => []],
             'track' => ['desc' => 'Track a specific order by number', 'params' => ['order_id']],

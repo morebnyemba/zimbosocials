@@ -4,6 +4,7 @@
     {"message": "Ndoda uise matiktok followers 100 pa link iyi tiktok.com/@mamaanitah", "authenticated": true, "expect_flow": "order", "expect_entities": {"platform": "tiktok", "quantity": 100}},
     {"message": "how much are youtube views?", "authenticated": true, "expect_flow": null},
     {"message": "add $20 to my wallet", "authenticated": true, "expect_flow": "deposit", "expect_entities": {"amount": 20}},
+    {"message": "deposit 10 via ecocash on 0771234567", "authenticated": true, "expect_flow": "deposit", "expect_entities": {"amount": 10, "method": "ecocash", "phone": "0771234567"}},
     {"message": "ndoda kuisa mari muwallet", "authenticated": true, "expect_flow": "deposit"},
     {"message": "where is my order 1231?", "authenticated": true, "expect_flow": "track", "expect_entities": {"order_id": 1231}},
     {"message": "show me my balance", "authenticated": true, "expect_flow": "balance"},
