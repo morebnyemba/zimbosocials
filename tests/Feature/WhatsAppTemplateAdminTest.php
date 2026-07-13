@@ -146,6 +146,29 @@ class WhatsAppTemplateAdminTest extends TestCase
             ->assertSessionHas('success');
     }
 
+    public function test_sync_command_resubmits_rejected_templates(): void
+    {
+        // Keep one known template; remote reports it REJECTED.
+        WhatsAppTemplate::where('name', '!=', 'welcome_message')->delete();
+        Cache::forget('wa:templates:config');
+        (new \ReflectionMethod($p = new AppServiceProvider(app()), 'loadWhatsAppTemplates'))->invoke($p);
+
+        $mock = Mockery::mock(WhatsAppService::class);
+        $mock->shouldReceive('listTemplates')->andReturn([
+            'ok' => true,
+            'templates' => [['id' => '333', 'name' => 'welcome_message', 'status' => 'REJECTED']],
+        ]);
+        $mock->shouldNotReceive('createTemplate');
+        $mock->shouldReceive('updateTemplate')->once()
+            ->withArgs(fn (string $id) => $id === '333')
+            ->andReturn(['ok' => true]);
+        $this->app->instance(WhatsAppService::class, $mock);
+
+        $this->artisan('whatsapp:sync-templates')
+            ->expectsOutputToContain('Resubmitted')
+            ->assertSuccessful();
+    }
+
     public function test_meta_payload_samples_match_placeholder_count(): void
     {
         // deposit_confirmed has 4 placeholders: user_name, amount, new_balance, date.

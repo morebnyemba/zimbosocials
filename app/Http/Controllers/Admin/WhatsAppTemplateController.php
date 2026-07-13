@@ -102,10 +102,17 @@ class WhatsAppTemplateController extends Controller
     public function sync(): RedirectResponse
     {
         Artisan::call('whatsapp:sync-templates');
+        $output = Artisan::output();
 
-        return str_contains(Artisan::output(), 'Failed')
-            ? back()->with('error', 'Sync completed with errors. See logs or output.')
-            : back()->with('success', 'WhatsApp templates synced successfully with Meta.');
+        if (str_contains($output, 'Failed')) {
+            // Surface Meta's actual per-template reasons, not a generic notice.
+            preg_match_all('/✗ Failed: (.+)/u', $output, $m);
+            $reasons = array_slice(array_unique(array_map('trim', $m[1] ?? [])), 0, 3);
+
+            return back()->with('error', 'Sync completed with errors'.($reasons ? ': '.implode(' | ', $reasons) : '. See logs.'));
+        }
+
+        return back()->with('success', 'Templates synced — new ones created and rejected ones resubmitted for Meta review.');
     }
 
     public function delete(string $name, WhatsAppService $whatsapp): RedirectResponse

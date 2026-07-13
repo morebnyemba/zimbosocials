@@ -38,22 +38,48 @@ class WhatsAppSyncTemplates extends Command
         $remoteByName = collect($remote['templates'])->keyBy('name');
         $this->info("Found {$remoteByName->count()} remote template(s).\n");
 
-        // ── Sync: create missing templates ───────────────────────────────────
+        // ── Sync: create missing templates, resubmit rejected ones ──────────
         $created = 0;
+        $resubmitted = 0;
         $skipped = 0;
         $failed = 0;
 
         foreach ($localTemplates as $name => $tpl) {
-            if ($remoteByName->has($name)) {
-                $status = $remoteByName[$name]['status'] ?? 'UNKNOWN';
+            $payload = \App\Models\WhatsAppTemplate::metaPayload($name, $tpl, $language);
+            $remoteTpl = $remoteByName->get($name);
+
+            if ($remoteTpl !== null) {
+                $status = strtoupper($remoteTpl['status'] ?? 'UNKNOWN');
+
+                // A REJECTED/PAUSED template can be edited in place, which
+                // resubmits it for review (deleting would block the name 30 days).
+                if (in_array($status, ['REJECTED', 'PAUSED'], true) && isset($remoteTpl['id'])) {
+                    if ($this->option('dry-run')) {
+                        $this->line("  ⏳ <comment>{$name}</comment> — {$status}, would be resubmitted (dry-run)");
+                        $resubmitted++;
+
+                        continue;
+                    }
+
+                    $this->line("  ↻ Resubmitting <info>{$name}</info> ({$status})...");
+                    $result = $whatsapp->updateTemplate((string) $remoteTpl['id'], $payload);
+
+                    if ($result['ok']) {
+                        $this->line('    ✓ Resubmitted — pending Meta approval');
+                        $resubmitted++;
+                    } else {
+                        $this->error("    ✗ Failed: {$result['error']}");
+                        $failed++;
+                    }
+
+                    continue;
+                }
+
                 $this->line("  ✓ <info>{$name}</info> — already exists (<comment>{$status}</comment>)");
                 $skipped++;
 
                 continue;
             }
-
-            // Build Meta template payload
-            $payload = \App\Models\WhatsAppTemplate::metaPayload($name, $tpl, $language);
 
             if ($this->option('dry-run')) {
                 $this->line("  ⏳ <comment>{$name}</comment> — would be created (dry-run)");
@@ -98,6 +124,7 @@ class WhatsAppSyncTemplates extends Command
             ['Action', 'Count'],
             [
                 ['Created', $created],
+                ['Resubmitted (was rejected)', $resubmitted],
                 ['Skipped (exists)', $skipped],
                 ['Failed', $failed],
                 ['Deleted', $deleted],
