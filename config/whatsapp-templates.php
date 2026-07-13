@@ -31,7 +31,7 @@ return [
         // ─── Deposits ────────────────────────────────────────────────────────
         'deposit_confirmed' => [
             'category' => 'UTILITY',
-            'body' => "✅ *Deposit Confirmed*\n\nHi {{1}}, your deposit of *{{2}}* has been credited to your wallet.\n\n💰 New Balance: {{3}}\n📅 Date: {{4}}",
+            'body' => "✅ *Deposit Confirmed*\n\nHi {{1}}, your deposit of *{{2}}* has been credited to your wallet.\n\n💰 New Balance: {{3}}\n📅 Date: {{4}}\n\nThank you for topping up!",
             'params' => ['user_name', 'amount', 'new_balance', 'date'],
             'header' => null,
             'footer' => 'Zimbo Socials',
@@ -50,7 +50,7 @@ return [
         // ─── Withdrawals ─────────────────────────────────────────────────────
         'withdrawal_processed' => [
             'category' => 'UTILITY',
-            'body' => "🏧 *Withdrawal Processed*\n\nHi {{1}}, your withdrawal of *{{2}}* has been sent to your account.\n\nPlease allow 24–48 hours for the funds to reflect.\n\n📅 Processed: {{3}}",
+            'body' => "🏧 *Withdrawal Processed*\n\nHi {{1}}, your withdrawal of *{{2}}* has been sent to your account.\n\nPlease allow 24–48 hours for the funds to reflect.\n\n📅 Processed: {{3}}\n\nThank you for your patience.",
             'params' => ['user_name', 'amount', 'date'],
             'header' => null,
             'footer' => 'Zimbo Socials',
@@ -69,7 +69,7 @@ return [
         // ─── Orders ──────────────────────────────────────────────────────────
         'order_status_changed' => [
             'category' => 'UTILITY',
-            'body' => "📦 *Order Update*\n\nHi {{1}}, your order *#{{2}}* status has changed to *{{3}}*.\n\nService: {{4}}\nQuantity: {{5}}",
+            'body' => "📦 *Order Update*\n\nHi {{1}}, your order *#{{2}}* status has changed to *{{3}}*.\n\nService: {{4}}\nQuantity: {{5}}\n\nThank you for your order!",
             'params' => ['user_name', 'order_id', 'status', 'service_name', 'quantity'],
             'header' => null,
             'footer' => 'Zimbo Socials',
@@ -78,7 +78,7 @@ return [
 
         'order_refunded' => [
             'category' => 'UTILITY',
-            'body' => "💸 *Order Refunded*\n\nHi {{1}}, your order *#{{2}}* has been refunded.\n\nRefund Amount: *{{3}}*\nYour updated balance: {{4}}",
+            'body' => "💸 *Order Refunded*\n\nHi {{1}}, your order *#{{2}}* has been refunded.\n\nRefund Amount: *{{3}}*\nYour updated balance: {{4}}\n\nSorry for the inconvenience.",
             'params' => ['user_name', 'order_id', 'refund_amount', 'new_balance'],
             'header' => null,
             'footer' => 'Zimbo Socials',
@@ -97,7 +97,7 @@ return [
 
         'admin_new_order' => [
             'category' => 'UTILITY',
-            'body' => "🛒 *New Order*\n\nOrder *#{{1}}* placed by {{2}}.\n\nService: {{3}}\nAmount: {{4}}",
+            'body' => "🛒 *New Order*\n\nOrder *#{{1}}* placed by {{2}}.\n\nService: {{3}}\nAmount: {{4}}\n\nOpen the admin panel for details.",
             'params' => ['order_id', 'user_name', 'service_name', 'amount'],
             'header' => null,
             'footer' => 'Zimbo Socials Admin',
@@ -107,7 +107,7 @@ return [
         // ─── Balance ─────────────────────────────────────────────────────────
         'balance_adjusted' => [
             'category' => 'UTILITY',
-            'body' => "💰 *Balance Adjustment*\n\nHi {{1}}, your balance has been adjusted by *{{2}}*.\n\nReason: {{3}}\nNew Balance: {{4}}",
+            'body' => "💰 *Balance Adjustment*\n\nHi {{1}}, your balance has been adjusted by *{{2}}*.\n\nReason: {{3}}\nNew Balance: {{4}}\n\nQuestions? Just reply here.",
             'params' => ['user_name', 'adjustment', 'reason', 'new_balance'],
             'header' => null,
             'footer' => 'Zimbo Socials',
@@ -137,7 +137,7 @@ return [
         // ─── Marketing Broadcast ────────────────────────────────────────────
         'marketing_broadcast' => [
             'category' => 'MARKETING',
-            'body' => "📣 *{{2}}*\n\nHi {{1}},\n{{3}}",
+            'body' => "📣 *{{2}}*\n\nHi {{1}},\n{{3}}\n\nReply STOP to opt out.",
             'params' => ['user_name', 'subject', 'body'],
             'header' => null,
             'footer' => 'Zimbo Socials',

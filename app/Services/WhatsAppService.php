@@ -178,8 +178,8 @@ class WhatsAppService
                 return ['ok' => true, 'data' => $response->json()];
             }
 
-            $err = $response->json('error.message', $response->body());
-            Log::error("WhatsApp Template Create Failed: {$templateDef['name']}", ['error' => $err]);
+            $err = $this->templateError($response);
+            Log::error("WhatsApp Template Create Failed: {$templateDef['name']}", ['error' => $response->json('error')]);
 
             return ['ok' => false, 'error' => $err];
         } catch (\Throwable $e) {
@@ -212,10 +212,31 @@ class WhatsAppService
                 return ['ok' => true, 'data' => $response->json()];
             }
 
-            return ['ok' => false, 'error' => $response->json('error.message', $response->body())];
+            Log::error("WhatsApp Template Update Failed: {$templateId}", ['error' => $response->json('error')]);
+
+            return ['ok' => false, 'error' => $this->templateError($response)];
         } catch (\Throwable $e) {
             return ['ok' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Meta buries the actionable reason in error_user_msg — "Invalid
+     * parameter" alone is the generic wrapper. Surface the specific text.
+     */
+    private function templateError(\Illuminate\Http\Client\Response $response): string
+    {
+        $error = (array) $response->json('error', []);
+        $parts = array_filter([
+            $error['error_user_title'] ?? null,
+            $error['error_user_msg'] ?? null,
+        ]);
+
+        if ($parts !== []) {
+            return implode(' — ', $parts);
+        }
+
+        return (string) ($error['message'] ?? $response->body());
     }
 
     /**

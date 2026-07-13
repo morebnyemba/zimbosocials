@@ -138,6 +138,15 @@ class WhatsAppTemplateController extends Controller
             'name.regex' => 'Template names must be lowercase letters, numbers and underscores only (Meta requirement).',
         ]);
 
+        // Meta rejects ("Invalid parameter") bodies that START or END with a
+        // variable — there must be literal text around the placeholders.
+        $trimmedBody = trim($data['body']);
+        if (preg_match('/^\**\{\{\d+\}\}|\{\{\d+\}\}\**$/', $trimmedBody)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'body' => 'Meta rejects templates whose body starts or ends with a {{variable}} — add some text before/after it (e.g. a closing "Thank you!").',
+            ]);
+        }
+
         // Meta rejects bodies whose {{n}} placeholders aren't 1..N — catch it here.
         preg_match_all('/\{\{(\d+)\}\}/', $data['body'], $m);
         $found = array_map('intval', array_unique($m[1]));

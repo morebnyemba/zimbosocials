@@ -45,6 +45,13 @@ class WhatsAppTemplate extends Model
      */
     public static function metaPayload(string $name, array $tpl, string $language): array
     {
+        // Meta only accepts its supported language codes — Shona/Ndebele (this
+        // app's locales) aren't among them and cause "Invalid parameter" on
+        // every submission. Register under English; sends still work.
+        if (! preg_match('/^(en(_(US|GB))?|af|zu|pt_(BR|PT)|fr|es(_(AR|ES|MX))?|sw)$/', $language)) {
+            $language = 'en';
+        }
+
         $components = [];
 
         if (! empty($tpl['header'])) {
