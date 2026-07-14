@@ -4,6 +4,7 @@ namespace App\WhatsApp\AI;
 
 use App\Models\Order;
 use App\Models\Service;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AI\GeminiClient;
 use App\WhatsApp\Intent\KnowledgeBase;
@@ -24,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-14.5';
+    public const PROMPT_VERSION = '2026-07-14.6';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -269,6 +270,23 @@ class GeminiProvider
             ."- Price pushback: reframe on value, don't discount or invent offers — e.g. 'for less than a cold drink, hundreds more "
             ."people see your brand'. Never pressure; never invent prices, discounts, or guarantees that aren't in the context.\n\n"
 
+            ."━━ TRUST THE LIVE CONTEXT, NOT THE OLD CHAT ━━\n"
+            ."The CONTEXT block is the current truth about this user RIGHT NOW. The recent conversation can be out of date — if it "
+            ."once said 'you're a guest' but the context now shows ACCOUNT STATUS: REGISTERED, they ARE registered: never tell them "
+            ."to sign up or log in again. Don't parrot old lines from earlier in the chat; answer from the live context.\n"
+            ."NEVER explain the system's internal mechanics or invent process steps ('the system will guide you', 'you'll do a "
+            ."signup', 'follow the steps on your screen') — you don't drive the screens and you'll get it wrong. If you're not "
+            ."certain what happens next, help with what you CAN see or hand off.\n\n"
+
+            ."━━ WHEN A PAYMENT OR ORDER 'DIDN'T WORK' ━━\n"
+            ."If the user says nothing happened / no prompt / it failed, check the context:\n"
+            ."- If there's a PENDING DEPOSIT: reassure — the mobile-money prompt can take a minute; ask them to check their phone "
+            ."for the approval/PIN request. If it still hasn't arrived, suggest they reply *deposit* to try again or pick another "
+            ."method (EcoCash, OneMoney, InnBucks, OMari). Do NOT claim it failed, and do NOT say they need to sign up.\n"
+            ."- If they report a real payment ERROR (insufficient funds, wrong PIN, declined), acknowledge it and offer to try "
+            ."again or a different method.\n"
+            ."- If they're stuck, confused, or it's a money problem you can't resolve from context, set flow to 'handoff'.\n\n"
+
             ."━━ THIS LATITUDE HAS LIMITS (these are not negotiable) ━━\n"
             ."Everything above is about JUDGEMENT and WARMTH — it NEVER overrides the hard rules: never invent a service, price, "
             ."min/max, delivery time or guarantee (ground everything in context); never place or confirm an order or move money "
@@ -341,6 +359,8 @@ class GeminiProvider
             ."{\"reply\":\"Totally understand the worry! 🙏 It's safe — we *never* need your password (we only use your public profile/post link), and delivery is gradual and natural. Thousands of orders go through smoothly. Want to start small so you can see it work?\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
             ."User (a guest): \"I want to buy youtube views\"\n"
             ."{\"reply\":\"Awesome, YouTube views coming right up! 🎬 I'll get it started — you'll just do a quick signup first, takes a sec.\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"platform\":\"youtube\"}}\n\n"
+            ."User (context shows a PENDING DEPOSIT of 1.00 via EcoCash): \"nothing happened, no prompt received?\"\n"
+            ."{\"reply\":\"No stress! 🙏 The *EcoCash* prompt can take a minute to reach your phone — keep an eye out for the approval/PIN request. If it still doesn't show, just reply *deposit* and we can resend it or try another method like OneMoney or OMari.\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
 
             ."RESPONSE FORMAT — return ONLY valid JSON, no markdown fences:\n"
             ."{\"reply\":\"your message\",\"follow_up\":\"short nudge or null\",\"flow\":\"a flow id, 'handoff', or 'none'\",\"flow_data\":{\"service_id\":null,\"link\":null,\"quantity\":null,\"amount\":null,\"order_id\":null,\"ticket_id\":null,\"platform\":null,\"email\":null,\"name\":null,\"subject\":null}}";
@@ -396,10 +416,13 @@ class GeminiProvider
             $lines[] = '===';
         }
 
-        // User account context (read-only).
+        // User account context (read-only). This is the LIVE truth — it wins
+        // over anything implied by older conversation history.
         if ($user) {
             $cur = $user->currency ?? 'USD';
+            $lines[] = 'ACCOUNT STATUS: REGISTERED & LOGGED IN. This user has an account — never tell them to sign up or log in.';
             $lines[] = 'User: '.$user->name.' · balance '.number_format((float) $user->balance, 2).' '.$cur;
+
             $recent = Order::with('service')->where('user_id', $user->id)->latest()->limit(5)->get();
             if ($recent->isNotEmpty()) {
                 $lines[] = 'Recent orders (id · service · qty · status):';
@@ -407,8 +430,22 @@ class GeminiProvider
                     $lines[] = "  #{$o->id} · ".($o->service?->name ?? 'service')." · {$o->quantity} · {$o->status}";
                 }
             }
+
+            // Pending payments — so the AI can answer "it didn't work / nothing
+            // happened" about a deposit intelligently instead of inventing one.
+            $pending = Transaction::where('user_id', $user->id)
+                ->where('type', 'deposit')
+                ->where('status', 'pending')
+                ->latest()->limit(3)->get();
+            if ($pending->isNotEmpty()) {
+                $lines[] = 'PENDING DEPOSIT(S) — a payment was started and is awaiting approval/confirmation (NOT failed):';
+                foreach ($pending as $t) {
+                    $lines[] = '  '.number_format((float) abs($t->amount), 2)." {$cur} via ".($t->method ?: 'gateway')
+                        .', started '.$t->created_at?->diffForHumans().' — the customer approves it on their phone; the balance updates automatically once confirmed.';
+                }
+            }
         } else {
-            $lines[] = 'User is a guest (not yet registered/linked).';
+            $lines[] = 'ACCOUNT STATUS: GUEST (not registered yet).';
         }
 
         return implode("\n", $lines);
