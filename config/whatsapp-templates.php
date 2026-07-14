@@ -69,7 +69,7 @@ return [
         // ─── Orders ──────────────────────────────────────────────────────────
         'order_status_changed' => [
             'category' => 'UTILITY',
-            'body' => "📦 *Order Update*\n\nHi {{1}}, your order *#{{2}}* status has changed to *{{3}}*.\n\nService: {{4}}\nQuantity: {{5}}\n\nThank you for your order!",
+            'body' => "📦 Hi {{1}}, an update on your order *#{{2}}* — the status is now *{{3}}*. This is for the service {{4}} with a quantity of {{5}}. Thank you for choosing us, we'll keep you posted!",
             'params' => ['user_name', 'order_id', 'status', 'service_name', 'quantity'],
             'header' => null,
             'footer' => 'Zimbo Socials',
@@ -88,7 +88,7 @@ return [
         // ─── Admin Alerts ────────────────────────────────────────────────────
         'admin_new_registration' => [
             'category' => 'UTILITY',
-            'body' => "🆕 *New Registration*\n\n{{1}} ({{2}}) just signed up as a *{{3}}*.",
+            'body' => "🆕 New sign-up on Zimbo Socials! {{1}} ({{2}}) just created an account as a *{{3}}*. Open the admin panel to view their details.",
             'params' => ['user_name', 'user_email', 'role'],
             'header' => null,
             'footer' => 'Zimbo Socials Admin',
@@ -97,7 +97,7 @@ return [
 
         'admin_new_order' => [
             'category' => 'UTILITY',
-            'body' => "🛒 *New Order*\n\nOrder *#{{1}}* placed by {{2}}.\n\nService: {{3}}\nAmount: {{4}}\n\nOpen the admin panel for details.",
+            'body' => "🛒 A new order was just placed on Zimbo Socials! Order *#{{1}}* from {{2}} for the service {{3}}, charged {{4}}. Open the admin panel to review it.",
             'params' => ['order_id', 'user_name', 'service_name', 'amount'],
             'header' => null,
             'footer' => 'Zimbo Socials Admin',
@@ -137,7 +137,10 @@ return [
         // ─── Marketing Broadcast ────────────────────────────────────────────
         'marketing_broadcast' => [
             'category' => 'MARKETING',
-            'body' => "📣 *{{2}}*\n\nHi {{1}},\n{{3}}\n\nReply STOP to opt out.",
+            // Leads and ends with fixed text (Meta forbids a variable at the
+            // start/end) and keeps plenty of literal words so the variable-to-
+            // words ratio stays within limits.
+            'body' => "📣 Hi {{1}}, we've got an update from the Zimbo Socials team about *{{2}}*:\n\n{{3}}\n\nReply STOP to opt out of promotional messages anytime.",
             'params' => ['user_name', 'subject', 'body'],
             'header' => null,
             'footer' => 'Zimbo Socials',

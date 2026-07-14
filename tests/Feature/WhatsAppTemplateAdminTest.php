@@ -57,6 +57,40 @@ class WhatsAppTemplateAdminTest extends TestCase
                 'name' => 'gapped', 'category' => 'UTILITY', 'body' => 'Hi {{1}} and {{3}}',
             ])
             ->assertSessionHasErrors('body');
+
+        // Leading variable (Meta: no param at the start).
+        $this->actingAs($admin)
+            ->post(route('admin.whatsapp.templates.store'), [
+                'name' => 'leadingvar', 'category' => 'UTILITY', 'body' => '{{1}} your order is ready to go now',
+            ])
+            ->assertSessionHasErrors('body');
+
+        // Variable-heavy (Meta: parameters/words ratio).
+        $this->actingAs($admin)
+            ->post(route('admin.whatsapp.templates.store'), [
+                'name' => 'toomanyvars', 'category' => 'UTILITY', 'body' => 'Hi {{1}} {{2}} {{3}} thanks',
+            ])
+            ->assertSessionHasErrors('body');
+    }
+
+    public function test_migration_healed_meta_noncompliant_templates(): void
+    {
+        // Every seeded template must satisfy Meta's leading/trailing + ratio rules.
+        foreach (WhatsAppTemplate::all() as $t) {
+            $body = trim((string) $t->body);
+
+            $this->assertDoesNotMatchRegularExpression('/^[\s*_~]*\{\{\d+\}\}/u', $body, "{$t->name} leads with a variable");
+            $this->assertDoesNotMatchRegularExpression('/\{\{\d+\}\}[\s*_~]*$/u', $body, "{$t->name} trails with a variable");
+
+            preg_match_all('/\{\{\d+\}\}/', $body, $m);
+            $vars = count(array_unique($m[0]));
+            if ($vars === 0) {
+                continue;
+            }
+            $stripped = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', preg_replace('/\{\{\d+\}\}/', '', $body));
+            $words = count(array_filter(preg_split('/\s+/', trim((string) $stripped))));
+            $this->assertLessThanOrEqual(0.25, $vars / ($vars + $words), "{$t->name} is too variable-heavy for Meta");
+        }
     }
 
     public function test_editing_updates_the_boot_config_override(): void

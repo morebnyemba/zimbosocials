@@ -148,7 +148,7 @@ class WhatsAppTemplateController extends Controller
         // Meta rejects ("Invalid parameter") bodies that START or END with a
         // variable — there must be literal text around the placeholders.
         $trimmedBody = trim($data['body']);
-        if (preg_match('/^\**\{\{\d+\}\}|\{\{\d+\}\}\**$/', $trimmedBody)) {
+        if (preg_match('/^[\s*_~]*\{\{\d+\}\}/u', $trimmedBody) || preg_match('/\{\{\d+\}\}[\s*_~]*$/u', $trimmedBody)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'body' => 'Meta rejects templates whose body starts or ends with a {{variable}} — add some text before/after it (e.g. a closing "Thank you!").',
             ]);
@@ -162,6 +162,20 @@ class WhatsAppTemplateController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'body' => 'Placeholders must be sequential starting at {{1}} (found: '.implode(', ', array_map(fn ($n) => '{{'.$n.'}}', $found)).').',
             ]);
+        }
+
+        // Meta rejects variable-heavy templates ("parameters words ratio
+        // exceeds limit"). Only block the genuinely extreme cases (e.g.
+        // "{{1}} {{2}} {{3}} thanks"); normal 2-variable templates are fine.
+        $vars = count($found);
+        if ($vars > 0) {
+            $stripped = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', preg_replace('/\{\{\d+\}\}/', '', $trimmedBody));
+            $words = count(array_filter(preg_split('/\s+/', trim((string) $stripped))));
+            if ($vars / ($vars + max($words, 1)) > 0.40) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'body' => "This template has too many variables ({$vars}) for its length ({$words} words). Add more fixed wording or use fewer {{variables}}.",
+                ]);
+            }
         }
 
         $data['params'] = array_values($data['params'] ?? []);
