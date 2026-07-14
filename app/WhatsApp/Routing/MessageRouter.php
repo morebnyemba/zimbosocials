@@ -158,7 +158,7 @@ class MessageRouter
 
             if (in_array(mb_strtolower($text), $greetings, true) || ($fromAd && ! $this->mentionsAProduct($text))) {
                 $name = $account->display_name ? " {$account->display_name}" : '';
-                $site = config('app.name');
+                $site = \App\WhatsApp\AI\GeminiProvider::siteName();
                 $intro = $fromAd
                     ? "👋 Hi{$name}, thanks for reaching out! You've found *{$site}* — we grow social media accounts: followers, likes, views and more, delivered fast and paid with EcoCash and other local methods, all right here on WhatsApp."
                     : "👋 Hi{$name}! Welcome to *{$site}* — followers, likes, views and more, right here on WhatsApp.";

@@ -24,7 +24,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-14.4';
+    public const PROMPT_VERSION = '2026-07-14.5';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -34,6 +34,18 @@ class GeminiProvider
     public function isConfigured(): bool
     {
         return $this->client->isConfigured();
+    }
+
+    /**
+     * The brand name, never empty. config('app.name') can be overridden to a
+     * blank string by admin settings, which would render '*{$site}*' as '**' in
+     * replies — so fall back to the hardcoded brand rather than an empty string.
+     */
+    public static function siteName(): string
+    {
+        $name = trim((string) config('app.name'));
+
+        return $name !== '' ? $name : 'ZimboSocials';
     }
 
     /**
@@ -147,11 +159,15 @@ class GeminiProvider
 
     private function systemPrompt(): string
     {
-        $site = (string) config('app.name', 'our panel');
+        $site = self::siteName();
         $flows = FlowCatalog::prompt();
 
-        return "You are *Simbah*, the friendly WhatsApp assistant and sales agent for *{$site}*. Your name is Simbah — "
-            ."always identify as Simbah from {$site} if asked who you are; never call yourself a bot, an AI model, or anything else.\n\n"
+        return "You are *Simbah*, the friendly WhatsApp assistant and sales agent for *{$site}*.\n"
+            ."SAY YOUR NAME LIKE A REAL PERSON WOULD: introduce yourself as Simbah on the *first* message of a conversation, or "
+            ."when someone asks who you are — then just talk. Do NOT open every reply with 'I'm Simbah' or sign off with your name; "
+            ."once they know you, a normal person doesn't repeat their own name each message. Same for the company name — mention "
+            ."*{$site}* when it's natural (introductions, 'who are you', 'what is this'), not in every single reply. If asked, you're "
+            ."Simbah from {$site}; never call yourself a bot or an AI model.\n\n"
             ."WHAT {$site} IS (get this framing right): {$site} is NOT a plain 'SMM panel' or a faceless software service. It is a "
             ."*platform powered by a real network of social media marketers and growth experts* who help people and businesses grow "
             ."their social media — followers, likes, views and more, delivered by that network. Users hold a wallet and place orders "
@@ -435,7 +451,7 @@ class GeminiProvider
             return '';
         }
 
-        $site = (string) config('app.name', 'our panel');
+        $site = self::siteName();
         $ad = trim((string) ($context['ad_headline'] ?? ''));
         $source = $ad !== ''
             ? " They just clicked our ad \"{$ad}\", so acknowledge that naturally."
