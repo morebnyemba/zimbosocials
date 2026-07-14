@@ -6,10 +6,14 @@ use App\Models\WhatsAppKnowledge;
 use Illuminate\Database\Seeder;
 
 /**
- * Richer KB entries for the three most-asked policy topics: delivery time,
- * refill guarantee, and refunds. Idempotent (keyed on title) — re-running
- * updates in place, and it upgrades the two thin starters from
- * WhatsAppKnowledgeBaseSeeder ("Delivery time", "Refunds").
+ * Richer KB entries: an About/positioning entry plus the three most-asked
+ * policy topics — delivery time, refill guarantee, and refunds. Idempotent
+ * (keyed on title) — re-running updates in place, and it upgrades the two thin
+ * starters from WhatsAppKnowledgeBaseSeeder ("Delivery time", "Refunds").
+ *
+ * Positioning note: ZimboSocials is framed as a *platform powered by a network
+ * of social media marketers and experts*, NOT a plain SMM panel — keep this
+ * consistent with the assistant's system prompt (Simbah persona).
  *
  * Refund answer mirrors the actual auto-refund logic in OrderStatusSyncService
  * (full refund on cancel/fail, proportional on partial, credited to wallet).
@@ -25,6 +29,13 @@ class WhatsAppKbDeliveryRefillRefundSeeder extends Seeder
     public function run(): void
     {
         $entries = [
+            [
+                'title' => 'About ZimboSocials',
+                'question' => 'What is ZimboSocials, who are you, tell me about your company, are you an SMM panel, what do you do',
+                'answer' => "👋 We're *ZimboSocials* — a platform powered by a real network of *social media marketers and growth experts*. We're not just an SMM panel or a piece of software: our team helps people and businesses across Zimbabwe and beyond grow their social media — more followers, likes, views, subscribers and engagement — delivered fast and paid with local methods like EcoCash, all right here on WhatsApp.\n\nTell me what you'd like to grow and I'll set you up! 🚀",
+                'keywords' => 'about zimbosocials who what is company platform smm panel network experts marketers agency what do you do tell me about your service business simbah ndeipi chii masocial media tell ngobani liyini',
+                'category' => 'general',
+            ],
             [
                 'title' => 'Delivery time',
                 'question' => 'How long does delivery take, how fast, when will my order start and finish, delivery speed',

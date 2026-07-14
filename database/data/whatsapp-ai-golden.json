@@ -135,5 +135,15 @@
         "message": "ndipe link yangu yekukoka shamwari",
         "authenticated": true,
         "expect_flow": "referral"
+    },
+    {
+        "message": "who are you? are you a bot?",
+        "authenticated": true,
+        "expect_flow": null
+    },
+    {
+        "message": "what is zimbosocials?",
+        "authenticated": true,
+        "expect_flow": null
     }
 ]
