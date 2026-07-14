@@ -1,0 +1,59 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\WhatsAppKnowledge;
+use Illuminate\Database\Seeder;
+
+/**
+ * Richer KB entries for the three most-asked policy topics: delivery time,
+ * refill guarantee, and refunds. Idempotent (keyed on title) — re-running
+ * updates in place, and it upgrades the two thin starters from
+ * WhatsAppKnowledgeBaseSeeder ("Delivery time", "Refunds").
+ *
+ * The refund answer mirrors the actual auto-refund logic in
+ * OrderStatusSyncService (full refund on cancel/fail, proportional on partial,
+ * credited to the wallet). The delivery and refill wording is deliberately
+ * general because both are PER-SERVICE (services.avg_time_minutes /
+ * is_refill / refill_days) — no fixed SLA is invented.
+ *
+ * ⚠️ VERIFY before relying on these publicly: if you advertise specific
+ * delivery windows or a standard refill period (e.g. "30-day refill"), edit
+ * the answers in Admin → WA Assistant → Knowledge Base to match your policy.
+ */
+class WhatsAppKbDeliveryRefillRefundSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $entries = [
+            [
+                'title' => 'Delivery time',
+                'question' => 'How long does delivery take, how fast, when will my order start and finish, delivery speed',
+                'answer' => "⏱️ Most orders *start within a few minutes* of you confirming. How long the whole order takes depends on the service and the quantity — smaller orders often finish within the hour, while very large ones can take longer. Each service also shows an average speed before you order.\n\nSend *track* with your order number anytime to see live progress.",
+                'keywords' => 'delivery time how long fast speed when start finish complete begin quick hours minutes eta wait nguva kukurumidza kumhanya masaha isikhathi masekethe ukusheshisa nini',
+                'category' => 'orders',
+            ],
+            [
+                'title' => 'Refill guarantee',
+                'question' => 'Do you offer refill, what if followers drop, is there a refill guarantee, will you top up if numbers fall',
+                'answer' => "🔁 Many of our *followers* and *subscribers* services are *refill-guaranteed*: if some drop off within the refill period shown on that service, we top them back up for free. Not every service includes refill, so check the service details before you order.\n\nNoticed a drop? Send *support* and we'll sort it out.",
+                'keywords' => 'refill guarantee drop dropped fell falling top up replace refills lost followers subscribers guarantee warranty maintain kudonha kudzikira kuwedzera zvadzoka refill kuzadzisa ukwehla ayancipha buyisela',
+                'category' => 'orders',
+            ],
+            [
+                'title' => 'Refunds',
+                'question' => 'Can I get a refund, what if my order fails or is cancelled, do I get my money back, partial delivery refund',
+                'answer' => "💰 Yes — refunds are automatic:\n• If an order is *cancelled* or can't be delivered, the *full charge* goes back to your wallet.\n• If only *part* of an order is delivered, you're automatically refunded for the undelivered portion.\n\nThe money returns to your *wallet balance* (type *balance* to check) — you can use it on your next order right away. For anything else, type *support* to open a ticket.",
+                'keywords' => 'refund refunds money back cash return returned failed fail cancel cancelled canceled partial not delivered undelivered reimburse credit wallet mari kudzoserwa kudzoka mari yangu kudzosewa refund imali ukubuyiselwa imali ibuyile',
+                'category' => 'wallet',
+            ],
+        ];
+
+        foreach ($entries as $e) {
+            WhatsAppKnowledge::updateOrCreate(
+                ['title' => $e['title']],
+                array_merge($e, ['locale' => 'en', 'status' => true]),
+            );
+        }
+    }
+}
