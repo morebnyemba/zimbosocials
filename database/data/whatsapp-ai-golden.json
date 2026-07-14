@@ -145,5 +145,25 @@
         "message": "what is zimbosocials?",
         "authenticated": true,
         "expect_flow": null
+    },
+    {
+        "message": "i have $5, what can i get?",
+        "authenticated": true,
+        "expect_flow": null
+    },
+    {
+        "message": "do you do linkedin?",
+        "authenticated": true,
+        "expect_flow": null
+    },
+    {
+        "message": "is it safe? will my account get banned?",
+        "authenticated": true,
+        "expect_flow": null
+    },
+    {
+        "message": "I'm opening a bakery, what should I grow?",
+        "authenticated": true,
+        "expect_flow": null
     }
 ]
