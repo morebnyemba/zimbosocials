@@ -43,6 +43,11 @@ Schedule::command('contracts:close-expired')->dailyAt('01:00')->withoutOverlappi
 // Safety net: verify every wallet balance against the transaction ledger
 Schedule::command('wallet:reconcile')->dailyAt('03:00')->withoutOverlapping();
 
+// Queue-independent safety net: re-dispatch stuck PENDING orders, else
+// cancel + refund past the deadline — so nothing stays pending forever even
+// if the queue worker stops.
+Schedule::command('orders:recover-pending')->everyFiveMinutes()->withoutOverlapping();
+
 // Flag active orders with no status movement for 5+ days
 Schedule::command('orders:flag-stuck')->dailyAt('08:00')->withoutOverlapping();
 

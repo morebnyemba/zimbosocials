@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\Order;
-use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\Upstream\OrderDispatchService;
 use Illuminate\Bus\Queueable;
@@ -11,8 +10,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Retries pushing an order to its upstream provider after the synchronous
@@ -79,55 +76,12 @@ class DispatchOrderUpstream implements ShouldQueue
      */
     public function failed(\Throwable $e): void
     {
-        $refundAmount = 0.0;
-        $userId = null;
+        $refundAmount = app(OrderDispatchService::class)->cancelAndRefundUndeliverable(
+            $this->orderId,
+            'Auto-cancelled: all dispatch attempts failed. Charge refunded.'
+        );
 
-        DB::transaction(function () use (&$refundAmount, &$userId): void {
-            $order = Order::lockForUpdate()->find($this->orderId);
-
-            // Only refund if the order is still stuck exactly where we left it —
-            // pending and never pushed. Anything else (cancelled by the user,
-            // pushed by a late retry, resolved by an admin) already moved the money.
-            if (! $order || $order->pushed_to_upstream || $order->status !== 'pending') {
-                return;
-            }
-
-            $order->update([
-                'status' => 'cancelled',
-                'upstream_last_error' => 'Auto-cancelled: all dispatch attempts failed. Charge refunded.',
-            ]);
-
-            $user = User::lockForUpdate()->find($order->user_id);
-            if (! $user) {
-                Log::error("DispatchOrderUpstream: user {$order->user_id} missing for refund of order #{$order->id}");
-
-                return;
-            }
-
-            $remaining = $order->remainingRefundable();
-            if ($remaining > 0) {
-                $user->creditBalance(
-                    $remaining,
-                    'refund',
-                    "Auto-refund: order #{$order->id} could not be submitted to the provider",
-                    'refund',
-                    $order
-                );
-            }
-
-            $refundAmount = $remaining;
-            $userId = (int) $user->id;
-        });
-
-        if ($userId !== null) {
-            NotificationService::notify(
-                $userId,
-                'order_refunded',
-                "Order #{$this->orderId} Refunded",
-                "We couldn't submit your order after several attempts, so it was cancelled and \${$refundAmount} was refunded to your wallet.",
-                ['order_id' => $this->orderId, 'refund_amount' => $refundAmount]
-            );
-
+        if ($refundAmount > 0) {
             NotificationService::notifyAdmins(
                 'admin_order_dispatch_failed',
                 "Order #{$this->orderId} auto-refunded",

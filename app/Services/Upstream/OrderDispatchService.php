@@ -113,6 +113,62 @@ class OrderDispatchService
     }
 
     /**
+     * Cancel an order that could not be delivered and refund whatever is still
+     * owed — atomic under row locks, idempotent, and safe to call from multiple
+     * places (the dispatch job's failed() handler and the pending-recovery
+     * command). Only acts on an order still stuck exactly where we left it
+     * (pending, never pushed); anything else already moved the money. Returns
+     * the amount refunded (0.0 if it was skipped).
+     */
+    public function cancelAndRefundUndeliverable(int $orderId, string $reason): float
+    {
+        $refundAmount = 0.0;
+        $userId = null;
+
+        DB::transaction(function () use ($orderId, $reason, &$refundAmount, &$userId): void {
+            $order = Order::lockForUpdate()->find($orderId);
+
+            // Guard: never refund an order that was pushed upstream (it may be
+            // delivering) or already resolved (cancelled/completed elsewhere).
+            if (! $order || $order->pushed_to_upstream || $order->status !== 'pending') {
+                return;
+            }
+
+            $order->update([
+                'status' => 'cancelled',
+                'upstream_last_error' => $reason,
+            ]);
+
+            $user = \App\Models\User::lockForUpdate()->find($order->user_id);
+            if (! $user) {
+                \Illuminate\Support\Facades\Log::error("cancelAndRefundUndeliverable: user {$order->user_id} missing for order #{$order->id}");
+
+                return;
+            }
+
+            $remaining = $order->remainingRefundable();
+            if ($remaining > 0) {
+                $user->creditBalance($remaining, 'refund', "Auto-refund: order #{$order->id} — {$reason}", 'refund', $order);
+            }
+
+            $refundAmount = $remaining;
+            $userId = (int) $user->id;
+        });
+
+        if ($userId !== null) {
+            NotificationService::notify(
+                $userId,
+                'order_refunded',
+                "Order #{$orderId} Refunded",
+                "We couldn't submit your order, so it was cancelled and \${$refundAmount} was refunded to your wallet.",
+                ['order_id' => $orderId, 'refund_amount' => $refundAmount]
+            );
+        }
+
+        return $refundAmount;
+    }
+
+    /**
      * Record a successful upstream push under a row lock. If the user managed
      * to cancel (and get refunded) while the HTTP push was in flight, we must
      * NOT flip the order back to processing — that would hand out the refund
