@@ -31,6 +31,7 @@ class FlowCatalog
             'link' => ['desc' => 'Link this number to an existing account via email code', 'params' => ['email']],
             'forgot' => ['desc' => 'Send a password reset email', 'params' => ['email']],
             'faq' => ['desc' => 'Show frequently asked questions', 'params' => []],
+            'referral' => ['desc' => 'Show the user\'s referral link and the invite-a-friend rewards (earn money by inviting friends)', 'params' => []],
         ];
     }
 

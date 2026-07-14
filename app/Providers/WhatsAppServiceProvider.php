@@ -48,6 +48,8 @@ class WhatsAppServiceProvider extends ServiceProvider
         SettingsFlow::class,
         FaqFlow::class,
         AskAiFlow::class,
+        // Growth:
+        \App\WhatsApp\Flow\Definitions\ReferralFlow::class,
     ];
 
     public function register(): void

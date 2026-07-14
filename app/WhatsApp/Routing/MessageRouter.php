@@ -277,6 +277,7 @@ class MessageRouter
     {
         $authenticated = $account->isLinked();
         $history = (array) $ctx->get('_ai_history', []);
+        $nudgeAllowed = $authenticated && \App\WhatsApp\ReferralNudge::allowed($ctx->phone);
 
         $r = $this->intent->resolve($text, $ctx->phone, [
             'user' => $authenticated ? $account->user : null,
@@ -284,6 +285,7 @@ class MessageRouter
             'current_flow' => $ctx->flow,
             'current_state' => $ctx->state,
             'history' => $history,
+            'referral_nudge_allowed' => $nudgeAllowed,
         ]);
 
         if (empty($r['handled'])) {
@@ -329,6 +331,14 @@ class MessageRouter
         // Optional AI follow-up nudge, sent as a second message.
         if (! empty($r['follow_up'])) {
             $this->responder->send($ctx->phone, (string) $r['follow_up'], ['handled_by' => 'ai', 'ai_used' => true, 'intent' => 'follow_up']);
+        }
+
+        // The model spent its one allowed referral mention — start the cooldown
+        // so the program isn't plugged again for a while on any surface.
+        if ($nudgeAllowed && $reply !== ''
+            && (mb_stripos($reply.' '.($r['follow_up'] ?? ''), 'refer') !== false || mb_stripos($reply, 'invite') !== false)
+        ) {
+            \App\WhatsApp\ReferralNudge::mark($ctx->phone);
         }
 
         $flowData = array_filter((array) ($r['flow_data'] ?? []), fn ($v) => $v !== null && $v !== '');
@@ -395,7 +405,7 @@ class MessageRouter
             'support' => 'ticket', 'tickets' => 'tickets', 'deposit' => 'deposit',
             'track' => 'track', 'profile' => 'profile', 'history' => 'history',
             'search' => 'search', 'faq' => 'faq', 'settings' => 'settings',
-            'ask_ai' => 'ask_ai',
+            'ask_ai' => 'ask_ai', 'referral' => 'referral',
         ];
         $flowId = $flowMap[$cmd] ?? null;
         if ($flowId !== null) {

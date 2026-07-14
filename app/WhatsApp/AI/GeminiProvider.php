@@ -24,7 +24,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-13.2';
+    public const PROMPT_VERSION = '2026-07-13.3';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -51,6 +51,7 @@ class GeminiProvider
         // boundary, better cache reuse); only the dynamic context + the user's
         // message form the user turn.
         $prompt = '=== CONTEXT ==='."\n".$this->buildContext($text, $context['user'] ?? null)
+            .$this->referralBlock($context)
             .$this->activeFlowBlock($context)
             .$this->historyBlock($context['history'] ?? [])
             ."\n\n=== USER MESSAGE ===\n".$text;
@@ -355,6 +356,37 @@ class GeminiProvider
             ."automatically returns them to the step they were on. Do NOT set flow to '{$flow}' just because the task "
             ."is active: without new flow_data that only makes the flow repeat itself.\n"
             ."Never confirm/place the order or payment yourself — the flow re-asks for confirmation.";
+    }
+
+    /**
+     * Ground-truth referral facts (never invented) plus an explicit permission
+     * flag for UNPROMPTED mentions — the router frequency-caps it so the model
+     * plugs the program at most once per cooldown window, and only when the
+     * conversational moment fits.
+     */
+    private function referralBlock(array $context): string
+    {
+        $user = $context['user'] ?? null;
+        if (! $user instanceof User) {
+            return '';
+        }
+
+        $link = \App\Support\ReferralLink::for($user);
+        $cur = $user->currency ?? 'USD';
+        $reward = number_format((float) config('services.referral.first_deposit_reward', 1.00), 2);
+        $commission = rtrim(rtrim(number_format((float) config('services.referral.order_commission_percent', 2.00), 2), '0'), '.');
+        $friendBonus = rtrim(rtrim(number_format((float) config('services.referral.referred_first_deposit_bonus_percent', 10.00), 2), '0'), '.');
+
+        $nudge = ! empty($context['referral_nudge_allowed'])
+            ? "You MAY weave in ONE short, natural referral mention if the moment fits (you just solved their problem, they thanked you, or they ask about earning/discounts) — a single sentence, never the centrepiece of the reply."
+            : 'Do NOT bring up the referral program unprompted (mentioned recently) — only discuss it if the user asks.';
+
+        return "\n\n=== REFERRAL PROGRAM (ground truth — never invent other numbers) ===\n"
+            ."User's personal referral link: {$link}\n"
+            ."Rewards: their friend gets a {$friendBonus}% first-deposit bonus; the user earns {$reward} {$cur} on the friend's "
+            ."first deposit plus {$commission}% ongoing commission on the friend's orders.\n"
+            ."If the user asks about referrals/inviting/earning → answer with these numbers and set flow 'referral' so they get their link.\n"
+            ."Unprompted mentions: {$nudge}";
     }
 
     private function historyBlock(array $history): string

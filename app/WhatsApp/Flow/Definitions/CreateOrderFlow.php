@@ -293,10 +293,19 @@ class CreateOrderFlow extends AbstractFlow
         if (! empty($res['ok'])) {
             $order = $res['order'];
 
-            return FlowResult::complete(
-                "✅ *Order placed!*\n\n".$this->rb->orderCard($order->fresh('service'), $user->currency ?? 'USD')
-                ."\n\nType *track* anytime to check progress."
-            );
+            $reply = "✅ *Order placed!*\n\n".$this->rb->orderCard($order->fresh('service'), $user->currency ?? 'USD')
+                ."\n\nType *track* anytime to check progress.";
+
+            // A happy moment is the one place a referral plug feels natural —
+            // frequency-capped across all surfaces via the shared cooldown.
+            if (\App\WhatsApp\ReferralNudge::allowed($ctx->phone)) {
+                \App\WhatsApp\ReferralNudge::mark($ctx->phone);
+                $reward = number_format((float) config('services.referral.first_deposit_reward', 1.00), 2);
+                $cur = $user->currency ?? 'USD';
+                $reply .= "\n\n💡 _Enjoying us? Type *referral* — invite friends, earn {$reward} {$cur} each + commission on their orders._";
+            }
+
+            return FlowResult::complete($reply);
         }
 
         // Map service-layer validation failures back to the right step.

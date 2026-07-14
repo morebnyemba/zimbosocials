@@ -27,18 +27,7 @@ class ReferralController extends Controller
      */
     private function referralLink(string $code): string
     {
-        $path = trim((string) Setting::get('referral_landing_path', '/'));
-
-        if ($path === '') {
-            $path = '/';
-        }
-        if (! str_starts_with($path, '/')) {
-            $path = '/'.$path;
-        }
-
-        $separator = str_contains($path, '?') ? '&' : '?';
-
-        return url($path.$separator.'ref='.urlencode($code));
+        return \App\Support\ReferralLink::build($code);
     }
 
     public function index(): Response

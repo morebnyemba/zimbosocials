@@ -43,6 +43,7 @@ class CommandRegistry
         'history' => 'history', 'transactions' => 'history',
         'faq' => 'faq',
         'ai' => 'ask_ai', 'ask' => 'ask_ai',
+        'referral' => 'referral', 'referrals' => 'referral', 'refer' => 'referral', 'invite' => 'referral', 'earn' => 'referral',
     ];
 
     public function match(?string $text): ?string
