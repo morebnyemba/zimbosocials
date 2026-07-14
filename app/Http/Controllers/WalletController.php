@@ -23,6 +23,25 @@ use Inertia\Response;
 
 class WalletController extends Controller
 {
+    /**
+     * Deposit methods that ALWAYS go through Paynow (auto-resolved via
+     * poll/webhook, never proof). 'paynow' is the web card flow; ecocash and
+     * onemoney are express-only. innbucks/omari are deliberately excluded —
+     * they can be either Paynow express OR a manual transfer, so those are
+     * judged per-transaction by the presence of a Paynow poll-URL reference.
+     */
+    private const UNAMBIGUOUS_GATEWAY_METHODS = ['paynow', 'ecocash', 'onemoney'];
+
+    /**
+     * A deposit is gateway (auto-confirming, no proof) if it uses an
+     * always-gateway method or carries a Paynow poll URL in its reference.
+     */
+    private function isGatewayDeposit(Transaction $t): bool
+    {
+        return in_array((string) $t->method, self::UNAMBIGUOUS_GATEWAY_METHODS, true)
+            || (is_string($t->reference) && str_starts_with($t->reference, 'http'));
+    }
+
     public function __construct(
         private readonly DepositService $depositService,
     ) {}
@@ -33,9 +52,14 @@ class WalletController extends Controller
         $user = Auth::user();
         $userId = (int) $user->getAuthIdentifier();
 
+        // Flag each deposit as gateway (auto-confirming) so the UI never shows a
+        // proof form for a Paynow payment.
         $transactions = Transaction::where('user_id', $userId)
             ->latest()
-            ->paginate(20);
+            ->paginate(20)
+            ->through(fn (Transaction $t) => array_merge($t->toArray(), [
+                'is_gateway' => $t->type === 'deposit' ? $this->isGatewayDeposit($t) : false,
+            ]));
 
         // Single aggregate query instead of 4 separate SUM queries
         $totalsRow = Transaction::where('user_id', $userId)
@@ -62,10 +86,14 @@ class WalletController extends Controller
             ->pluck('label', 'method_key')
             ->toArray();
 
-        // method_keys that go through the Paynow payment gateway (automatic redirect)
+        // method_keys the PICKER should route through the gateway (redirect/
+        // express) rather than showing manual bank details. Config-driven, plus
+        // the always-gateway methods as a safety net.
         $gatewayMethods = $manualPaymentDetails
             ->where('gateway_type', 'paynow')
             ->pluck('method_key')
+            ->merge(self::UNAMBIGUOUS_GATEWAY_METHODS)
+            ->unique()
             ->values()
             ->all();
 
@@ -76,7 +104,6 @@ class WalletController extends Controller
                 'onemoney' => 'OneMoney Express',
                 'crypto' => 'Crypto (Manual)',
             ];
-            $gatewayMethods = ['paynow', 'ecocash', 'onemoney'];
         }
 
         return Inertia::render('Wallet/Index', [
@@ -202,11 +229,18 @@ class WalletController extends Controller
 
         $transaction = Transaction::where('id', $data['transaction_id'])
             ->where('user_id', $userId)
+            ->where('type', 'deposit')
             ->where('status', 'pending')
             ->first();
 
         if (! $transaction) {
             return back()->with('error', 'Transaction not found or already processed.');
+        }
+
+        // Gateway (Paynow) deposits confirm automatically via poll/webhook —
+        // they never need a proof upload.
+        if ($this->isGatewayDeposit($transaction)) {
+            return back()->with('error', 'This is an automatic online payment — it confirms on its own, no proof needed.');
         }
 
         // Store proof file

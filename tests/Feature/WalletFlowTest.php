@@ -127,6 +127,29 @@ class WalletFlowTest extends TestCase
         @unlink($tmpPng);
     }
 
+    public function test_gateway_deposit_cannot_submit_proof(): void
+    {
+        $user = User::factory()->create();
+
+        // A Paynow deposit carries a poll-URL reference — no proof needed.
+        $transaction = Transaction::create([
+            'user_id' => $user->id, 'type' => 'deposit', 'amount' => 20,
+            'balance_before' => 0, 'balance_after' => 20, 'method' => 'ecocash',
+            'status' => 'pending', 'reference' => 'https://www.paynow.co.zw/interface/poll/?guid=abc',
+        ]);
+
+        $tmpPng = tempnam(sys_get_temp_dir(), 'proof_').'.png';
+        file_put_contents($tmpPng, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5X2wAAAABJRU5ErkJggg=='));
+
+        $this->actingAs($user)->post('/wallet/submit-proof', [
+            'transaction_id' => $transaction->getKey(),
+            'proof_file' => new UploadedFile($tmpPng, 'proof.png', 'image/png', null, true),
+        ])->assertSessionHas('error');
+
+        $this->assertNull($transaction->fresh()->getAttribute('proof_url'));
+        @unlink($tmpPng);
+    }
+
     public function test_paynow_init_rejects_non_gateway_method(): void
     {
         $user = User::factory()->create();

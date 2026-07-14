@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { PageProps } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { useTranslation } from '@/lib/i18n';
 import { useCurrency } from '@/lib/currency';
@@ -309,29 +309,27 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
 
     const submitProof = (e: React.FormEvent) => {
         e.preventDefault();
-        const formData = new FormData();
-        formData.append('transaction_id', proofForm.data.transaction_id);
-        if (proofForm.data.proof_file) {
-            formData.append('proof_file', proofForm.data.proof_file);
+        if (!proofForm.data.proof_file) {
+            notify('error', t('wallet_failed_submit_proof'));
+            return;
         }
 
-        fetch(route('wallet.submit-proof'), {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': (document.head.querySelector('meta[name="csrf-token"]') as any)?.content || ''
-            },
-            body: formData
-        })
-        .then(r => r.text().then(text => {
-            // Parse HTML response for success/error
-            if (text.includes('success')) {
+        // Inertia handles CSRF (XSRF cookie), the redirect, and reloads the
+        // transaction list so the submitted proof shows immediately. The old
+        // raw fetch used a nonexistent csrf-token meta tag (→ 419) and grepped
+        // the HTML for "success", so submissions silently failed.
+        router.post(route('wallet.submit-proof'), {
+            transaction_id: proofForm.data.transaction_id,
+            proof_file: proofForm.data.proof_file,
+        }, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
                 notify('success', t('wallet_proof_submitted'));
                 proofForm.reset();
-            } else {
-                notify('error', t('wallet_failed_submit_proof'));
-            }
-        }))
-        .catch(() => notify('error', t('wallet_error_submit_proof')));
+            },
+            onError: () => notify('error', t('wallet_failed_submit_proof')),
+        });
     };
 
     const submitWithdrawal = (e: React.FormEvent) => {
@@ -768,8 +766,13 @@ export default function WalletIndex({ auth, transactions, totals, manualPaymentD
                 {/* Pending Manual Deposits - POP Submission */}
                 {transactions.data && (
                     (() => {
+                        // Only MANUAL pending deposits need proof. is_gateway is
+                        // computed per-transaction on the server (Paynow poll-URL
+                        // reference or an always-gateway method); fall back to the
+                        // method set for safety.
                         const pendingManualDeposits = (transactions.data ?? []).filter(
-                            t => t.type === 'deposit' && t.status === 'pending' && !gatewaySet.has(t.method ?? '')
+                            t => t.type === 'deposit' && t.status === 'pending'
+                                && !(t as any).is_gateway && !gatewaySet.has(t.method ?? '')
                         );
                         
                         return pendingManualDeposits.length > 0 ? (
