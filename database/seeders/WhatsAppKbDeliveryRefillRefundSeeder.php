@@ -11,15 +11,14 @@ use Illuminate\Database\Seeder;
  * updates in place, and it upgrades the two thin starters from
  * WhatsAppKnowledgeBaseSeeder ("Delivery time", "Refunds").
  *
- * The refund answer mirrors the actual auto-refund logic in
- * OrderStatusSyncService (full refund on cancel/fail, proportional on partial,
- * credited to the wallet). The delivery and refill wording is deliberately
- * general because both are PER-SERVICE (services.avg_time_minutes /
- * is_refill / refill_days) — no fixed SLA is invented.
+ * Refund answer mirrors the actual auto-refund logic in OrderStatusSyncService
+ * (full refund on cancel/fail, proportional on partial, credited to wallet).
+ * Delivery: 5 minutes to 24 hours (operator-confirmed 2026-07-14).
  *
- * ⚠️ VERIFY before relying on these publicly: if you advertise specific
- * delivery windows or a standard refill period (e.g. "30-day refill"), edit
- * the answers in Admin → WA Assistant → Knowledge Base to match your policy.
+ * ⚠️ VERIFY the REFILL wording: it stays general ("the refill period shown on
+ * the service") because refill is per-service (is_refill / refill_days). If you
+ * advertise a standard window (e.g. "30-day refill"), edit it in
+ * Admin → WA Assistant → Knowledge Base.
  */
 class WhatsAppKbDeliveryRefillRefundSeeder extends Seeder
 {
@@ -29,7 +28,7 @@ class WhatsAppKbDeliveryRefillRefundSeeder extends Seeder
             [
                 'title' => 'Delivery time',
                 'question' => 'How long does delivery take, how fast, when will my order start and finish, delivery speed',
-                'answer' => "⏱️ Most orders *start within a few minutes* of you confirming. How long the whole order takes depends on the service and the quantity — smaller orders often finish within the hour, while very large ones can take longer. Each service also shows an average speed before you order.\n\nSend *track* with your order number anytime to see live progress.",
+                'answer' => "⏱️ Orders usually *start within 5 minutes* of you confirming, and complete anywhere up to *24 hours* depending on the service and quantity — smaller orders are often much faster. Each service also shows its average speed before you order.\n\nSend *track* with your order number anytime to see live progress.",
                 'keywords' => 'delivery time how long fast speed when start finish complete begin quick hours minutes eta wait nguva kukurumidza kumhanya masaha isikhathi masekethe ukusheshisa nini',
                 'category' => 'orders',
             ],
