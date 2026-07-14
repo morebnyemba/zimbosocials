@@ -24,7 +24,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-13.3';
+    public const PROMPT_VERSION = '2026-07-14.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -51,6 +51,7 @@ class GeminiProvider
         // boundary, better cache reuse); only the dynamic context + the user's
         // message form the user turn.
         $prompt = '=== CONTEXT ==='."\n".$this->buildContext($text, $context['user'] ?? null)
+            .$this->firstContactBlock($context)
             .$this->referralBlock($context)
             .$this->activeFlowBlock($context)
             .$this->historyBlock($context['history'] ?? [])
@@ -356,6 +357,30 @@ class GeminiProvider
             ."automatically returns them to the step they were on. Do NOT set flow to '{$flow}' just because the task "
             ."is active: without new flow_data that only makes the flow repeat itself.\n"
             ."Never confirm/place the order or payment yourself — the flow re-asks for confirmation.";
+    }
+
+    /**
+     * First-ever message from this person — very often straight off a
+     * click-to-WhatsApp ad. They don't know who answered: open with a one-line
+     * introduction of the assistant and the platform, then help.
+     */
+    private function firstContactBlock(array $context): string
+    {
+        if (empty($context['first_contact'])) {
+            return '';
+        }
+
+        $site = (string) config('app.name', 'our panel');
+        $ad = trim((string) ($context['ad_headline'] ?? ''));
+        $source = $ad !== ''
+            ? " They just clicked our ad \"{$ad}\", so acknowledge that naturally."
+            : '';
+
+        return "\n\n=== FIRST CONTACT ===\n"
+            ."This is this person's very first message to us — they don't know who answered.{$source} "
+            ."START your reply with ONE warm sentence introducing yourself and *{$site}* (we grow social media: "
+            ."followers, likes, views and more, ordered right here on WhatsApp), THEN address their message. "
+            ."Keep the whole reply short and inviting.";
     }
 
     /**

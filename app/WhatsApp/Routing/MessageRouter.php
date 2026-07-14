@@ -115,8 +115,15 @@ class MessageRouter
 
             $selection = $msg['interactive_id'] ?? null;
 
+            // Ad-origin signal for this message; also remembered for the AI's
+            // first-contact intro while the account remains fresh.
+            $ad = $msg['ad_referral'] ?? null;
+            if ($ad !== null && ! empty($ad['headline'])) {
+                $ctx->set('_ad_headline', mb_substr((string) $ad['headline'], 0, 120));
+            }
+
             try {
-                $tag = $this->dispatch($ctx, $account, $text, $selection);
+                $tag = $this->dispatch($ctx, $account, $text, $selection, $ad);
             } catch (\Throwable $e) {
                 Log::error('WhatsApp dispatch error', ['message' => $e->getMessage()]);
                 $ctx->resetFlow();
@@ -134,26 +141,34 @@ class MessageRouter
         }
     }
 
-    private function dispatch(SessionContext $ctx, WhatsAppAccount $account, string $text, ?string $selection): array
+    private function dispatch(SessionContext $ctx, WhatsAppAccount $account, string $text, ?string $selection, ?array $ad = null): array
     {
         $phone = $ctx->phone;
 
-        // 0. Very first message from an unknown number: if it's just a greeting,
-        //    welcome them and go straight into guided sign-up (name → email →
-        //    account created automatically). A substantive first message ("I
-        //    want 1000 followers") skips this — the normal ladder handles it,
-        //    and the auth gate starts this same sign-up with their request
-        //    remembered as _pending_flow.
+        // 0. Very first message from an unknown number. Greetings — and the
+        //    generic canned texts click-to-WhatsApp ads produce ("Hi! Can I
+        //    get more info about this?") — get a platform introduction and go
+        //    straight into guided sign-up. A substantive first message ("I
+        //    want 1000 tiktok followers", even from an ad) skips this — the AI
+        //    handles it with a first-contact intro (see consultAi), and the
+        //    auth gate starts this same sign-up with their request remembered.
         if ($account->wasRecentlyCreated && ! $account->isLinked() && $selection === null) {
             $greetings = ['', 'hi', 'hello', 'hey', 'hie', 'menu', 'start', 'hesi', 'mhoro', 'makadii', 'sawubona', 'salibonani'];
-            if (in_array(mb_strtolower($text), $greetings, true)) {
+            $fromAd = $ad !== null || $this->looksLikeAdCta($text);
+
+            if (in_array(mb_strtolower($text), $greetings, true) || ($fromAd && ! $this->mentionsAProduct($text))) {
                 $name = $account->display_name ? " {$account->display_name}" : '';
+                $site = config('app.name');
+                $intro = $fromAd
+                    ? "👋 Hi{$name}, thanks for reaching out! You've found *{$site}* — we grow social media accounts: followers, likes, views and more, delivered fast and paid with EcoCash and other local methods, all right here on WhatsApp."
+                    : "👋 Hi{$name}! Welcome to *{$site}* — followers, likes, views and more, right here on WhatsApp.";
+
                 $this->responder->send(
                     $phone,
-                    "👋 Hi{$name}! Welcome to ".config('app.name').' — followers, likes, views and more, right here on WhatsApp.'
-                    ."\n\nLet me set up your account real quick (takes ~30 seconds), then you can order and track everything in this chat."
+                    $intro
+                    ."\n\nLet me set up your free account real quick (takes ~30 seconds), then you can order and track everything in this chat."
                     ."\n\n_Type *cancel* anytime to skip._",
-                    ['handled_by' => 'system', 'intent' => 'first_contact']
+                    ['handled_by' => 'system', 'intent' => $fromAd ? 'first_contact_ad' : 'first_contact']
                 );
                 $res = $this->engine->start($ctx, 'register');
                 $this->emit($account, $ctx, $res);
@@ -265,6 +280,29 @@ class MessageRouter
         return ['handled_by' => 'menu', 'intent' => 'fallback'];
     }
 
+    /** The canned texts Meta's click-to-WhatsApp ad CTAs pre-fill. */
+    private function looksLikeAdCta(string $text): bool
+    {
+        $t = mb_strtolower(preg_replace('/[^a-z ]/i', '', $text));
+
+        foreach (['interested', 'more info', 'tell me more', 'get more info', 'saw your ad', 'about this'] as $phrase) {
+            if (str_contains($t, $phrase)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Whether the text already names a platform/product — a real ask, not a canned CTA. */
+    private function mentionsAProduct(string $text): bool
+    {
+        return (bool) preg_match(
+            '/instagram|tiktok|youtube|facebook|twitter|telegram|whatsapp|spotify|follow|like|view|subscriber|comment|share/i',
+            $text
+        );
+    }
+
     /**
      * Hand a message to the AI brain. It always replies and decides what runs
      * next: trigger a flow (with extracted data as prefills — flows fast-forward
@@ -286,6 +324,10 @@ class MessageRouter
             'current_state' => $ctx->state,
             'history' => $history,
             'referral_nudge_allowed' => $nudgeAllowed,
+            // First-ever message (often straight off an ad): the model opens
+            // with a one-line introduction of itself and the platform.
+            'first_contact' => $account->wasRecentlyCreated && ! $authenticated,
+            'ad_headline' => $ctx->get('_ad_headline'),
         ]);
 
         if (empty($r['handled'])) {

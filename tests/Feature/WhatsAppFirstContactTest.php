@@ -22,7 +22,7 @@ class WhatsAppFirstContactTest extends TestCase
 
     private const PHONE = '263771234567';
 
-    private function msg(string $text): array
+    private function msg(string $text, ?array $adReferral = null): array
     {
         return [
             'from' => self::PHONE,
@@ -30,6 +30,7 @@ class WhatsAppFirstContactTest extends TestCase
             'type' => 'text',
             'text' => $text,
             'interactive_id' => null,
+            'ad_referral' => $adReferral,
             'name' => 'Tendai',
             'timestamp' => time(),
             'raw' => [],
@@ -79,6 +80,59 @@ class WhatsAppFirstContactTest extends TestCase
 
         $ctx = app(SessionManager::class)->load(self::PHONE);
         $this->assertNull($ctx->flow);
+    }
+
+    public function test_ad_click_with_canned_cta_gets_platform_intro_and_signup(): void
+    {
+        app(MessageRouter::class)->handle($this->msg(
+            'Hi! Can I get more info about this?',
+            ['source_type' => 'ad', 'headline' => 'Grow your Instagram today', 'source_url' => 'https://fb.me/xyz']
+        ));
+
+        // Intro names the platform and explains what it does...
+        $intro = \App\Models\WhatsAppMessage::where('direction', 'out')->first();
+        $this->assertStringContainsString(config('app.name'), $intro->body);
+        $this->assertStringContainsString('followers, likes, views', $intro->body);
+
+        // ...then guided signup starts.
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('register', $ctx->flow);
+    }
+
+    public function test_canned_cta_text_alone_triggers_the_ad_intro(): void
+    {
+        // No referral payload (e.g. forwarded ad) — the text heuristic catches it.
+        app(MessageRouter::class)->handle($this->msg("I'm interested, tell me more"));
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('register', $ctx->flow);
+    }
+
+    public function test_substantive_ad_message_goes_to_ai_with_first_contact_context(): void
+    {
+        $captured = [];
+        $intent = Mockery::mock(IntentEngine::class);
+        $intent->shouldReceive('resolve')
+            ->withArgs(function ($text, $phone, $context) use (&$captured) {
+                $captured = $context;
+
+                return true;
+            })
+            ->andReturn(['handled' => false]);
+        $this->app->instance(IntentEngine::class, $intent);
+
+        // Product named → a real ask, not a canned CTA: AI handles it, told
+        // it's a first contact that came from a specific ad.
+        app(MessageRouter::class)->handle($this->msg(
+            "I'm interested in tiktok followers",
+            ['source_type' => 'ad', 'headline' => 'TikTok growth deals', 'source_url' => null]
+        ));
+
+        $this->assertTrue($captured['first_contact']);
+        $this->assertSame('TikTok growth deals', $captured['ad_headline']);
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertNull($ctx->flow); // not hijacked into signup
     }
 
     public function test_matched_phone_auto_links_and_skips_signup(): void

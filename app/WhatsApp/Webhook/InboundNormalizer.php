@@ -88,12 +88,24 @@ class InboundNormalizer
                 break;
         }
 
+        // Click-to-WhatsApp ads/posts attach a referral object to the first
+        // message — the strongest signal that this person just clicked an ad.
+        $adReferral = null;
+        if (isset($m['referral']) && is_array($m['referral'])) {
+            $adReferral = [
+                'source_type' => $m['referral']['source_type'] ?? null, // 'ad' | 'post'
+                'headline' => $m['referral']['headline'] ?? null,
+                'source_url' => $m['referral']['source_url'] ?? null,
+            ];
+        }
+
         return [
             'from' => $from,
             'wa_message_id' => $m['id'] ?? null,
             'type' => $type,
             'text' => $text,
             'interactive_id' => $interactiveId,
+            'ad_referral' => $adReferral,
             'name' => $names[$from] ?? null,
             'timestamp' => isset($m['timestamp']) ? (int) $m['timestamp'] : null,
             'raw' => $m,
