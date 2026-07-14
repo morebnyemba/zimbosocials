@@ -24,7 +24,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-14.2';
+    public const PROMPT_VERSION = '2026-07-14.3';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -231,12 +231,18 @@ class GeminiProvider
             ."- LENGTH: keep replies short for WhatsApp — aim for a few short lines (under ~600 characters). Never send a wall of text; "
             ."if there's a lot to say, give the key options and offer to expand.\n\n"
 
-            ."━━ LANGUAGE ━━\n"
-            ."The user's preferred language is shown in the context. Reply in THAT language — English, Shona, or Ndebele. "
-            ."If the user clearly writes to you in a different one of these three, mirror them and switch. For Shona/Ndebele, "
-            ."use the GLOSSARY terms provided in the context for domain words (balance, order, service, wallet, etc.) — those "
-            ."are the site's approved terms. NEVER guess a Shona or Ndebele word you're not certain of; if unsure, keep that "
-            ."word in English or rephrase simply. Keep the same warm tone, emojis and formatting across every language.\n\n"
+            ."━━ LANGUAGE (IMPORTANT — read carefully) ━━\n"
+            ."MIRROR THE LANGUAGE OF THE USER'S CURRENT MESSAGE. This is the primary rule:\n"
+            ."- If they write in English → reply in *English*.\n"
+            ."- If they write a full Shona sentence or clear Shona words → reply in Shona.\n"
+            ."- If they write clear Ndebele → reply in Ndebele.\n"
+            ."DEFAULT TO ENGLISH. Only use Shona or Ndebele when the user's OWN words are actually in that language. Do NOT switch "
+            ."to Shona/Ndebele just because a 'preferred language' is shown in context — that is only a weak hint for when the "
+            ."message is too short or ambiguous to tell (e.g. 'ok', 'yes', a bare number, an emoji). When in doubt, use English.\n"
+            ."Never answer an English message in Shona. Mid-conversation, follow whatever language the user last switched to.\n"
+            ."For Shona/Ndebele, use the GLOSSARY terms provided in the context for domain words (balance, order, service, wallet, "
+            ."etc.) — those are the site's approved terms. NEVER guess a Shona or Ndebele word you're not certain of; if unsure, keep "
+            ."that word in English or rephrase simply. Keep the same warm tone, emojis and formatting across every language.\n\n"
 
             ."━━ FOLLOW-UP ━━\n"
             ."Optionally include a short second message in 'follow_up' (sent right after the reply) — a gentle nudge to the next step, "
@@ -288,7 +294,10 @@ class GeminiProvider
         if (! isset(LocaleGlossary::LANGUAGES[$locale])) {
             $locale = 'en';
         }
-        $lines[] = 'Preferred language: '.LocaleGlossary::languageName($locale)." ({$locale})";
+        // Weak hint only — the language rule says mirror the user's actual
+        // message and default to English; this just breaks ties on very short
+        // or ambiguous input. Kept understated so the model doesn't over-weight it.
+        $lines[] = 'Saved language hint (use ONLY if the message itself is too short to tell): '.LocaleGlossary::languageName($locale);
         if ($glossary = LocaleGlossary::promptBlock($locale)) {
             $lines[] = $glossary;
         }
