@@ -24,9 +24,9 @@ class GeminiClient
     /**
      * Send a prompt and return the model's raw text reply (or null on failure).
      */
-    public function generateText(string $prompt, float $temperature = 0.7): ?string
+    public function generateText(string $prompt, float $temperature = 0.7, ?string $system = null, ?int $timeout = null): ?string
     {
-        return $this->send($prompt, ['temperature' => $temperature]);
+        return $this->send($prompt, ['temperature' => $temperature], $system, $timeout);
     }
 
     /**

@@ -304,12 +304,13 @@ class MessageRouter
     }
 
     /**
-     * Hand a message to the AI brain. It always replies and decides what runs
-     * next: trigger a flow (with extracted data as prefills — flows fast-forward
-     * to the right step), or just answer. Mid-flow, an answer-only outcome
-     * re-renders the current step so the user isn't left stranded; outside a
-     * flow it shows the menu. Returns false when AI is unavailable/over budget
-     * so the caller can fall back deterministically.
+     * Hand a message to the AI brain — ONE VOICE: the AI both decides and
+     * speaks. When it triggers a flow, its reply is NOT sent separately; the
+     * flow runs silently and the AI's draft is fused with the step's facts
+     * into a single message (money steps stay verbatim). Answer-only turns
+     * send just the answer — the AI steers back to any pending step itself.
+     * Returns false when AI is unavailable/over budget so the caller can fall
+     * back deterministically.
      */
     private function consultAi(SessionContext $ctx, WhatsAppAccount $account, string $text, bool $inFlow): bool
     {
@@ -336,20 +337,32 @@ class MessageRouter
 
         $reply = (string) ($r['reply'] ?? '');
         $flow = $r['flow'] ?? null;
+        $flowData = array_filter((array) ($r['flow_data'] ?? []), fn ($v) => $v !== null && $v !== '');
+
+        // Only a *different* flow or *new data* warrants a (re)start — the
+        // model sometimes re-names the active flow for a plain side answer.
+        $willStartFlow = $flow !== null && $flow !== 'handoff'
+            && ($flow !== $ctx->flow || $flowData !== []);
+
+        // Full decision, kept for offline accuracy analysis (ai-eval).
+        $decision = [
+            'flow' => $flow,
+            'flow_data' => $r['flow_data'] ?? [],
+            'prompt_version' => $r['prompt_version'] ?? null,
+            'in_flow' => $inFlow ? $ctx->flow : null,
+        ];
 
         if ($reply !== '') {
             // Keep short-term memory (last 6 exchanges) for follow-ups.
             $history[] = ['user' => $text, 'model' => $reply];
             $ctx->set('_ai_history', array_slice($history, -6));
+        }
+
+        // Standalone reply ONLY when no flow will speak — one voice, never two.
+        if (! $willStartFlow && $reply !== '') {
             $this->responder->send($ctx->phone, $reply, [
                 'handled_by' => 'ai', 'ai_used' => true, 'intent' => $flow ?? 'ai',
-                // Full decision, kept for offline accuracy analysis (ai-eval).
-                'payload' => [
-                    'flow' => $flow,
-                    'flow_data' => $r['flow_data'] ?? [],
-                    'prompt_version' => $r['prompt_version'] ?? null,
-                    'in_flow' => $inFlow ? $ctx->flow : null,
-                ],
+                'payload' => $decision,
             ]);
         }
 
@@ -370,8 +383,9 @@ class MessageRouter
             return true;
         }
 
-        // Optional AI follow-up nudge, sent as a second message.
-        if (! empty($r['follow_up'])) {
+        // Optional AI follow-up nudge — answer-only turns; a flow turn already
+        // ends in the step's question, a nudge on top would be a second voice.
+        if (! $willStartFlow && ! empty($r['follow_up'])) {
             $this->responder->send($ctx->phone, (string) $r['follow_up'], ['handled_by' => 'ai', 'ai_used' => true, 'intent' => 'follow_up']);
         }
 
@@ -383,28 +397,15 @@ class MessageRouter
             \App\WhatsApp\ReferralNudge::mark($ctx->phone);
         }
 
-        $flowData = array_filter((array) ($r['flow_data'] ?? []), fn ($v) => $v !== null && $v !== '');
-
-        // The model sometimes re-names the active flow for what is really just
-        // a side answer. Only a *different* flow or *new data* warrants a
-        // (re)start — otherwise re-render the step so it doesn't look like the
-        // flow keeps calling itself.
-        if ($flow !== null && ($flow !== $ctx->flow || $flowData !== [])) {
+        if ($willStartFlow) {
             foreach ($flowData as $k => $v) {
                 $ctx->set('_prefill_'.$k, $v);
             }
-            $this->startFlow($flow, $ctx, $account);
-
-            return true;
+            $this->startFlow($flow, $ctx, $account, voiceDraft: $reply, decisionMeta: $decision, userText: $text);
         }
-
-        if ($inFlow && $ctx->inFlow()) {
-            // Answered a side-question mid-flow → re-render the step they were on.
-            $this->emit($account, $ctx, $this->engine->resume($ctx));
-        }
-        // Outside a flow the AI reply stands on its own — no menu chaser. The
-        // menu still appears via 'menu', after flows finish, and as the
-        // fallback when the AI is unavailable.
+        // Answer-only mid-flow: the step is NOT re-blasted — the prompt makes
+        // the AI steer back to the pending question in its own words, and the
+        // flow state is untouched so their next input still lands on the step.
 
         return true;
     }
@@ -483,7 +484,7 @@ class MessageRouter
         $this->startFlow($flowId, $ctx, $account);
     }
 
-    private function startFlow(string $flowId, SessionContext $ctx, WhatsAppAccount $account): void
+    private function startFlow(string $flowId, SessionContext $ctx, WhatsAppAccount $account, ?string $voiceDraft = null, array $decisionMeta = [], string $userText = ''): void
     {
         $isGuestFlow = in_array($flowId, $this->guestFlows, true);
 
@@ -492,7 +493,7 @@ class MessageRouter
             // action they wanted so it can be resumed after registration.
             $ctx->set('_pending_flow', $flowId);
             $res = $this->engine->start($ctx, 'register');
-            $this->emit($account, $ctx, $res);
+            $this->emit($account, $ctx, $res, $voiceDraft, $decisionMeta, $userText);
 
             return;
         }
@@ -505,25 +506,60 @@ class MessageRouter
         }
 
         $res = $this->engine->start($ctx, $flowId);
-        $this->emit($account, $ctx, $res);
+        $this->emit($account, $ctx, $res, $voiceDraft, $decisionMeta, $userText);
     }
 
-    private function emit(WhatsAppAccount $account, SessionContext $ctx, FlowResult $res): void
+    /**
+     * Money-critical steps whose wording must stay verbatim: confirmation
+     * summaries (exact amounts) and OTP entry. Everything else may be voiced.
+     */
+    private function isMoneyStep(FlowResult $res, SessionContext $ctx): bool
+    {
+        if (in_array($ctx->state, ['confirm', 'ask_otp'], true)) {
+            return true;
+        }
+        foreach ((array) ($res->buttons ?? []) as $button) {
+            if (($button['id'] ?? '') === 'fs:yes') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function emit(WhatsAppAccount $account, SessionContext $ctx, FlowResult $res, ?string $voiceDraft = null, array $decisionMeta = [], string $userText = ''): void
     {
         $meta = ['flow' => $ctx->flow, 'handled_by' => 'flow'];
+        $body = $res->reply;
 
-        if ($res->buttons !== null && $res->reply !== null) {
-            $this->responder->sendButtons($ctx->phone, $res->reply, $res->buttons, $meta);
+        // ONE VOICE: this flow output is the consequence of an AI decision —
+        // Simbah speaks it. Fuse the AI's draft with the step's facts into a
+        // single message. Money steps and terminal results stay verbatim (the
+        // factual card/summary IS the message); on any voice failure the
+        // scripted text sends unchanged — never both.
+        if ($voiceDraft !== null) {
+            $meta = ['flow' => $ctx->flow, 'handled_by' => 'ai', 'ai_used' => true, 'payload' => $decisionMeta];
+
+            if (! $res->isDone() && ! $this->isMoneyStep($res, $ctx) && $body !== null && $body !== '') {
+                $voiced = $this->intent->voice($voiceDraft, (string) $body, $userText);
+                if ($voiced !== null) {
+                    $body = $voiced;
+                }
+            }
+        }
+
+        if ($res->buttons !== null && $body !== null) {
+            $this->responder->sendButtons($ctx->phone, $body, $res->buttons, $meta);
         } elseif ($res->list !== null) {
             $this->responder->sendMenu($ctx->phone, [
-                'body' => (string) $res->reply,
+                'body' => (string) $body,
                 'button' => $res->list['button'],
                 'sections' => $res->list['sections'],
                 'header' => $res->list['header'] ?? null,
                 'footer' => $res->list['footer'] ?? null,
             ], $meta);
-        } elseif ($res->reply !== null && $res->reply !== '') {
-            $this->responder->send($ctx->phone, $res->reply, $meta);
+        } elseif ($body !== null && $body !== '') {
+            $this->responder->send($ctx->phone, $body, $meta);
         }
 
         if (! $res->isDone()) {

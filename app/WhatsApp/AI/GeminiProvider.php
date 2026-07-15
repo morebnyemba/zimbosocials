@@ -25,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-14.6';
+    public const PROMPT_VERSION = '2026-07-15.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -100,6 +100,60 @@ class GeminiProvider
                 : [],
             'prompt_version' => self::PROMPT_VERSION,
         ];
+    }
+
+    /**
+     * The "one voice" pass. When the AI triggers a flow, the flow's scripted
+     * step prompt used to be sent ON TOP of the AI's reply — two mouths asking
+     * the same thing. This composes ONE message: Simbah's intent (the draft)
+     * fused with every required fact from the step prompt. Interactive
+     * buttons/lists ride along unchanged; null → caller falls back to the
+     * scripted text (never both).
+     *
+     * @param  string  $draft  What the AI wanted to say (its decision reply).
+     * @param  string  $scripted  The flow step's scripted prompt — source of
+     *                            truth for facts (names, min/max, instructions).
+     * @param  string  $userMessage  The user's message (for language mirroring).
+     */
+    public function voiceStep(string $draft, string $scripted, string $userMessage): ?string
+    {
+        $draft = trim($draft);
+        $scripted = trim($scripted);
+        if ($scripted === '') {
+            return $draft !== '' ? $draft : null;
+        }
+
+        $site = self::siteName();
+        $system = "You are *Simbah*, the warm WhatsApp assistant for *{$site}* (social media growth). "
+            ."Fuse the assistant's DRAFT and the system's STEP PROMPT into exactly ONE natural WhatsApp message, as if a "
+            ."single friendly person wrote it.\n"
+            ."RULES:\n"
+            ."- Include EVERY fact, number, name and instruction from the STEP PROMPT (service names, minimums, maximums, "
+            ."examples, commands like *cancel*). Copy numbers and names EXACTLY — never change, drop or invent any.\n"
+            ."- Keep the draft's warmth and any acknowledgement it makes; drop anything the draft repeats from the step prompt.\n"
+            ."- Mirror the language of the USER MESSAGE (default English).\n"
+            ."- WhatsApp formatting only: *bold*, _italic_, real newlines. Short — under 500 characters. No preamble, no quotes: "
+            ."output ONLY the final message text.";
+
+        $prompt = "USER MESSAGE (for language/tone):\n{$userMessage}\n\n"
+            ."DRAFT (the assistant's intent):\n".($draft !== '' ? $draft : '(none — just deliver the step naturally)')."\n\n"
+            ."STEP PROMPT (facts that MUST all be included):\n{$scripted}";
+
+        $voiced = $this->client->generateText(
+            $prompt,
+            0.5,
+            system: $system,
+            timeout: (int) config('services.gemini.chat_timeout', 10),
+        );
+
+        $voiced = is_string($voiced) ? trim(WhatsAppFormatter::clean($voiced)) : '';
+
+        // Reject degenerate outputs — the scripted fallback is always safe.
+        if ($voiced === '' || mb_strlen($voiced) > 1200) {
+            return null;
+        }
+
+        return $voiced;
     }
 
     /**
@@ -471,9 +525,10 @@ class GeminiProvider
             ."- Adjusting this task with NEW values (new quantity, different link, changed option) → set "
             ."flow to '{$flow}' and put ONLY the new values in flow_data; already-collected details are kept.\n"
             ."- Switching to a different task → set that flow instead.\n"
-            ."- Anything else — a question, a doubt, small talk — answer it and set flow to null; the system "
-            ."automatically returns them to the step they were on. Do NOT set flow to '{$flow}' just because the task "
-            ."is active: without new flow_data that only makes the flow repeat itself.\n"
+            ."- Anything else — a question, a doubt, small talk — answer it with flow null, and END your reply by steering "
+            ."them back to the pending step in your own words (e.g. '…so, which platform are we growing?'). The system will "
+            ."NOT re-send the step prompt — you are the only voice. Do NOT set flow to '{$flow}' just because the task is "
+            ."active: without new flow_data that only makes the flow repeat itself.\n"
             ."Never confirm/place the order or payment yourself — the flow re-asks for confirmation.";
     }
 

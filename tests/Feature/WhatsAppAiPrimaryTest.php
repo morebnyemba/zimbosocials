@@ -68,10 +68,12 @@ class WhatsAppAiPrimaryTest extends TestCase
         return array_merge($this->msg(''), ['type' => 'interactive', 'interactive_id' => $id]);
     }
 
-    private function mockIntent(array $resolveResult): void
+    private function mockIntent(array $resolveResult, ?string $voiced = null): void
     {
         $intent = Mockery::mock(IntentEngine::class);
         $intent->shouldReceive('resolve')->andReturn($resolveResult);
+        // The one-voice pass; null = fall back to the scripted step text.
+        $intent->shouldReceive('voice')->andReturn($voiced)->byDefault();
         $this->app->instance(IntentEngine::class, $intent);
     }
 
@@ -99,14 +101,14 @@ class WhatsAppAiPrimaryTest extends TestCase
         $this->assertEquals(20.0, (float) $ctx->get('deposit_amount'));
     }
 
-    public function test_mid_flow_side_question_is_answered_and_step_reprompted(): void
+    public function test_mid_flow_side_question_gets_one_answer_and_no_step_reblast(): void
     {
         $this->seedUserAndAccount();
         $this->makeService('Instagram', 'Instagram Followers');
 
         $this->mockIntent([
             'handled' => true,
-            'reply' => 'Refills top you back up if numbers drop. ✅',
+            'reply' => 'Refills top you back up if numbers drop. ✅ So — which platform are we growing?',
             'follow_up' => null,
             'flow' => null,
             'flow_data' => [],
@@ -114,18 +116,79 @@ class WhatsAppAiPrimaryTest extends TestCase
 
         $router = app(MessageRouter::class);
         $router->handle($this->tap('fl_order'));
+        $before = \Illuminate\Support\Facades\DB::table('whatsapp_messages')->where('direction', 'out')->count();
         $router->handle($this->msg('what does refill mean?'));
 
-        // Answered, but the user is still exactly where they were.
+        // Flow state untouched — their next input still lands on the step.
         $ctx = app(SessionManager::class)->load(self::PHONE);
         $this->assertSame('order', $ctx->flow);
         $this->assertSame('pick_category', $ctx->state);
 
+        // ONE voice: only the AI's answer went out; the step prompt was NOT
+        // re-sent on top of it (the AI steers back in its own words).
+        $out = \Illuminate\Support\Facades\DB::table('whatsapp_messages')->where('direction', 'out')->count();
+        $this->assertSame($before + 1, $out);
         $this->assertDatabaseHas('whatsapp_messages', [
             'wa_phone' => self::PHONE,
             'direction' => 'out',
-            'body' => 'Refills top you back up if numbers drop. ✅',
+            'body' => 'Refills top you back up if numbers drop. ✅ So — which platform are we growing?',
         ]);
+    }
+
+    public function test_ai_flow_trigger_speaks_with_one_voiced_message(): void
+    {
+        $this->seedUserAndAccount();
+
+        // AI decides deposit AND the voice pass fuses draft + step into one text.
+        $this->mockIntent([
+            'handled' => true,
+            'reply' => "Sure — let's top up *\$20*! 💰",
+            'follow_up' => 'Want anything else?', // must be suppressed on flow turns
+            'flow' => 'deposit',
+            'flow_data' => ['amount' => 20],
+        ], voiced: "Sure — let's top up *\$20*! 💰 How would you like to pay?");
+
+        $before = \Illuminate\Support\Facades\DB::table('whatsapp_messages')->where('direction', 'out')->count();
+        app(MessageRouter::class)->handle($this->msg('deposit 20'));
+
+        // Exactly ONE outbound message: the fused voice as the body, with the
+        // method list attached (flattened into the text fallback in tests).
+        $out = \Illuminate\Support\Facades\DB::table('whatsapp_messages')->where('direction', 'out')->get()->slice($before);
+        $this->assertCount(1, $out);
+        $this->assertStringContainsString("Sure — let's top up *\$20*! 💰 How would you like to pay?", $out->first()->body);
+        // The scripted step text was replaced, not duplicated.
+        $this->assertStringNotContainsString('Deposit *20.00', $out->first()->body);
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('deposit', $ctx->flow);
+        $this->assertSame('choose_method', $ctx->state);
+    }
+
+    public function test_money_confirm_steps_are_never_voiced(): void
+    {
+        $this->seedUserAndAccount();
+
+        $intent = Mockery::mock(IntentEngine::class);
+        $intent->shouldReceive('resolve')->andReturn([
+            'handled' => true,
+            'reply' => 'Setting up your EcoCash top-up now!',
+            'follow_up' => null,
+            'flow' => 'deposit',
+            'flow_data' => ['amount' => 10, 'method' => 'ecocash', 'phone' => '0771234567'],
+        ]);
+        // Full prefills land on the CONFIRM step — the voice pass must not run.
+        $intent->shouldNotReceive('voice');
+        $this->app->instance(IntentEngine::class, $intent);
+
+        app(MessageRouter::class)->handle($this->msg('deposit 10 by ecocash on 0771234567'));
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('confirm', $ctx->state);
+
+        // The verbatim scripted summary (exact amounts) is what went out.
+        $confirm = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringContainsString('10.00', $confirm->body);
+        $this->assertStringContainsString('EcoCash', $confirm->body);
     }
 
     public function test_ai_unavailable_falls_back_to_flow_error_text(): void

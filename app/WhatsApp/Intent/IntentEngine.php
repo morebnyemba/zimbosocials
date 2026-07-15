@@ -57,6 +57,29 @@ class IntentEngine
             'follow_up' => $res['follow_up'] ?? null,
             'flow' => $res['flow'],
             'flow_data' => $res['flow_data'],
+            'prompt_version' => $res['prompt_version'] ?? null,
         ];
+    }
+
+    /**
+     * "One voice": fuse the AI's draft reply with a flow step's scripted prompt
+     * into a single message. Null → caller sends the scripted text (the safe
+     * fallback). Deliberately NOT budget-gated: it belongs to a resolve() that
+     * already passed the gate — one user message costs one budget unit even
+     * though it may use two model calls.
+     */
+    public function voice(string $draft, string $scripted, string $userMessage): ?string
+    {
+        if (! $this->ai->isConfigured()) {
+            return null;
+        }
+
+        try {
+            return $this->ai->voiceStep($draft, $scripted, $userMessage);
+        } catch (\Throwable $e) {
+            Log::warning('WhatsApp AI voice pass failed', ['message' => $e->getMessage()]);
+
+            return null;
+        }
     }
 }
