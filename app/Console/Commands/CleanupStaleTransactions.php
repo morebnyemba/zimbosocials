@@ -133,7 +133,7 @@ class CleanupStaleTransactions extends Command
                 return 'credited';
             }
 
-            if ($status && in_array($status->status(), ['Cancelled', 'Failed'], true)) {
+            if ($status && in_array($status->status(), ['cancelled', 'failed'], true)) {
                 $this->depositService->reject($transaction, 'stale_cleanup_poll');
 
                 return 'rejected';

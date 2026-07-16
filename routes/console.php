@@ -33,6 +33,11 @@ Schedule::command('upstream:sync-services')->dailyAt('02:00')->withoutOverlappin
 // sensitive mail (login codes, order updates) is sent ahead of bookkeeping.
 Schedule::command('queue:work --queue=notifications,default --stop-when-empty --max-time=50 --tries=3')->everyMinute()->withoutOverlapping();
 
+// Actively poll recently-started Paynow deposits so their status
+// auto-updates (credit/reject) — WhatsApp express payments have no other
+// poller, so without this an EcoCash failure would sit pending for hours.
+Schedule::command('transactions:poll-gateway')->everyMinute()->withoutOverlapping();
+
 // Expire stale pending deposits older than 24 hours (final-polls Paynow
 // first; skips proof-submitted deposits; never touches withdrawals)
 Schedule::command('transactions:cleanup-stale --hours=24')->hourly()->withoutOverlapping();

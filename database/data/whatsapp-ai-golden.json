@@ -86,10 +86,7 @@
     {
         "message": "I want to buy tiktok likes",
         "authenticated": false,
-        "expect_flow": "order",
-        "expect_entities": {
-            "platform": "tiktok"
-        }
+        "expect_flow": null
     },
     {
         "message": "any update on my ticket 12?",

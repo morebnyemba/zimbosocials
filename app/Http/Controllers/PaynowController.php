@@ -287,7 +287,7 @@ class PaynowController extends Controller
                         ->with('success', 'Your deposit of $'.number_format((float) $transaction->amount, 2).' has been confirmed!');
                 }
 
-                if ($remoteStatus && in_array($remoteStatus->status(), ['Cancelled', 'Failed'], true)) {
+                if ($remoteStatus && in_array($remoteStatus->status(), ['cancelled', 'failed'], true)) {
                     $this->depositService->reject($transaction, 'return_url');
 
                     return redirect()->route('wallet.index')
@@ -345,7 +345,7 @@ class PaynowController extends Controller
                 return response()->json(['status' => 'completed', 'resolved' => true]);
             }
 
-            if ($remoteStatus && in_array($remoteStatus->status(), ['Cancelled', 'Failed'], true)) {
+            if ($remoteStatus && in_array($remoteStatus->status(), ['cancelled', 'failed'], true)) {
                 $this->depositService->reject($transaction, 'client_poll');
 
                 return response()->json(['status' => 'rejected', 'resolved' => true]);
