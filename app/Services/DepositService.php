@@ -98,6 +98,20 @@ class DepositService
             $credited = true;
         });
 
+        // A WhatsApp order may have stalled at confirm waiting for these funds —
+        // re-open it now. Decoupled + guarded so it can never break crediting.
+        if ($credited) {
+            try {
+                app(\App\WhatsApp\Order\OrderResumeService::class)
+                    ->resumeAfterDeposit((int) $transaction->user_id);
+            } catch (\Throwable $e) {
+                Log::warning('WhatsApp order resume after deposit failed', [
+                    'user_id' => $transaction->user_id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
         return $credited;
     }
 

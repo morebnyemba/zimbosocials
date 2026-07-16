@@ -241,6 +241,18 @@ class CreateOrderFlow extends AbstractFlow
             // Pre-fill the deposit amount so "deposit" jumps straight to methods.
             $ctx->set('_prefill_amount', (float) ceil($charge));
 
+            // Remember this order so it auto-resumes once the top-up confirms
+            // (the deposit credits in a separate webhook/poll request).
+            if ($user && $ctx->has('order_link')) {
+                \App\WhatsApp\Order\OrderResumeService::stash(
+                    (int) $user->id,
+                    $ctx->phone,
+                    (int) $service->id,
+                    (string) $ctx->get('order_link'),
+                    $qty,
+                );
+            }
+
             return FlowResult::step(
                 $summary."⚠️ You're a bit short — you need *".$this->money($short, $cur)."* more.\n\n"
                 .'Top up first (I\'ve got the amount ready 👍), then just place your order again.',
