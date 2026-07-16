@@ -247,6 +247,13 @@ class MessageRouter
                 || in_array($selection, ['menu', 'menu_home', 'guest_learn'], true);
 
             if (! $isNav) {
+                // The id wasn't one of ours (some payloads deliver the button's
+                // title as the id). Try to map it — by the raw value or its
+                // title form — back to the option we sent before giving up.
+                if ($tag = $this->routeMappedOption($ctx, $account, $selection, $text)) {
+                    return $tag;
+                }
+
                 $this->handleStuck($account, $ctx);
 
                 return ['handled_by' => 'system', 'intent' => 'unknown_selection'];
@@ -267,24 +274,8 @@ class MessageRouter
         //     wrong). Map the title back to the id we sent and route it as a
         //     real tap so buttons always advance the flow.
         if ($selection === null && $text !== '') {
-            $mapped = ((array) $ctx->get('_option_map', []))[$this->optionKey($text)] ?? null;
-
-            if ($mapped !== null && str_starts_with($mapped, 'fs:') && $ctx->inFlow()) {
-                $res = $this->engine->advance($ctx, substr($mapped, 3));
-                $this->emit($account, $ctx, $res);
-
-                return ['handled_by' => 'flow', 'intent' => 'title_tap'];
-            }
-
-            if ($mapped !== null && (isset(MenuProvider::$actionFlow[$mapped])
-                || in_array($mapped, ['menu', 'menu_home', 'guest_learn'], true))
-            ) {
-                if ($ctx->inFlow()) {
-                    $this->engine->cancel($ctx);
-                }
-                $this->handleSelection($mapped, $ctx, $account);
-
-                return ['handled_by' => 'menu', 'intent' => 'title_tap'];
+            if ($tag = $this->routeMappedOption($ctx, $account, $text)) {
+                return $tag;
             }
         }
 
@@ -661,6 +652,56 @@ class MessageRouter
         // A finished flow's closing message stands on its own — no menu chaser.
         // The menu appears when asked for ('menu' / a tap) and as the fallback
         // when the AI can't handle free text.
+    }
+
+    /**
+     * Resolve a tap that didn't arrive as one of our option ids back to the
+     * option we actually sent, and route it. Handles two malformed-payload
+     * shapes: a tap delivered as the option's plain title (no id), and a tap
+     * whose id is the title itself. Candidates are tried in order, each matched
+     * against the remembered option map by raw value and by title form.
+     * Returns the dispatch tag when routed, or null when nothing matched.
+     */
+    private function routeMappedOption(SessionContext $ctx, WhatsAppAccount $account, ?string ...$candidates): ?array
+    {
+        $map = (array) $ctx->get('_option_map', []);
+        if ($map === []) {
+            return null;
+        }
+
+        $mapped = null;
+        foreach ($candidates as $candidate) {
+            if ($candidate === null || $candidate === '') {
+                continue;
+            }
+            $mapped = $map[$candidate] ?? $map[$this->optionKey($candidate)] ?? null;
+            if ($mapped !== null) {
+                break;
+            }
+        }
+
+        if ($mapped === null) {
+            return null;
+        }
+
+        if (str_starts_with($mapped, 'fs:') && $ctx->inFlow()) {
+            $this->emit($account, $ctx, $this->engine->advance($ctx, substr($mapped, 3)));
+
+            return ['handled_by' => 'flow', 'intent' => 'title_tap'];
+        }
+
+        if (isset(MenuProvider::$actionFlow[$mapped])
+            || in_array($mapped, ['menu', 'menu_home', 'guest_learn'], true)
+        ) {
+            if ($ctx->inFlow()) {
+                $this->engine->cancel($ctx);
+            }
+            $this->handleSelection($mapped, $ctx, $account);
+
+            return ['handled_by' => 'menu', 'intent' => 'title_tap'];
+        }
+
+        return null;
     }
 
     /**

@@ -198,6 +198,33 @@ class WhatsAppAiPrimaryTest extends TestCase
         ]);
     }
 
+    /**
+     * A second malformed shape: the tap arrives WITH an interactive_id, but the
+     * id is the button's title ("✅ Place order") rather than our fs:yes value.
+     * The unknown-selection branch must map it back and place, not nudge.
+     */
+    public function test_tap_whose_id_is_the_title_still_advances_the_flow(): void
+    {
+        $this->seedUserAndAccount(balance: 100);
+        $service = $this->makeService('Facebook', 'Facebook Followers', 5.0);
+
+        $this->mockIntent([
+            'handled' => true, 'reply' => 'Setting up! ✅', 'follow_up' => null,
+            'flow' => 'order',
+            'flow_data' => ['service_id' => $service->id, 'link' => 'https://facebook.com/x', 'quantity' => 1000],
+        ]);
+
+        $router = app(MessageRouter::class);
+        $router->handle($this->msg('1000 facebook followers on https://facebook.com/x')); // → confirm
+
+        // Tap delivered with the title as its id (not fs:yes) — must still place.
+        $router->handle($this->tap('✅ Place order'));
+
+        $this->assertDatabaseHas('orders', [
+            'user_id' => \App\Models\User::first()->id, 'quantity' => 1000,
+        ]);
+    }
+
     public function test_unknown_tap_midflow_rerenders_step_not_menu(): void
     {
         $this->seedUserAndAccount(balance: 100);
