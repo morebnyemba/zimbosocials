@@ -74,6 +74,22 @@ class WhatsAppProofIntakeTest extends TestCase
         $this->assertSame('pending', $tx->fresh()->status);
     }
 
+    public function test_admins_are_notified_when_proof_is_submitted(): void
+    {
+        $this->manualMethod();
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $user = User::factory()->create(['balance' => 0]);
+        $tx = $this->pendingManual($user);
+        $this->fakeMediaDownload();
+
+        app(ProofIntake::class)->intake($user, ['id' => 'MEDIA1', 'mime' => 'image/jpeg', 'kind' => 'image']);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $admin->id,
+            'type' => 'admin_deposit_proof',
+        ]);
+    }
+
     public function test_no_pending_manual_deposit_is_reported(): void
     {
         $user = User::factory()->create(['balance' => 0]);

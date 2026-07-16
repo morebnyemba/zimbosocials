@@ -6,7 +6,9 @@ use App\Models\AuditLog;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\DepositService;
+use App\Services\NotificationService;
 use App\WhatsApp\Messaging\WhatsAppGateway;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -92,7 +94,42 @@ class ProofIntake
             newValues: ['proof_url' => (string) $transaction->getAttribute('proof_url'), 'source' => 'whatsapp'],
         );
 
+        $this->notifyAdmins($user, $transaction);
+
         return ['ok' => true, 'transaction' => $transaction];
+    }
+
+    /**
+     * Alert admins that a manual deposit is ready to review — otherwise a
+     * WhatsApp proof just sits in the queue until someone happens to look.
+     * Best-effort: the proof is already saved, so a notify failure never fails
+     * the intake.
+     */
+    private function notifyAdmins(User $user, Transaction $transaction): void
+    {
+        try {
+            $cur = $user->currency ?? 'USD';
+            $amount = number_format((float) abs($transaction->amount), 2);
+            $method = $transaction->method ? ucfirst((string) $transaction->method) : 'manual';
+
+            NotificationService::notifyAdmins(
+                'admin_deposit_proof',
+                'Deposit proof submitted (WhatsApp)',
+                "{$user->name} submitted proof for a {$amount} {$cur} {$method} deposit (#{$transaction->getKey()}) via WhatsApp — verify and credit it in Transactions.",
+                [
+                    'transaction_id' => (int) $transaction->getKey(),
+                    'user_name' => $user->name,
+                    'amount' => $amount,
+                    'method' => $transaction->method,
+                    'source' => 'whatsapp',
+                ],
+            );
+        } catch (\Throwable $e) {
+            Log::warning('WhatsApp proof admin-notify failed', [
+                'transaction_id' => $transaction->getKey(),
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
