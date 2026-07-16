@@ -127,6 +127,62 @@ class WhatsAppInteractiveFlowTest extends TestCase
         $this->assertNotNull($res->list);
     }
 
+    public function test_deposit_menu_lists_manual_methods_with_the_bonus(): void
+    {
+        \App\Models\ManualPaymentDetail::create([
+            'method_key' => 'bank', 'label' => 'Bank Transfer (USD)',
+            'account_name' => 'ZimboSocials', 'account_number' => '000111222',
+            'instructions' => 'Use your username as reference.',
+            'is_active' => true, 'sort_order' => 1,
+        ]);
+        $user = User::factory()->create(['balance' => 0]);
+
+        $ctx = new SessionContext('263771234567');
+        $ctx->set('_user_id', $user->id);
+        $engine = app(FlowEngine::class);
+        $engine->start($ctx, 'deposit');
+        $res = $engine->advance($ctx, '10'); // amount → method menu
+
+        $this->assertSame('choose_method', $ctx->state);
+        // The manual method + the bonus are both surfaced.
+        $this->assertStringContainsString('bonus', (string) $res->reply);
+        $ids = collect($res->list['sections'])->flatMap(fn ($s) => $s['rows'])->pluck('title');
+        $this->assertTrue($ids->contains('Bank Transfer (USD)'), 'manual method should be listed');
+    }
+
+    public function test_choosing_a_manual_method_opens_a_pending_deposit_with_details(): void
+    {
+        $detail = \App\Models\ManualPaymentDetail::create([
+            'method_key' => 'bank', 'label' => 'Bank Transfer (USD)',
+            'account_name' => 'ZimboSocials Ltd', 'account_number' => '000111222',
+            'instructions' => 'Reference: your username.',
+            'is_active' => true, 'sort_order' => 1,
+        ]);
+        $user = User::factory()->create(['balance' => 0]);
+
+        $ctx = new SessionContext('263771234567');
+        $ctx->set('_user_id', $user->id);
+        $engine = app(FlowEngine::class);
+        $engine->start($ctx, 'deposit');
+        $engine->advance($ctx, '10'); // → method menu (4 gateway, then manual = index 5)
+
+        $map = (array) $ctx->get('deposit_method_map', []);
+        $manualIdx = array_search('m:'.$detail->id, $map, true);
+        $res = $engine->advance($ctx, (string) $manualIdx); // pick the manual method
+
+        // Pay-to details shown, bonus mentioned, and a pending deposit opened.
+        $body = (string) $res->reply;
+        $this->assertStringContainsString('000111222', $body);
+        $this->assertStringContainsString('ZimboSocials Ltd', $body);
+        $this->assertStringContainsString('bonus', $body);
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $user->id, 'type' => 'deposit', 'method' => 'bank',
+            'status' => 'pending', 'amount' => 10.0,
+        ]);
+        // No money moved yet — awaiting proof/approval.
+        $this->assertSame(0.0, (float) $user->fresh()->balance);
+    }
+
     /**
      * Regression: buildContext() used to clobber its string $query param with an
      * Eloquent builder and pass it to KnowledgeBase::search(string) — a TypeError

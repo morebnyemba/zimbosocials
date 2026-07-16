@@ -2,7 +2,9 @@
 
 namespace App\WhatsApp\Flow\Definitions;
 
+use App\Models\ManualPaymentDetail;
 use App\Models\Transaction;
+use App\Services\DepositService;
 use App\Services\Paynow\PaynowMobileService;
 use App\WhatsApp\Flow\AbstractFlow;
 use App\WhatsApp\Flow\FlowResult;
@@ -21,8 +23,11 @@ class DepositFundsFlow extends AbstractFlow
     /** Menu order for the mobile-money providers. */
     private const MENU = ['ecocash', 'onemoney', 'innbucks', 'omari'];
 
-    public function __construct(ResponseBuilder $rb, private readonly PaynowMobileService $paynow)
-    {
+    public function __construct(
+        ResponseBuilder $rb,
+        private readonly PaynowMobileService $paynow,
+        private readonly DepositService $deposits,
+    ) {
         parent::__construct($rb);
     }
 
@@ -101,38 +106,161 @@ class DepositFundsFlow extends AbstractFlow
     private function methodMenu(float $amount, SessionContext $ctx): FlowResult
     {
         $cur = $this->user($ctx)?->currency ?? 'USD';
-        $rows = [];
-        $i = 1;
-        foreach (self::MENU as $key) {
-            $rows[] = ['id' => 'fs:'.$i, 'title' => PaynowMobileService::PROVIDERS[$key]['label']];
-            $i++;
-        }
-        $rows[] = ['id' => 'fs:'.$i, 'title' => 'Card / Other', 'description' => 'Pay on the website'];
+        $bonus = $this->deposits->manualDepositBonusPercent();
 
-        return FlowResult::step('💳 Deposit *'.$this->money($amount, $cur).'* — how would you like to pay?', 'choose_method')
-            ->withList('Payment method', [['title' => 'Pay with', 'rows' => $rows]], 'Add funds');
+        // We build the visible rows AND a parallel index→option map so the tap
+        // (or typed number) resolves unambiguously — gateway keys and manual
+        // method_keys can overlap (e.g. an "EcoCash" express AND an "EcoCash USD"
+        // manual account), so we route by position, not by label.
+        $map = [];
+        $i = 0;
+
+        // ⚡ Instant / express — auto-confirming Paynow methods.
+        $instantRows = [];
+        foreach (self::MENU as $key) {
+            $i++;
+            $instantRows[] = ['id' => 'fs:'.$i, 'title' => PaynowMobileService::PROVIDERS[$key]['label']];
+            $map[$i] = 'g:'.$key;
+        }
+
+        $sections = [['title' => '⚡ Instant', 'rows' => $instantRows]];
+
+        // 🏦 Manual transfers — pay to our account, upload proof; these earn the
+        // deposit bonus, so surface that right in the row.
+        $manuals = ManualPaymentDetail::active()->whereNull('gateway_type')->ordered()->get();
+        if ($manuals->isNotEmpty()) {
+            $manualRows = [];
+            foreach ($manuals as $m) {
+                $i++;
+                $manualRows[] = [
+                    'id' => 'fs:'.$i,
+                    'title' => $m->label,
+                    'description' => $bonus > 0 ? '+'.$this->trimPercent($bonus).'% bonus' : 'Pay & upload proof',
+                ];
+                $map[$i] = 'm:'.$m->id;
+            }
+            $sections[] = ['title' => '🏦 Manual (+'.$this->trimPercent($bonus).'% bonus)', 'rows' => $manualRows];
+        }
+
+        // Card / anything else → the secure wallet page.
+        $i++;
+        $sections[] = ['title' => 'Other', 'rows' => [
+            ['id' => 'fs:'.$i, 'title' => 'Card / Other', 'description' => 'Pay on the website'],
+        ]];
+        $map[$i] = 'card';
+
+        $ctx->set('deposit_method_map', $map);
+
+        $body = '💳 Deposit *'.$this->money($amount, $cur).'* — how would you like to pay?';
+        if ($bonus > 0 && $manuals->isNotEmpty()) {
+            $body .= "\n\n💵 *Manual* transfers earn a *+".$this->trimPercent($bonus).'% bonus* on your deposit!';
+        }
+
+        return FlowResult::step($body, 'choose_method')
+            ->withList('Payment method', $sections, 'Add funds');
     }
 
     private function chooseMethod(string $input, SessionContext $ctx): FlowResult
     {
-        $idx = (int) preg_replace('/\D+/', '', $input) - 1;
+        $map = (array) $ctx->get('deposit_method_map', []);
+        $idx = (int) preg_replace('/\D+/', '', $input);
+        $token = $map[$idx] ?? null;
 
-        // Last option = Card / Other → website.
-        if ($idx === count(self::MENU)) {
+        if ($token === null) {
+            return FlowResult::retry('Please reply with a valid number, or type *cancel*.', 'choose_method');
+        }
+
+        // Card / Other → website.
+        if ($token === 'card') {
             return FlowResult::complete(
                 "💳 To pay by *card or another method*, open your wallet:\n".url('/wallet')
                 ."\n\nYour balance updates automatically once payment is confirmed."
             );
         }
 
-        $provider = self::MENU[$idx] ?? null;
-        if (! $provider) {
-            return FlowResult::retry('Please reply with a valid number, or type *cancel*.', 'choose_method');
+        // Manual transfer → show our account details, open a pending deposit.
+        if (str_starts_with($token, 'm:')) {
+            return $this->chooseManual((int) substr($token, 2), $ctx);
         }
 
+        // Gateway express → collect the phone to charge.
+        $provider = substr($token, 2);
         $ctx->set('deposit_provider', $provider);
 
         return $this->askPhonePrompt($provider, $ctx);
+    }
+
+    /**
+     * Manual bank/wallet transfer: create the pending deposit (awaiting proof)
+     * and hand back the pay-to details, the bonus, and how to submit proof.
+     * No money moves here — an admin credits it (plus bonus) once proof lands.
+     */
+    private function chooseManual(int $detailId, SessionContext $ctx): FlowResult
+    {
+        $detail = ManualPaymentDetail::active()->whereNull('gateway_type')->find($detailId);
+        if (! $detail) {
+            return FlowResult::retry('That method is no longer available — pick another, or type *cancel*.', 'choose_method');
+        }
+
+        $user = $this->user($ctx);
+        if (! $user) {
+            return FlowResult::fail('Please try again from the *menu*.');
+        }
+
+        // Cap open manual requests (same guard as the wallet page).
+        $open = Transaction::where('user_id', $user->id)
+            ->where('type', 'deposit')->where('status', 'pending')
+            ->where('method', $detail->method_key)->count();
+        if ($open >= 3) {
+            return FlowResult::fail('You already have a few manual deposits awaiting proof. Upload proof for those first at '.url('/wallet').', then start another.');
+        }
+
+        $amount = (float) $ctx->get('deposit_amount', 0);
+        $cur = $user->currency ?? 'USD';
+
+        Transaction::create([
+            'user_id' => $user->id,
+            'type' => 'deposit',
+            'amount' => $amount,
+            'balance_before' => $user->balance,
+            'balance_after' => $user->balance, // not credited — awaiting proof
+            'method' => $detail->method_key,
+            'status' => 'pending',
+            'notes' => 'Awaiting proof of payment (via WhatsApp)',
+        ]);
+
+        $bonus = $this->deposits->manualDepositBonusPercent();
+        $lines = [
+            '🏦 *'.$detail->label.'*',
+            '',
+            'Please send *'.$this->money($amount, $cur).'* to:',
+        ];
+        if ($detail->account_name) {
+            $lines[] = '• Name: *'.$detail->account_name.'*';
+        }
+        if ($detail->account_number) {
+            $lines[] = '• Account: *'.$detail->account_number.'*';
+        }
+        if ($detail->instructions) {
+            $lines[] = '';
+            $lines[] = $detail->instructions;
+        }
+        if ($bonus > 0) {
+            $bonusAmt = $this->money(round($amount * $bonus / 100, 2), $cur);
+            $lines[] = '';
+            $lines[] = "💵 You'll earn a *+".$this->trimPercent($bonus).'% bonus* ('.$bonusAmt.') once approved!';
+        }
+        $lines[] = '';
+        $lines[] = '📸 After paying, upload your proof of payment here to get credited:';
+        $lines[] = url('/wallet');
+
+        return FlowResult::complete(implode("\n", $lines));
+    }
+
+    /** 5.00 → "5", 7.50 → "7.5" for clean bonus copy. */
+    private function trimPercent(float $percent): string
+    {
+        return rtrim(rtrim(number_format($percent, 2, '.', ''), '0'), '.');
     }
 
     private function askPhonePrompt(string $provider, SessionContext $ctx): FlowResult

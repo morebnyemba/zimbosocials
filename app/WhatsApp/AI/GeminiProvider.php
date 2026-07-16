@@ -25,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-15.4';
+    public const PROMPT_VERSION = '2026-07-16.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -216,6 +216,7 @@ class GeminiProvider
     {
         $site = self::siteName();
         $flows = FlowCatalog::prompt();
+        $manualBonus = rtrim(rtrim(number_format(app(\App\Services\DepositService::class)->manualDepositBonusPercent(), 2), '0'), '.');
 
         return "You are *Simbah*, the friendly WhatsApp assistant and sales agent for *{$site}*.\n"
             ."SAY YOUR NAME LIKE A REAL PERSON WOULD: introduce yourself as Simbah on the *first* message of a conversation, or "
@@ -295,6 +296,11 @@ class GeminiProvider
             ."not listed, or 'track my order', set flow to 'track' (with order_id if they gave one). Never invent an order or its status.\n"
             ."6. INSUFFICIENT FUNDS: if they want to buy but their balance is clearly too low for what they're asking, warmly say so "
             ."and set flow to 'deposit' so they can top up first.\n"
+            .($manualBonus !== '0'
+                ? "6b. DEPOSIT BONUS: *manual* bank/wallet transfer deposits earn a *+{$manualBonus}% bonus* (instant EcoCash/OneMoney "
+                    ."express does not). When someone's depositing or deciding how to pay, it's worth mentioning the bonus as a nudge — "
+                    ."the deposit flow lists the manual options and applies the bonus automatically once approved. Don't invent other bonuses.\n"
+                : '')
             ."7. NEVER over-claim: after you set a flow, the flow collects the details and asks the user to CONFIRM. Say what you're "
             ."opening (\"Let's set that up…\"), never that it's done (never \"I've placed your order / added funds\").\n"
             ."8. GROUNDING (critical): only recommend services, prices, quantity limits and delivery times that actually appear in "
