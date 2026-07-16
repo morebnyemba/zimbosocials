@@ -91,6 +91,12 @@ class OrderResumeService
         $ctx->set('_prefill_quantity', $qty);
 
         $res = $this->engine->start($ctx, 'order');
+
+        // Remember the confirm buttons as title → id, so a tap that arrives as
+        // its plain label ("Place order") still routes to the flow even when the
+        // WhatsApp payload omits the interactive id (see MessageRouter dispatch).
+        $this->rememberOptions($ctx, $res);
+
         $this->sessions->save($ctx);
         self::clear($userId);
 
@@ -190,6 +196,32 @@ class OrderResumeService
         } else {
             $this->responder->send($phone, $body, $meta);
         }
+    }
+
+    /**
+     * Stash the step's tappable options as title → id on the session, matching
+     * MessageRouter's fallback so a title-only tap can be routed to the flow.
+     */
+    private function rememberOptions(SessionContext $ctx, FlowResult $res): void
+    {
+        $map = [];
+        foreach ((array) ($res->buttons ?? []) as $b) {
+            if (isset($b['title'], $b['id'])) {
+                $map[$this->optionKey((string) $b['title'])] = (string) $b['id'];
+            }
+        }
+
+        if ($map !== []) {
+            $ctx->set('_option_map', $map);
+        }
+    }
+
+    /** Same normalisation as MessageRouter::optionKey so keys line up. */
+    private function optionKey(string $title): string
+    {
+        $stripped = preg_replace('/[^\p{L}\p{N} ]+/u', ' ', $title) ?? $title;
+
+        return trim((string) preg_replace('/\s+/u', ' ', mb_strtolower($stripped)));
     }
 
     private static function key(int $userId): string

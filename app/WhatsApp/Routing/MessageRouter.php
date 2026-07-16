@@ -260,6 +260,34 @@ class MessageRouter
             return ['handled_by' => 'menu', 'intent' => $selection];
         }
 
+        // 4c. Tap that arrived as its plain TITLE (no interactive id). Some
+        //     WhatsApp payloads/clients deliver a button/list tap as the option
+        //     label text instead of its id — which would otherwise fall through
+        //     as stray free text, fail the flow, and bounce off the AI (slow +
+        //     wrong). Map the title back to the id we sent and route it as a
+        //     real tap so buttons always advance the flow.
+        if ($selection === null && $text !== '') {
+            $mapped = ((array) $ctx->get('_option_map', []))[$this->optionKey($text)] ?? null;
+
+            if ($mapped !== null && str_starts_with($mapped, 'fs:') && $ctx->inFlow()) {
+                $res = $this->engine->advance($ctx, substr($mapped, 3));
+                $this->emit($account, $ctx, $res);
+
+                return ['handled_by' => 'flow', 'intent' => 'title_tap'];
+            }
+
+            if ($mapped !== null && (isset(MenuProvider::$actionFlow[$mapped])
+                || in_array($mapped, ['menu', 'menu_home', 'guest_learn'], true))
+            ) {
+                if ($ctx->inFlow()) {
+                    $this->engine->cancel($ctx);
+                }
+                $this->handleSelection($mapped, $ctx, $account);
+
+                return ['handled_by' => 'menu', 'intent' => 'title_tap'];
+            }
+        }
+
         // 5. Active flow consumes free text. When the flow doesn't understand
         //    the input, the AI brain gets first crack at it — it can answer,
         //    adjust the current flow's data, or switch to another flow. The
@@ -603,6 +631,12 @@ class MessageRouter
             $this->responder->send($ctx->phone, $body, $meta);
         }
 
+        // Remember this step's tappable options (title → id). Some WhatsApp
+        // payloads deliver a button/list tap as the option's plain TITLE with no
+        // interactive id; the dispatcher uses this map to route such a tap back
+        // to the flow instead of treating it as stray free text. See dispatch().
+        $this->rememberOptions($ctx, $res);
+
         if (! $res->isDone()) {
             return; // still mid-flow, awaiting input
         }
@@ -627,6 +661,48 @@ class MessageRouter
         // A finished flow's closing message stands on its own — no menu chaser.
         // The menu appears when asked for ('menu' / a tap) and as the fallback
         // when the AI can't handle free text.
+    }
+
+    /**
+     * Stash the current step's tappable options as title → id, so a tap that
+     * arrives as its plain title (no interactive id) can still be routed to the
+     * flow. Cleared to nothing when a step has no options.
+     */
+    private function rememberOptions(SessionContext $ctx, FlowResult $res): void
+    {
+        $map = [];
+
+        foreach ((array) ($res->buttons ?? []) as $b) {
+            if (isset($b['title'], $b['id'])) {
+                $map[$this->optionKey((string) $b['title'])] = (string) $b['id'];
+            }
+        }
+
+        foreach ((array) ($res->list['sections'] ?? []) as $section) {
+            foreach ((array) ($section['rows'] ?? []) as $row) {
+                if (isset($row['title'], $row['id'])) {
+                    $map[$this->optionKey((string) $row['title'])] = (string) $row['id'];
+                }
+            }
+        }
+
+        if ($map !== []) {
+            $ctx->set('_option_map', $map);
+        } else {
+            $ctx->forget('_option_map');
+        }
+    }
+
+    /**
+     * Normalise a button/row title for matching: drop emojis and punctuation,
+     * lower-case, collapse spaces. So "✅ Place order" and a typed "place order"
+     * both key to "place order".
+     */
+    private function optionKey(string $title): string
+    {
+        $stripped = preg_replace('/[^\p{L}\p{N} ]+/u', ' ', $title) ?? $title;
+
+        return trim((string) preg_replace('/\s+/u', ' ', mb_strtolower($stripped)));
     }
 
     private function sendMenuFor(WhatsAppAccount $account, SessionContext $ctx): void

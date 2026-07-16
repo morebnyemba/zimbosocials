@@ -165,6 +165,39 @@ class WhatsAppAiPrimaryTest extends TestCase
         $this->assertStringNotContainsString('What would you like to do', (string) $lastOut->body);
     }
 
+    /**
+     * The prod bug: some WhatsApp payloads deliver a button tap as its plain
+     * TITLE text with no interactive id. "✅ Place order" arriving as text must
+     * still place the order (routed via the remembered option map), not fall
+     * through to the flow-error / AI path and leave the user stuck typing.
+     */
+    public function test_button_tap_arriving_as_title_text_advances_the_flow(): void
+    {
+        $this->seedUserAndAccount(balance: 100);
+        $service = $this->makeService('Facebook', 'Facebook Followers', 5.0);
+
+        $this->mockIntent([
+            'handled' => true, 'reply' => 'Setting up! ✅', 'follow_up' => null,
+            'flow' => 'order',
+            'flow_data' => ['service_id' => $service->id, 'link' => 'https://facebook.com/x', 'quantity' => 1000],
+        ]);
+
+        $router = app(MessageRouter::class);
+        $router->handle($this->msg('1000 facebook followers on https://facebook.com/x')); // → confirm
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('confirm', $ctx->state);
+        // The confirm step remembered its buttons for title-tap routing.
+        $this->assertArrayHasKey('place order', (array) $ctx->get('_option_map', []));
+
+        // Tap delivered as label text (no interactive_id) — must still place.
+        $router->handle($this->msg('✅ Place order'));
+
+        $this->assertDatabaseHas('orders', [
+            'user_id' => \App\Models\User::first()->id, 'quantity' => 1000,
+        ]);
+    }
+
     public function test_unknown_tap_midflow_rerenders_step_not_menu(): void
     {
         $this->seedUserAndAccount(balance: 100);
