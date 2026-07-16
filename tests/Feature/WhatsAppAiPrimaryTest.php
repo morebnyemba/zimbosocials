@@ -135,6 +135,72 @@ class WhatsAppAiPrimaryTest extends TestCase
         ]);
     }
 
+    public function test_ai_triggered_order_confirm_tap_places_not_menu(): void
+    {
+        $this->seedUserAndAccount(balance: 100);
+        $service = $this->makeService('Facebook', 'Facebook Followers', 5.0);
+
+        // AI gathered everything and triggers order → lands on confirm.
+        $this->mockIntent([
+            'handled' => true,
+            'reply' => "Perfect — setting that up! ✅",
+            'follow_up' => null,
+            'flow' => 'order',
+            'flow_data' => ['service_id' => $service->id, 'link' => 'https://facebook.com/x', 'quantity' => 1000],
+        ]);
+
+        $router = app(MessageRouter::class);
+        $router->handle($this->msg('1000 facebook followers on https://facebook.com/x'));
+
+        // The AI-triggered flow MUST persist as active at confirm.
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('order', $ctx->flow, 'order flow should be active after AI trigger');
+        $this->assertSame('confirm', $ctx->state);
+
+        // Tapping ✅ Place order (fs:yes) must PLACE the order, not show the menu.
+        $router->handle($this->tap('fs:yes'));
+
+        $this->assertDatabaseHas('orders', ['user_id' => $ctx->get('_user_id') ?? \App\Models\User::first()->id, 'quantity' => 1000]);
+        $lastOut = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringNotContainsString('What would you like to do', (string) $lastOut->body);
+    }
+
+    public function test_unknown_tap_midflow_rerenders_step_not_menu(): void
+    {
+        $this->seedUserAndAccount(balance: 100);
+        $service = $this->makeService('Facebook', 'Facebook Followers', 5.0);
+        $this->mockIntent([
+            'handled' => true, 'reply' => 'Setting up! ✅', 'follow_up' => null,
+            'flow' => 'order',
+            'flow_data' => ['service_id' => $service->id, 'link' => 'https://facebook.com/x', 'quantity' => 1000],
+        ]);
+
+        $router = app(MessageRouter::class);
+        $router->handle($this->msg('1000 facebook followers on https://facebook.com/x')); // → confirm
+
+        // An unrecognized/stale tap while mid-confirm must re-render the step,
+        // NOT dump the main menu.
+        $router->handle($this->tap('some_stale_button_id'));
+
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('confirm', $ctx->state); // still on confirm
+        $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringNotContainsString('What would you like to do', (string) $out->body);
+        $this->assertStringContainsString('Confirm your order', (string) $out->body);
+    }
+
+    public function test_ai_unavailable_freetext_gives_feedback_not_menu(): void
+    {
+        $this->seedUserAndAccount();
+        $this->mockIntent(['handled' => false]); // AI down / over budget
+
+        app(MessageRouter::class)->handle($this->msg('asdkfjhqwe random'));
+
+        $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringNotContainsString('What would you like to do', (string) $out->body);
+        $this->assertStringContainsString("didn't quite catch", (string) $out->body);
+    }
+
     public function test_ai_flow_trigger_speaks_with_one_voiced_message(): void
     {
         $this->seedUserAndAccount();
@@ -391,9 +457,11 @@ class WhatsAppAiPrimaryTest extends TestCase
         // ✅ Place order after the first tap already completed the order).
         app(MessageRouter::class)->handle($this->tap('fs:yes'));
 
+        // One warm nudge, never the main menu.
         $out = \Illuminate\Support\Facades\DB::table('whatsapp_messages')->where('direction', 'out')->get();
         $this->assertCount(1, $out);
-        $this->assertStringContainsString('expired', $out[0]->body);
+        $this->assertStringContainsString("didn't quite catch", $out[0]->body);
+        $this->assertStringNotContainsString('What would you like to do', $out[0]->body);
     }
 
     public function test_control_keywords_never_consult_the_ai(): void

@@ -127,8 +127,7 @@ class MessageRouter
             } catch (\Throwable $e) {
                 Log::error('WhatsApp dispatch error', ['message' => $e->getMessage()]);
                 $ctx->resetFlow();
-                $this->responder->send($phone, "⚠️ Something went wrong. Let's go back to the menu.");
-                $this->sendMenuFor($account, $ctx);
+                $this->responder->send($phone, "⚠️ Oops, something went wrong on my end. Tell me what you'd like to do and we'll try again — or type *menu* for options.", ['handled_by' => 'system', 'intent' => 'error']);
                 $tag = ['handled_by' => 'system', 'intent' => 'error'];
             }
 
@@ -232,16 +231,27 @@ class MessageRouter
                 return ['handled_by' => 'flow', 'intent' => $selection];
             }
 
-            // Tap on a button/list from an already-finished flow (e.g. a
-            // double-tap on ✅ Place order). A quiet nudge beats dumping the
-            // whole menu on them right after they completed something.
-            $this->responder->send($ctx->phone, "That button has expired 👍 Just tell me what you'd like to do, or type *menu*.", ['handled_by' => 'system', 'intent' => 'stale_selection']);
+            // Tap on a button/list whose flow has ended (or a tap we couldn't
+            // route). Never dump the menu — re-render if mid-flow, else nudge.
+            $this->handleStuck($account, $ctx);
 
             return ['handled_by' => 'system', 'intent' => 'stale_selection'];
         }
 
-        // 4b. Any global selection navigates (cancel an active flow first).
+        // 4b. Global navigation selection (menu tap, fl_* action). Only a KNOWN
+        //     nav target cancels the active flow and navigates; an unknown or
+        //     stale selection must NOT dump the main menu — re-render the step
+        //     or nudge instead.
         if ($selection !== null) {
+            $isNav = isset(MenuProvider::$actionFlow[$selection])
+                || in_array($selection, ['menu', 'menu_home', 'guest_learn'], true);
+
+            if (! $isNav) {
+                $this->handleStuck($account, $ctx);
+
+                return ['handled_by' => 'system', 'intent' => 'unknown_selection'];
+            }
+
             if ($ctx->inFlow()) {
                 $this->engine->cancel($ctx);
             }
@@ -272,8 +282,9 @@ class MessageRouter
             return ['handled_by' => 'ai', 'intent' => 'ai', 'ai_used' => true];
         }
 
-        // 7. AI unavailable / over budget → menu.
-        $this->sendMenuFor($account, $ctx);
+        // 7. AI unavailable / over budget / nothing matched → feedback, never
+        //    the main menu (that only appears on an explicit *menu*).
+        $this->handleStuck($account, $ctx);
 
         return ['handled_by' => 'menu', 'intent' => 'fallback'];
     }
@@ -427,8 +438,9 @@ class MessageRouter
             case 'cancel':
                 $wasInFlow = $ctx->inFlow();
                 $this->engine->cancel($ctx);
-                $this->responder->send($phone, $wasInFlow ? '✖ Cancelled.' : 'Nothing to cancel.');
-                $this->sendMenuFor($account, $ctx);
+                $this->responder->send($phone, $wasInFlow
+                    ? "✖ Cancelled 👍 What would you like to do next? (or type *menu* for options)"
+                    : "All good — what can I help you with? Type *menu* to see your options.");
 
                 return;
             case 'stop':
@@ -455,7 +467,28 @@ class MessageRouter
             return;
         }
 
-        $this->sendMenuFor($account, $ctx);
+        $this->handleStuck($account, $ctx);
+    }
+
+    /**
+     * Nothing actionable matched — but NEVER dump the main menu here (it appears
+     * only on an explicit *menu*). If they're mid-flow, re-render the step so a
+     * mis-registered tap or stray message doesn't derail them; otherwise a
+     * short, warm nudge that invites them to say what they want.
+     */
+    private function handleStuck(WhatsAppAccount $account, SessionContext $ctx): void
+    {
+        if ($ctx->inFlow()) {
+            $this->emit($account, $ctx, $this->engine->resume($ctx));
+
+            return;
+        }
+
+        $this->responder->send(
+            $ctx->phone,
+            "I didn't quite catch that 🤔 Just tell me what you'd like — an *order*, a *deposit*, your *balance*, or ask me anything about growing your socials. Type *menu* to see all options.",
+            ['handled_by' => 'system', 'intent' => 'stuck']
+        );
     }
 
     private function handleSelection(string $selection, SessionContext $ctx, WhatsAppAccount $account): void
@@ -467,14 +500,13 @@ class MessageRouter
         }
         if ($selection === 'guest_learn') {
             $this->responder->send($ctx->phone, $this->learnMoreText());
-            $this->sendMenuFor($account, $ctx);
 
             return;
         }
 
         $flowId = MenuProvider::$actionFlow[$selection] ?? null;
         if ($flowId === null) {
-            $this->sendMenuFor($account, $ctx);
+            $this->handleStuck($account, $ctx);
 
             return;
         }
