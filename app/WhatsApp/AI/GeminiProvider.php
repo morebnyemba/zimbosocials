@@ -25,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-15.2';
+    public const PROMPT_VERSION = '2026-07-15.3';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -276,7 +276,13 @@ class GeminiProvider
             ."   Show ONLY the name, price and minimum. NEVER print the internal id (the id= value in the catalogue) and "
             ."NEVER print the maximum — the max is context for YOU (to validate quantities), not for the user. When the "
             ."user picks, map their choice back to the real numeric id and put it in flow_data.service_id.\n"
-            ."4. When the user wants to buy, set flow to 'order' (with service_id, and link/quantity if given). Use the other flows to act.\n"
+            ."4. BUYING INTENT → ALWAYS set flow 'order'. Any clear intent to buy — 'I want to buy X', 'get me X', 'buy X likes/"
+            ."followers/views', 'I want X followers' — triggers the order flow RIGHT AWAY (the flow itself collects platform, "
+            ."service, link and quantity). Do NOT just list options or ask questions when they've said they want to buy — start "
+            ."the order and let it guide them. Put whatever they named in flow_data (ALWAYS include the platform when named, plus "
+            ."service_id/quantity/link if given). Only stay in chat (flow null) when they're asking ABOUT services, not asking to buy.\n"
+            ."4b. ACCOUNT/LOGIN TROUBLE: 'my password isn't working', 'can't log in', 'reset my password' → set flow 'forgot' to "
+            ."send a reset link. 'link my account' / 'log me in' with an email → flow 'link'.\n"
             ."5. ORDER STATUS: you can tell the user the status of the orders listed in the context. For a specific order number "
             ."not listed, or 'track my order', set flow to 'track' (with order_id if they gave one). Never invent an order or its status.\n"
             ."6. INSUFFICIENT FUNDS: if they want to buy but their balance is clearly too low for what they're asking, warmly say so "
@@ -412,6 +418,10 @@ class GeminiProvider
             ."{\"reply\":\"Not LinkedIn just yet 😊 — but we're strong on *Instagram*, *TikTok* and *YouTube*. Which of those are you looking to grow?\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
             ."User: \"is it safe? will my account get banned?\"\n"
             ."{\"reply\":\"Totally understand the worry! 🙏 It's safe — we *never* need your password (we only use your public profile/post link), and delivery is gradual and natural. Thousands of orders go through smoothly. Want to start small so you can see it work?\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
+            ."User: \"I want to buy tiktok likes\"\n"
+            ."{\"reply\":\"Great choice — TikTok likes make your videos pop! 🔥 Let's set it up.\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"platform\":\"tiktok\"}}\n\n"
+            ."User: \"my password isn't working\"\n"
+            ."{\"reply\":\"No worries — let's get you back in. I'll send a password reset link. 🔑\",\"follow_up\":null,\"flow\":\"forgot\",\"flow_data\":{}}\n\n"
             ."User (a guest): \"I want to buy youtube views\"\n"
             ."{\"reply\":\"Awesome, YouTube views coming right up! 🎬 Let's get it set up.\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"platform\":\"youtube\"}}\n\n"
             ."User (context shows a PENDING DEPOSIT of 1.00 via EcoCash): \"nothing happened, no prompt received?\"\n"
