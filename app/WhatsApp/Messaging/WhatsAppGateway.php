@@ -126,6 +126,57 @@ class WhatsAppGateway
         ], $body));
     }
 
+    /**
+     * Download an inbound media object by its id. Two hops per Meta's API:
+     * resolve the media id to a short-lived signed URL, then fetch the bytes
+     * (both require the bearer token).
+     *
+     * @return array{ok:bool, contents?:string, mime?:string, size?:int, reason?:string}
+     */
+    public function downloadMedia(string $mediaId): array
+    {
+        if (! $this->configured()) {
+            return ['ok' => false, 'reason' => 'not_configured'];
+        }
+
+        try {
+            $lookup = Http::withToken($this->token)->timeout(15)
+                ->get("https://graph.facebook.com/{$this->graph}/{$mediaId}");
+            if (! $lookup->successful()) {
+                Log::warning('WhatsAppGateway: media lookup failed', ['error' => $lookup->json('error.message', $lookup->body())]);
+
+                return ['ok' => false, 'reason' => 'lookup_failed'];
+            }
+
+            $url = (string) $lookup->json('url');
+            if ($url === '') {
+                return ['ok' => false, 'reason' => 'no_url'];
+            }
+
+            $mime = (string) $lookup->json('mime_type');
+            $size = (int) $lookup->json('file_size');
+
+            // The signed CDN URL still needs the bearer token.
+            $bin = Http::withToken($this->token)->timeout(30)->get($url);
+            if (! $bin->successful()) {
+                return ['ok' => false, 'reason' => 'download_failed'];
+            }
+
+            $contents = $bin->body();
+
+            return [
+                'ok' => true,
+                'contents' => $contents,
+                'mime' => $mime !== '' ? $mime : (string) $bin->header('Content-Type'),
+                'size' => $size > 0 ? $size : strlen($contents),
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('WhatsAppGateway: media download exception', ['media_id' => $mediaId, 'message' => $e->getMessage()]);
+
+            return ['ok' => false, 'reason' => 'exception'];
+        }
+    }
+
     private function post(array $payload): array
     {
         if (! $this->configured()) {

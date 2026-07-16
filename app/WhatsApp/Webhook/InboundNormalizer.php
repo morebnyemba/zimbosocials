@@ -15,6 +15,7 @@ namespace App\WhatsApp\Webhook;
  *     'type'          => 'text'|'interactive'|'button'|...,
  *     'text'          => ?string,          // body text, if any
  *     'interactive_id'=> ?string,          // selected list/button id, if any
+ *     'media'         => ?array,           // ['id','mime','kind'=>image|document, 'filename'?]
  *     'name'          => ?string,          // contact profile name
  *     'timestamp'     => ?int,
  *     'raw'           => array,            // the original message node
@@ -64,10 +65,28 @@ class InboundNormalizer
 
         $text = null;
         $interactiveId = null;
+        $media = null;
 
         switch ($type) {
             case 'text':
                 $text = $m['text']['body'] ?? null;
+                break;
+            case 'image':
+                $media = [
+                    'id' => $m['image']['id'] ?? null,
+                    'mime' => $m['image']['mime_type'] ?? null,
+                    'kind' => 'image',
+                ];
+                $text = $m['image']['caption'] ?? null;
+                break;
+            case 'document':
+                $media = [
+                    'id' => $m['document']['id'] ?? null,
+                    'mime' => $m['document']['mime_type'] ?? null,
+                    'kind' => 'document',
+                    'filename' => $m['document']['filename'] ?? null,
+                ];
+                $text = $m['document']['caption'] ?? null;
                 break;
             case 'interactive':
                 $inter = $m['interactive'] ?? [];
@@ -119,6 +138,7 @@ class InboundNormalizer
             'type' => $type,
             'text' => $text,
             'interactive_id' => $interactiveId,
+            'media' => $media,
             'ad_referral' => $adReferral,
             'name' => $names[$from] ?? null,
             'timestamp' => isset($m['timestamp']) ? (int) $m['timestamp'] : null,

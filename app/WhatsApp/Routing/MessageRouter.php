@@ -43,6 +43,7 @@ class MessageRouter
         private readonly CommandRegistry $commands,
         private readonly RateLimiter $limiter,
         private readonly IntentEngine $intent,
+        private readonly \App\WhatsApp\Deposit\ProofIntake $proof,
     ) {}
 
     public function handle(array $msg, ?string $displayName = null): void
@@ -123,7 +124,12 @@ class MessageRouter
             }
 
             try {
-                $tag = $this->dispatch($ctx, $account, $text, $selection, $ad);
+                $media = $msg['media'] ?? null;
+                if (is_array($media) && ! empty($media['id'])) {
+                    $tag = $this->handleMedia($account, $ctx, $media);
+                } else {
+                    $tag = $this->dispatch($ctx, $account, $text, $selection, $ad);
+                }
             } catch (\Throwable $e) {
                 Log::error('WhatsApp dispatch error', ['message' => $e->getMessage()]);
                 $ctx->resetFlow();
@@ -487,6 +493,55 @@ class MessageRouter
         }
 
         $this->handleStuck($account, $ctx);
+    }
+
+    /**
+     * An inbound image/PDF — treat it as proof of payment for a pending manual
+     * deposit (the in-chat version of the wallet's proof upload). If there's no
+     * deposit waiting on proof, or the file isn't usable, guide them warmly.
+     */
+    private function handleMedia(WhatsAppAccount $account, SessionContext $ctx, array $media): array
+    {
+        $account->refresh();
+
+        if (! $account->isLinked() || ! $account->user) {
+            $this->responder->send($ctx->phone,
+                "Thanks for the file! 📎 If you're sending proof of a deposit, reply *deposit* first, choose a *manual* method, pay, then send the screenshot here.",
+                ['handled_by' => 'system', 'intent' => 'media_no_user']
+            );
+
+            return ['handled_by' => 'system', 'intent' => 'media_no_user'];
+        }
+
+        $res = $this->proof->intake($account->user, $media);
+
+        if (! empty($res['ok'])) {
+            $tx = $res['transaction'];
+            $cur = $account->user->currency ?? 'USD';
+            $amount = number_format((float) abs($tx->amount), 2);
+            $bonus = app(\App\Services\DepositService::class)->manualDepositBonusPercent();
+            $bonusLine = $bonus > 0
+                ? " You'll also get your *+".rtrim(rtrim(number_format($bonus, 2), '0'), '.').'% bonus* once it clears.'
+                : '';
+
+            $this->responder->send($ctx->phone,
+                "✅ *Proof received!* Thanks — I've attached it to your *{$amount} {$cur}* deposit. Our team will verify and credit your wallet shortly.{$bonusLine} 🙌",
+                ['handled_by' => 'system', 'intent' => 'proof_received']
+            );
+
+            return ['handled_by' => 'system', 'intent' => 'proof_received'];
+        }
+
+        $message = match ($res['reason'] ?? '') {
+            'no_pending' => "Thanks for the file! 📎 I couldn't find a manual deposit waiting on proof. To top up, reply *deposit*, pick a *manual* method, pay, then send your screenshot here.",
+            'bad_type' => "I can only read a *photo* or *PDF* of your payment. Please resend it as an image (JPG/PNG) or PDF. 📸",
+            'too_large' => "That file's a bit large for me (max 5MB). Please send a smaller *photo* of your payment confirmation. 📸",
+            default => "Hmm, I couldn't open that file 🤔 Please resend a clear *photo* of your payment confirmation, or upload it at ".url('/wallet').".",
+        };
+
+        $this->responder->send($ctx->phone, $message, ['handled_by' => 'system', 'intent' => 'proof_'.($res['reason'] ?? 'error')]);
+
+        return ['handled_by' => 'system', 'intent' => 'proof_'.($res['reason'] ?? 'error')];
     }
 
     /**
