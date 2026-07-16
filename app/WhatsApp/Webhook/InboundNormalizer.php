@@ -88,6 +88,20 @@ class InboundNormalizer
                 break;
         }
 
+        // Instrumentation: a tap (interactive/button) that yielded no id means
+        // WhatsApp delivered a shape we don't extract — the taps then fall to the
+        // text path and don't advance the flow. Log the exact payload once so the
+        // real shape is captured instead of guessed at. (MessageRouter has a
+        // title→id fallback that routes these anyway.)
+        if (in_array($type, ['interactive', 'button'], true) && $interactiveId === null) {
+            \Illuminate\Support\Facades\Log::warning('WhatsApp interactive tap missing id', [
+                'type' => $type,
+                'interactive_type' => $m['interactive']['type'] ?? null,
+                'interactive_keys' => array_keys($m['interactive'] ?? $m['button'] ?? []),
+                'payload' => $m['interactive'] ?? $m['button'] ?? null,
+            ]);
+        }
+
         // Click-to-WhatsApp ads/posts attach a referral object to the first
         // message — the strongest signal that this person just clicked an ad.
         $adReferral = null;
