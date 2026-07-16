@@ -54,6 +54,10 @@ return [
         // service; the default bounds token cost for large imported catalogues.
         'ai_max_services' => (int) env('WHATSAPP_AI_MAX_SERVICES', 150),
         'ai_daily_limit' => (int) env('WHATSAPP_AI_DAILY_LIMIT', 40),          // AI calls per phone per day; 0 = unlimited
+        // Synthetic mailbox domain for silent WhatsApp auto-registration
+        // ({phone_digits}@domain). Never receives real mail (guarded in the
+        // email job); users can attach a real email later via register/link.
+        'auto_email_domain' => env('WHATSAPP_AUTO_EMAIL_DOMAIN', 'zimbosocials.co.zw'),
         'ai_global_daily_limit' => (int) env('WHATSAPP_AI_GLOBAL_DAILY_LIMIT', 0), // AI calls per day across ALL users; 0 = unlimited
         'twilio_sid' => env('TWILIO_SID'),
         'twilio_from' => env('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),

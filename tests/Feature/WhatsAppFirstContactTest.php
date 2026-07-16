@@ -37,22 +37,84 @@ class WhatsAppFirstContactTest extends TestCase
         ];
     }
 
-    public function test_first_greeting_from_unknown_number_starts_guided_signup(): void
+    public function test_first_greeting_gets_intro_and_no_signup_hurdle(): void
     {
         $router = app(MessageRouter::class);
         $router->handle($this->msg('hi'), 'Tendai');
 
+        // Intro + invitation to business — no register flow, no user row yet
+        // (accounts are created silently the moment they take an action).
         $ctx = app(SessionManager::class)->load(self::PHONE);
-        $this->assertSame('register', $ctx->flow);
-        $this->assertSame('ask_name', $ctx->state);
+        $this->assertNull($ctx->flow);
+        $this->assertDatabaseCount('users', 0);
 
-        // Completing name + email actually creates the account.
-        $router->handle($this->msg('Tendai Moyo'));
-        $router->handle($this->msg('tendai@example.com'));
+        $intro = \App\Models\WhatsAppMessage::where('direction', 'out')->first();
+        $this->assertStringContainsString('what would you like to grow', $intro->body);
+    }
 
-        $this->assertDatabaseHas('users', ['email' => 'tendai@example.com', 'name' => 'Tendai Moyo']);
+    public function test_taking_an_action_auto_registers_silently_and_proceeds(): void
+    {
+        \App\Models\Service::create([
+            'name' => 'Instagram Followers', 'name_sn' => 'x', 'description' => '', 'description_sn' => '',
+            'category' => 'Instagram', 'type' => 'followers', 'rate' => 1.0,
+            'min_qty' => 100, 'max_qty' => 100000, 'is_active' => true,
+        ]);
+
+        $router = app(MessageRouter::class);
+        $router->handle($this->msg('hi'), 'Tendai');
+        $router->handle($this->tap('fl_order')); // guest taps New order
+
+        // Account exists — synthetic {digits}@domain email, display name, linked.
+        $this->assertDatabaseHas('users', [
+            'email' => '263771234567@zimbosocials.co.zw',
+            'name' => 'Tendai',
+        ]);
         $account = WhatsAppAccount::where('wa_phone', self::PHONE)->first();
-        $this->assertNotNull($account->user_id);
+        $this->assertTrue($account->isLinked());
+
+        // And the order flow started in the SAME turn — straight to business.
+        $ctx = app(SessionManager::class)->load(self::PHONE);
+        $this->assertSame('order', $ctx->flow);
+        $this->assertSame('pick_category', $ctx->state);
+    }
+
+    public function test_auto_registration_is_idempotent_on_recontact(): void
+    {
+        $registrar = app(\App\WhatsApp\Auth\WhatsAppRegistrar::class);
+        WhatsAppAccount::create(['wa_phone' => self::PHONE, 'link_status' => 'guest', 'opted_in' => true]);
+
+        $first = $registrar->autoRegister(self::PHONE, 'Tendai');
+        $second = $registrar->autoRegister(self::PHONE, 'Tendai');
+
+        $this->assertTrue($first['ok']);
+        $this->assertTrue($second['ok']);
+        $this->assertSame($first['user']->id, $second['user']->id);
+        $this->assertSame(1, \App\Models\User::count());
+    }
+
+    public function test_no_real_email_is_ever_sent_to_synthetic_addresses(): void
+    {
+        $this->assertTrue(\App\WhatsApp\Auth\WhatsAppRegistrar::isAutoEmail('263771234567@zimbosocials.co.zw'));
+        $this->assertFalse(\App\WhatsApp\Auth\WhatsAppRegistrar::isAutoEmail('tendai@gmail.com'));
+
+        \Illuminate\Support\Facades\Mail::fake();
+        (new \App\Jobs\SendEmailNotification('263771234567@zimbosocials.co.zw', 'T', 'Subj', 'Body'))->handle();
+        \Illuminate\Support\Facades\Mail::assertNothingSent();
+    }
+
+    private function tap(string $id): array
+    {
+        return [
+            'from' => self::PHONE,
+            'wa_message_id' => 'wamid.'.uniqid('', true),
+            'type' => 'interactive',
+            'text' => '',
+            'interactive_id' => $id,
+            'ad_referral' => null,
+            'name' => 'Tendai',
+            'timestamp' => time(),
+            'raw' => [],
+        ];
     }
 
     public function test_known_guest_greeting_does_not_restart_signup(): void
@@ -94,9 +156,9 @@ class WhatsAppFirstContactTest extends TestCase
         $this->assertStringContainsString(config('app.name'), $intro->body);
         $this->assertStringContainsString('followers, likes, views', $intro->body);
 
-        // ...then guided signup starts.
+        // ...and invites them straight to business (no signup flow).
         $ctx = app(SessionManager::class)->load(self::PHONE);
-        $this->assertSame('register', $ctx->flow);
+        $this->assertNull($ctx->flow);
     }
 
     public function test_canned_cta_text_alone_triggers_the_ad_intro(): void
@@ -104,8 +166,13 @@ class WhatsAppFirstContactTest extends TestCase
         // No referral payload (e.g. forwarded ad) — the text heuristic catches it.
         app(MessageRouter::class)->handle($this->msg("I'm interested, tell me more"));
 
+        // Ad intro sent, no signup flow — accounts appear when they act.
         $ctx = app(SessionManager::class)->load(self::PHONE);
-        $this->assertSame('register', $ctx->flow);
+        $this->assertNull($ctx->flow);
+        $this->assertStringContainsString(
+            'thanks for reaching out',
+            \App\Models\WhatsAppMessage::where('direction', 'out')->first()->body
+        );
     }
 
     public function test_substantive_ad_message_goes_to_ai_with_first_contact_context(): void

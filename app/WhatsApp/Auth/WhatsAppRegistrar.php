@@ -17,8 +17,62 @@ use Illuminate\Support\Str;
  */
 class WhatsAppRegistrar
 {
+    /** Synthetic mailbox domain for silently auto-registered WhatsApp users. */
+    public static function autoEmailDomain(): string
+    {
+        return (string) config('services.whatsapp.auto_email_domain', 'zimbosocials.co.zw');
+    }
+
+    public static function autoEmailFor(string $phone): string
+    {
+        return preg_replace('/\D+/', '', $phone).'@'.self::autoEmailDomain();
+    }
+
+    /** Whether an address is one of our synthetic auto-registration mailboxes (never send real mail there). */
+    public static function isAutoEmail(?string $email): bool
+    {
+        return is_string($email) && str_ends_with(mb_strtolower($email), '@'.mb_strtolower(self::autoEmailDomain()));
+    }
+
+    /**
+     * Silent background registration: create a real account keyed to the
+     * synthetic {digits}@domain mailbox and bind the phone — no questions
+     * asked, so the user jumps straight into business. Idempotent: if the
+     * synthetic user already exists (re-contact after an unlink), it relinks.
+     * No welcome email/WhatsApp blast — the conversation itself is the
+     * onboarding; they can set a real email later via 'register' or 'link'.
+     *
+     * @return array{ok:bool, user?:User, error?:string}
+     */
+    public function autoRegister(string $phone, ?string $displayName = null): array
+    {
+        $email = self::autoEmailFor($phone);
+
+        $existing = User::where('email', $email)->first();
+        if ($existing) {
+            $this->bindPhone($phone, $existing);
+
+            return ['ok' => true, 'user' => $existing];
+        }
+
+        $name = trim((string) $displayName) !== '' ? trim((string) $displayName) : 'WhatsApp User';
+
+        $result = $this->register($phone, $name, $email, silent: true);
+
+        if (! empty($result['ok'])) {
+            $this->safely(fn () => NotificationService::notifyAdmins(
+                'admin_new_registration',
+                'New User Auto-Registered (WhatsApp)',
+                "{$result['user']->name} ({$phone}) was auto-registered via WhatsApp and jumped straight into the conversation.",
+                ['user_name' => $result['user']->name, 'user_email' => $email, 'role' => 'user']
+            ));
+        }
+
+        return $result;
+    }
+
     /** @return array{ok:bool, user?:User, error?:string} */
-    public function register(string $phone, string $name, string $email): array
+    public function register(string $phone, string $name, string $email, bool $silent = false): array
     {
         $email = mb_strtolower(trim($email));
 
@@ -43,22 +97,17 @@ class WhatsAppRegistrar
 
             $user->generateApiKey();
 
-            // Bind the phone to the new user.
-            WhatsAppAccount::where('wa_phone', $phone)->update([
-                'user_id' => $user->id,
-                'link_status' => 'linked',
-                'link_otp' => null,
-                'link_otp_expires' => null,
-                'link_attempts' => 0,
-            ]);
+            $this->bindPhone($phone, $user);
 
-            $this->safely(fn () => NotificationService::sendWelcome($user));
-            $this->safely(fn () => NotificationService::notifyAdmins(
-                'admin_new_registration',
-                'New User Registered (WhatsApp)',
-                "{$user->name} ({$user->email}) signed up via WhatsApp.",
-                ['user_name' => $user->name, 'user_email' => $user->email, 'role' => $user->role]
-            ));
+            if (! $silent) {
+                $this->safely(fn () => NotificationService::sendWelcome($user));
+                $this->safely(fn () => NotificationService::notifyAdmins(
+                    'admin_new_registration',
+                    'New User Registered (WhatsApp)',
+                    "{$user->name} ({$user->email}) signed up via WhatsApp.",
+                    ['user_name' => $user->name, 'user_email' => $user->email, 'role' => $user->role]
+                ));
+            }
 
             return ['ok' => true, 'user' => $user];
         } catch (\Throwable $e) {
@@ -66,6 +115,17 @@ class WhatsAppRegistrar
 
             return ['ok' => false, 'error' => 'server_error'];
         }
+    }
+
+    private function bindPhone(string $phone, User $user): void
+    {
+        WhatsAppAccount::where('wa_phone', $phone)->update([
+            'user_id' => $user->id,
+            'link_status' => 'linked',
+            'link_otp' => null,
+            'link_otp_expires' => null,
+            'link_attempts' => 0,
+        ]);
     }
 
     private function uniqueUsername(string $name, string $email): string

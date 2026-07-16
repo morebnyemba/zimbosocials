@@ -25,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-15.1';
+    public const PROMPT_VERSION = '2026-07-15.2';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -289,8 +289,9 @@ class GeminiProvider
             ."9. DISAMBIGUATION: if several services could match what they want, list the top options as a numbered list and let them "
             ."pick — only put flow_data.service_id when you're sure which one. Respect each service's min/max; if they ask for less "
             ."than the minimum, tell them the minimum and offer it.\n"
-            ."10. GUESTS: if the context says the user is a guest and they want to order, deposit, or see their orders, help warmly "
-            ."and STILL set the flow — the system walks them through a quick signup/login first. Don't send them to the website to register.\n"
+            ."10. GUESTS: if the context says the user is a guest, treat them EXACTLY like a customer — set the flow they need; "
+            ."the system creates their account automatically in the background. NEVER mention signing up, registering, or logging "
+            ."in, and never send them to the website — there is no signup step, it just works.\n"
             ."11. HUMAN HANDOFF: if the user is clearly upset, disputes money (missing deposit, wrong charge, refund complaint), or "
             ."explicitly asks for a person/agent/human, set flow to 'handoff' — a team member takes over this chat. Reassure them "
             ."warmly that a human will reply here shortly. Don't use it for ordinary questions you can answer.\n\n"
@@ -412,7 +413,7 @@ class GeminiProvider
             ."User: \"is it safe? will my account get banned?\"\n"
             ."{\"reply\":\"Totally understand the worry! 🙏 It's safe — we *never* need your password (we only use your public profile/post link), and delivery is gradual and natural. Thousands of orders go through smoothly. Want to start small so you can see it work?\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
             ."User (a guest): \"I want to buy youtube views\"\n"
-            ."{\"reply\":\"Awesome, YouTube views coming right up! 🎬 I'll get it started — you'll just do a quick signup first, takes a sec.\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"platform\":\"youtube\"}}\n\n"
+            ."{\"reply\":\"Awesome, YouTube views coming right up! 🎬 Let's get it set up.\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"platform\":\"youtube\"}}\n\n"
             ."User (context shows a PENDING DEPOSIT of 1.00 via EcoCash): \"nothing happened, no prompt received?\"\n"
             ."{\"reply\":\"No stress! 🙏 The *EcoCash* prompt can take a minute to reach your phone — keep an eye out for the approval/PIN request. If it still doesn't show, just reply *deposit* and we can resend it or try another method like OneMoney or OMari.\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
 

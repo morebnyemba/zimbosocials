@@ -147,11 +147,11 @@ class MessageRouter
 
         // 0. Very first message from an unknown number. Greetings — and the
         //    generic canned texts click-to-WhatsApp ads produce ("Hi! Can I
-        //    get more info about this?") — get a platform introduction and go
-        //    straight into guided sign-up. A substantive first message ("I
-        //    want 1000 tiktok followers", even from an ad) skips this — the AI
-        //    handles it with a first-contact intro (see consultAi), and the
-        //    auth gate starts this same sign-up with their request remembered.
+        //    get more info about this?") — get a platform introduction and an
+        //    invitation to say what they want. No signup gate: the account is
+        //    auto-created silently the moment they take an action. Substantive
+        //    first messages skip this — the AI handles them with a
+        //    first-contact intro (see consultAi).
         if ($account->wasRecentlyCreated && ! $account->isLinked() && $selection === null) {
             $greetings = ['', 'hi', 'hello', 'hey', 'hie', 'menu', 'start', 'hesi', 'mhoro', 'makadii', 'sawubona', 'salibonani'];
             $fromAd = $ad !== null || $this->looksLikeAdCta($text);
@@ -163,17 +163,15 @@ class MessageRouter
                     ? "👋 Hi{$name}, thanks for reaching out! You've found *{$site}* — we grow social media accounts: followers, likes, views and more, delivered fast and paid with EcoCash and other local methods, all right here on WhatsApp."
                     : "👋 Hi{$name}! Welcome to *{$site}* — followers, likes, views and more, right here on WhatsApp.";
 
+                // No signup hurdle: the account is created silently the moment
+                // they take an action — so go straight to business.
                 $this->responder->send(
                     $phone,
-                    $intro
-                    ."\n\nLet me set up your free account real quick (takes ~30 seconds), then you can order and track everything in this chat."
-                    ."\n\n_Type *cancel* anytime to skip._",
+                    $intro."\n\nSo — what would you like to grow today? Just tell me (e.g. *\"1000 Instagram followers\"*), or type *menu* to browse. 🚀",
                     ['handled_by' => 'system', 'intent' => $fromAd ? 'first_contact_ad' : 'first_contact']
                 );
-                $res = $this->engine->start($ctx, 'register');
-                $this->emit($account, $ctx, $res);
 
-                return ['handled_by' => 'system', 'intent' => 'first_contact_signup'];
+                return ['handled_by' => 'system', 'intent' => 'first_contact_intro'];
             }
         }
 
@@ -489,13 +487,24 @@ class MessageRouter
         $isGuestFlow = in_array($flowId, $this->guestFlows, true);
 
         if (! $isGuestFlow && ! $account->isLinked()) {
-            // Auth required for a guest → start guided sign-up, remembering the
-            // action they wanted so it can be resumed after registration.
-            $ctx->set('_pending_flow', $flowId);
-            $res = $this->engine->start($ctx, 'register');
-            $this->emit($account, $ctx, $res, $voiceDraft, $decisionMeta, $userText);
+            // Silent auto-registration: create a real account in the background
+            // ({phone}@auto-domain, random password, no questions) and proceed
+            // straight into what they asked for — the conversation IS the
+            // onboarding. They can attach a real email later via register/link.
+            $auto = app(\App\WhatsApp\Auth\WhatsAppRegistrar::class)->autoRegister($ctx->phone, $account->display_name);
 
-            return;
+            if (! empty($auto['ok'])) {
+                $account->refresh();
+                $ctx->set('_user_id', $account->user_id);
+            } else {
+                // Couldn't auto-create (rare) → fall back to guided sign-up,
+                // remembering the action so it resumes after registration.
+                $ctx->set('_pending_flow', $flowId);
+                $res = $this->engine->start($ctx, 'register');
+                $this->emit($account, $ctx, $res, $voiceDraft, $decisionMeta, $userText);
+
+                return;
+            }
         }
 
         if (! $this->engine->canStart($flowId)) {

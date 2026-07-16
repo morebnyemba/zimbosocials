@@ -30,6 +30,12 @@ class SendEmailNotification implements ShouldQueue
 
     public function handle(): void
     {
+        // Synthetic auto-registration mailboxes ({phone}@auto-domain) don't
+        // exist — sending would only generate bounces and hurt deliverability.
+        if (\App\WhatsApp\Auth\WhatsAppRegistrar::isAutoEmail($this->email)) {
+            return;
+        }
+
         $resolvedLocale = in_array($this->locale, ['sn', 'nd', 'en'], true) ? $this->locale : 'en';
         $mail = new LocalizedTemplateMail(
             $this->title,
