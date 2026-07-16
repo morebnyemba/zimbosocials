@@ -20,8 +20,9 @@ class NotificationService
      * Types that should also trigger WhatsApp (critical / money-related).
      */
     private const WHATSAPP_TYPES = [
-        'deposit_confirmed',
-        'deposit_rejected',
+        // deposit_confirmed / deposit_rejected are intentionally NOT here — the
+        // WhatsApp assistant sends those conversationally & immediately from
+        // DepositService (OrderResumeService), not as a delayed queued template.
         'withdrawal_processed',
         'withdrawal_rejected',
         'order_refunded',

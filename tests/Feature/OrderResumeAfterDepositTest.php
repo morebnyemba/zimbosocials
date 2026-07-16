@@ -138,14 +138,47 @@ class OrderResumeAfterDepositTest extends TestCase
         $this->assertNotNull(\Illuminate\Support\Facades\Cache::get('wa:resume_order:'.$user->id));
     }
 
-    public function test_deposit_without_a_stashed_order_does_nothing(): void
+    public function test_deposit_without_a_stashed_order_sends_plain_confirmation(): void
     {
         $user = $this->linkedUser(0.0);
 
         app(DepositService::class)->credit($this->pendingDeposit($user, 5.0), 'test');
 
-        // No order session created.
+        // No order session created, but the user IS told their deposit landed.
         $ctx = app(SessionManager::class)->load(self::PHONE);
         $this->assertNull($ctx->flow);
+
+        $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringContainsString('Deposit confirmed', (string) $out->body);
+        $this->assertStringContainsString('5.00', (string) $out->body);
+    }
+
+    public function test_failed_deposit_tells_the_user_conversationally(): void
+    {
+        $user = $this->linkedUser(0.0);
+        $tx = $this->pendingDeposit($user, 10.0);
+
+        app(DepositService::class)->reject($tx, 'gateway_poller');
+
+        // Immediate, clear, actionable — not silence + menu.
+        $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringContainsString("didn't go through", (string) $out->body);
+        $this->assertStringContainsString('No money was taken', (string) $out->body);
+        $this->assertStringContainsString('10.00', (string) $out->body);
+        $this->assertStringContainsString('deposit', (string) $out->body); // retry hint
+    }
+
+    public function test_failed_deposit_reassures_when_an_order_is_waiting(): void
+    {
+        $this->makeService();
+        $user = $this->linkedUser(0.0);
+        $this->stallOrderAtConfirm($user); // stashes an order
+
+        app(DepositService::class)->reject($this->pendingDeposit($user, 10.0), 'gateway_poller');
+
+        $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringContainsString('order is still saved', (string) $out->body);
+        // Stash preserved so a later top-up still finishes it.
+        $this->assertNotNull(\Illuminate\Support\Facades\Cache::get('wa:resume_order:'.$user->id));
     }
 }

@@ -98,14 +98,15 @@ class DepositService
             $credited = true;
         });
 
-        // A WhatsApp order may have stalled at confirm waiting for these funds —
-        // re-open it now. Decoupled + guarded so it can never break crediting.
+        // Tell the WhatsApp user right away and resume any order that was
+        // waiting on these funds. Decoupled + guarded so it can never break
+        // crediting.
         if ($credited) {
             try {
                 app(\App\WhatsApp\Order\OrderResumeService::class)
-                    ->resumeAfterDeposit((int) $transaction->user_id);
+                    ->afterDepositCredited($transaction);
             } catch (\Throwable $e) {
-                Log::warning('WhatsApp order resume after deposit failed', [
+                Log::warning('WhatsApp deposit-credited notice failed', [
                     'user_id' => $transaction->user_id,
                     'message' => $e->getMessage(),
                 ]);
@@ -236,6 +237,8 @@ class DepositService
             ['transaction_id' => $transaction->id]
         );
 
+        $this->notifyWhatsAppDepositFailed($transaction, expired: true);
+
         return true;
     }
 
@@ -274,6 +277,24 @@ class DepositService
             ['transaction_id' => $transaction->id]
         );
 
+        // Immediate, conversational heads-up in the chat (the queued template
+        // is delayed and impersonal; this tells them what happened right now).
+        $this->notifyWhatsAppDepositFailed($transaction, expired: false);
+
         return true;
+    }
+
+    /** Best-effort conversational WhatsApp notice for a failed/expired deposit. */
+    private function notifyWhatsAppDepositFailed(Transaction $transaction, bool $expired): void
+    {
+        try {
+            app(\App\WhatsApp\Order\OrderResumeService::class)
+                ->afterDepositFailed($transaction, $expired);
+        } catch (\Throwable $e) {
+            Log::warning('WhatsApp deposit-failed notice failed', [
+                'user_id' => $transaction->user_id,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 }

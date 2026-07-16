@@ -3,7 +3,9 @@
 namespace App\WhatsApp\Order;
 
 use App\Models\Service;
+use App\Models\Transaction;
 use App\Models\User;
+use App\Models\WhatsAppAccount;
 use App\WhatsApp\Flow\FlowEngine;
 use App\WhatsApp\Flow\FlowResult;
 use App\WhatsApp\Messaging\Responder;
@@ -99,6 +101,82 @@ class OrderResumeService
 
         $lead = "✅ *You're topped up!* Let's finish your order.\n\n";
         $this->emitConfirm($phone, $lead, $res);
+    }
+
+    /**
+     * A deposit just CONFIRMED — tell the WhatsApp user right away. If an order
+     * was waiting on it, resume that (its own message); otherwise a plain,
+     * immediate confirmation with the new balance.
+     */
+    public function afterDepositCredited(Transaction $tx): void
+    {
+        $userId = (int) $tx->user_id;
+
+        if (Cache::get(self::key($userId)) !== null) {
+            $this->resumeAfterDeposit($userId);
+
+            // If the top-up still wasn't enough, the stash is kept and no resume
+            // fired — fall through to a plain confirmation so they still hear back.
+            if (Cache::get(self::key($userId)) === null) {
+                return;
+            }
+        }
+
+        $phone = $this->resolvePhone($userId);
+        if ($phone === null) {
+            return;
+        }
+
+        $user = User::find($userId);
+        $cur = $user?->currency ?? 'USD';
+        $bal = number_format((float) ($user?->balance ?? 0), 2);
+        $amount = number_format((float) abs($tx->amount), 2);
+
+        $this->responder->send(
+            $phone,
+            "✅ *Deposit confirmed!* Your *{$amount} {$cur}* is in — your balance is now *{$bal} {$cur}*. 🎉\n\nReady when you are — just tell me what you'd like to grow!",
+            ['handled_by' => 'system', 'intent' => 'deposit_confirmed']
+        );
+    }
+
+    /**
+     * A deposit FAILED or expired — tell the WhatsApp user immediately what
+     * happened, that no money was taken, and how to retry. Never leaves them
+     * guessing (the old behaviour: a silent status change + the menu).
+     */
+    public function afterDepositFailed(Transaction $tx, bool $expired = false): void
+    {
+        $phone = $this->resolvePhone((int) $tx->user_id);
+        if ($phone === null) {
+            return;
+        }
+
+        $user = User::find($tx->user_id);
+        $cur = $user?->currency ?? 'USD';
+        $amount = number_format((float) abs($tx->amount), 2);
+        $method = $tx->method ? ucfirst((string) $tx->method) : 'payment';
+
+        $reason = $expired
+            ? "we didn't receive the payment in time"
+            : "the payment was declined or failed (often not enough funds)";
+
+        $msg = "❌ Your *{$amount} {$cur}* {$method} top-up didn't go through — {$reason}. *No money was taken.* 🙏\n\n"
+            ."Want to try again? Reply *deposit* to retry or pick another method (EcoCash, OneMoney, InnBucks, OMari).";
+
+        // If an order was waiting on this top-up, reassure them it's still saved.
+        if (Cache::get(self::key((int) $tx->user_id)) !== null) {
+            $msg .= "\n\nYour order is still saved — top up and I'll finish it for you. 👍";
+        }
+
+        $this->responder->send($phone, $msg, ['handled_by' => 'system', 'intent' => 'deposit_failed']);
+    }
+
+    /** The WhatsApp number linked to this user, if they use the assistant. */
+    private function resolvePhone(int $userId): ?string
+    {
+        $phone = (string) (WhatsAppAccount::where('user_id', $userId)->value('wa_phone') ?? '');
+
+        return $phone !== '' ? $phone : null;
     }
 
     /** Send the confirm card verbatim (money step — never model-rendered), buttons attached. */
