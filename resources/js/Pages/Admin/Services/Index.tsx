@@ -232,7 +232,7 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                 value={search} 
                                 onChange={e => setSearch(e.target.value)} 
                                 onKeyDown={e => e.key === 'Enter' && applySearch()} 
-                                placeholder="Search by name, ID, or description..." 
+                                placeholder="Search by name, category, service ID, or upstream ID..."
                                 className="w-full pl-10 pr-4 py-3 rounded-2xl bg-zinc-50 border-none font-medium text-zinc-900 focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-zinc-400"
                             />
                         </div>
@@ -293,7 +293,7 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                                 {s.upstreams?.map((u, i) => (
                                                     <div key={i} className={`text-[10px] font-bold px-2 py-1 rounded-md border truncate ${i === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-zinc-50 text-zinc-500 border-zinc-200'}`}>
                                                         <span className="opacity-50 mr-1">#{u.priority}</span>
-                                                        {u.provider?.name || 'Unknown'} <span className="opacity-50 ml-1">ID:{u.external_service_id}</span>
+                                                        {u.provider?.name || 'Unknown'} <span className="ml-1 font-mono opacity-80" title="Upstream service ID">ID {u.external_service_id}</span>
                                                     </div>
                                                 ))}
                                                 {(!s.upstreams || s.upstreams.length === 0) && <span className="text-xs font-bold text-zinc-400 italic">Local / Manual</span>}

@@ -27,7 +27,13 @@ class AdminServiceController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('name_sn', 'like', "%{$search}%")
                     ->orWhere('category', 'like', "%{$search}%")
-                    ->orWhere('id', $search);
+                    ->orWhere('id', $search)
+                    // Also match the upstream/provider service id an admin pastes
+                    // from the provider panel (exact, plus a loose contains).
+                    ->orWhereHas('upstreams', function ($u) use ($search) {
+                        $u->where('external_service_id', $search)
+                            ->orWhere('external_service_id', 'like', "%{$search}%");
+                    });
             });
         }
 
