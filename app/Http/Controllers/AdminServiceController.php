@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\Service;
 use App\Models\UpstreamProvider;
+use App\Services\AI\ServiceEnricher;
 use App\Services\AI\ServiceListFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -230,6 +231,70 @@ class AdminServiceController extends Controller
         });
 
         return back()->with('success', "Service \"{$service->name}\" updated.");
+    }
+
+    /**
+     * AI-enhance one or more service NAMES (plus Shona/Ndebele translations):
+     * cleans ALL-CAPS, strips provider junk/codes/emojis, and localizes. Batched
+     * into a single Gemini call. Descriptions are left untouched — this only
+     * polishes the customer-facing names. Degrades gracefully when AI is off.
+     */
+    public function enhanceNames(Request $request, ServiceEnricher $enricher): RedirectResponse
+    {
+        $data = $request->validate([
+            'service_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'service_ids.*' => ['integer', 'exists:services,id'],
+        ]);
+
+        if (! $enricher->isAvailable()) {
+            return back()->with('error', 'AI enhancer is unavailable (Gemini not configured).');
+        }
+
+        $services = Service::whereIn('id', $data['service_ids'])->get();
+        if ($services->isEmpty()) {
+            return back()->with('info', 'No services to enhance.');
+        }
+
+        // enrich() keys by the 'service' field — use the local id so we can map back.
+        $map = $enricher->enrich($services->map(fn (Service $s): array => [
+            'service' => (string) $s->id,
+            'name' => $s->name,
+            'category' => $s->category,
+        ])->all());
+
+        $updated = 0;
+        foreach ($services as $service) {
+            $entry = $map[(string) $service->id] ?? null;
+            if (! $entry || empty($entry['name'])) {
+                continue;
+            }
+
+            // Names only — keep any curated descriptions.
+            $updates = array_filter([
+                'name' => $entry['name'] ?? null,
+                'name_sn' => $entry['name_sn'] ?? null,
+                'name_nd' => $entry['name_nd'] ?? null,
+            ], fn ($v) => is_string($v) && $v !== '');
+
+            if ($updates === []) {
+                continue;
+            }
+
+            $old = $service->name;
+            $service->update($updates);
+            $updated++;
+
+            AuditLog::log('service.ai_enhanced', Auth::id(), Service::class, $service->id,
+                ['name' => $old], ['name' => $service->name]);
+        }
+
+        if ($updated === 0) {
+            return back()->with('info', 'AI could not improve the selected service(s) right now — nothing changed.');
+        }
+
+        return back()->with('success', $updated === 1
+            ? 'AI enhanced 1 service name.'
+            : "AI enhanced {$updated} service names.");
     }
 
     /**

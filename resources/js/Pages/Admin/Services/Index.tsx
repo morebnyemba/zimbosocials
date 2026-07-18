@@ -3,7 +3,7 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import ToastContainer, { ToastKind } from '@/Components/Toast';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Plus, Trash2, Search, Filter, Edit2, X, AlertCircle, Merge, MessageCircle, Copy } from 'lucide-react';
+import { Plus, Trash2, Search, Filter, Edit2, X, AlertCircle, Merge, MessageCircle, Copy, Sparkles, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface UpstreamProvider { id: number; name: string; url: string; }
@@ -29,6 +29,15 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
     const [search, setSearch] = useState(filters.search || '');
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
+    const [enhancingId, setEnhancingId] = useState<number | null>(null);
+
+    const enhanceNames = (id: number) => {
+        setEnhancingId(id);
+        router.post(route('admin.services.enhance-names'), { service_ids: [id] }, {
+            preserveScroll: true,
+            onFinish: () => setEnhancingId(null),
+        });
+    };
     const [form, setForm] = useState<any>(emptyForm);
     const [pendingDeactivateId, setPendingDeactivateId] = useState<number | null>(null);
     const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
@@ -307,6 +316,14 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                         </td>
                                         <td className="py-4 px-6 text-right">
                                             <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => enhanceNames(s.id)}
+                                                    disabled={enhancingId === s.id}
+                                                    title="AI: clean up this service name + translations"
+                                                    className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all disabled:opacity-50"
+                                                >
+                                                    {enhancingId === s.id ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                                                </button>
                                                 <button onClick={() => openEdit(s)} className="p-2 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all">
                                                     <Edit2 size={16} />
                                                 </button>
