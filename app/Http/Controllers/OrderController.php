@@ -77,12 +77,18 @@ class OrderController extends Controller
 
         $order = $result['order'];
 
-        NotificationService::notifyAdmins(
-            'admin_new_order',
-            'New Order Placed',
-            "Order #{$order->id} placed by {$user->name} — {$service->name} (\${$order->charge}).",
-            ['order_id' => $order->id, 'user_name' => $user->name, 'service_name' => $service->name, 'amount' => "\${$order->charge}"]
-        );
+        // Best-effort — the order is already placed; a notification hiccup must
+        // never turn a successful order into a 500 for the customer.
+        try {
+            NotificationService::notifyAdmins(
+                'admin_new_order',
+                'New Order Placed',
+                "Order #{$order->id} placed by {$user->name} — {$service->name} (\${$order->charge}).",
+                ['order_id' => $order->id, 'user_name' => $user->name, 'service_name' => $service->name, 'amount' => "\${$order->charge}"]
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('admin_new_order notify failed', ['order_id' => $order->id, 'message' => $e->getMessage()]);
+        }
 
         if (! $result['dispatch']['ok']) {
             return redirect()->route('orders.index')

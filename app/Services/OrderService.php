@@ -10,6 +10,7 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\Upstream\OrderDispatchService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class OrderService
 {
@@ -293,7 +294,21 @@ class OrderService
         }
 
         // --- Dispatch upstream (outside transaction; failure is recoverable) ---
-        $dispatch = $dispatchService->dispatch($order);
+        // CRITICAL: the order + charge are already committed. A throw here (a
+        // provider client blowing up, a notify failure, anything) must NOT 500
+        // the request — that would show the customer an error for an order that
+        // actually went through, and leave it looking "stuck right after
+        // placing". Any failure just leaves the order PENDING; the queued retry
+        // below and the every-5-min orders:recover-pending command finish it.
+        try {
+            $dispatch = $dispatchService->dispatch($order);
+        } catch (\Throwable $e) {
+            Log::error('Order dispatch threw after placement; leaving order pending for recovery', [
+                'order_id' => $order->id,
+                'message' => $e->getMessage(),
+            ]);
+            $dispatch = ['ok' => false, 'message' => 'Dispatch deferred — will retry automatically.', 'raw' => null, 'external_order_id' => null];
+        }
 
         // A failed synchronous push gets queued retries with backoff; the job
         // auto-cancels and refunds the order if every attempt fails, so the
@@ -303,7 +318,11 @@ class OrderService
         // unknown outcomes (the provider may have the order — retrying could
         // buy the delivery twice; admins are alerted to verify manually).
         if (! $dispatch['ok'] && ! ($dispatch['unknown'] ?? false) && config('queue.default') !== 'sync') {
-            DispatchOrderUpstream::dispatch($order->id)->delay(now()->addSeconds(15));
+            try {
+                DispatchOrderUpstream::dispatch($order->id)->delay(now()->addSeconds(15));
+            } catch (\Throwable $e) {
+                Log::error('Failed to queue order dispatch retry', ['order_id' => $order->id, 'message' => $e->getMessage()]);
+            }
         }
 
         return [
