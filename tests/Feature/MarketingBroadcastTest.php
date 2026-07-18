@@ -128,7 +128,7 @@ class MarketingBroadcastTest extends TestCase
             fn (SendEmailNotification $job) => $job->email === 'real@example.com');
     }
 
-    public function test_filtered_campaign_does_not_sweep_in_guest_contacts(): void
+    public function test_guests_are_reached_even_on_a_role_filtered_campaign_by_default(): void
     {
         Queue::fake();
 
@@ -139,10 +139,34 @@ class MarketingBroadcastTest extends TestCase
         ]);
 
         $this->runBroadcast(
-            $this->campaign(['whatsapp'], ['roles' => ['marketer'], 'account_types' => ['all']])->id
+            $this->makeCampaign(['whatsapp'], ['roles' => ['marketer'], 'account_types' => ['all']])->id
         );
 
-        // Only the matching marketer — the guest contact is not swept in.
+        // The matching marketer AND the account-less guest (include_guests defaults on).
+        Queue::assertPushed(SendWhatsAppNotification::class, 2);
+        Queue::assertPushed(SendWhatsAppNotification::class,
+            fn (SendWhatsAppNotification $job) => $job->to === '263771111111');
+    }
+
+    public function test_guests_can_be_excluded_when_include_guests_is_off(): void
+    {
+        Queue::fake();
+
+        User::factory()->create(['role' => 'marketer', 'whatsapp_number' => '263772222222', 'is_active' => true]);
+        WhatsAppAccount::create([
+            'wa_phone' => '263771111111', 'user_id' => null,
+            'link_status' => 'guest', 'opted_in' => true,
+        ]);
+
+        $this->runBroadcast(
+            $this->makeCampaign(['whatsapp'], [
+                'roles' => ['marketer'], 'account_types' => ['all'], 'include_guests' => false,
+            ])->id
+        );
+
+        // Only the matching marketer — the guest is held back.
         Queue::assertPushed(SendWhatsAppNotification::class, 1);
+        Queue::assertNotPushed(SendWhatsAppNotification::class,
+            fn (SendWhatsAppNotification $job) => $job->to === '263771111111');
     }
 }

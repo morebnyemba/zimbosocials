@@ -55,6 +55,7 @@ class AdminCampaignController extends Controller
             'account_types' => ['nullable', 'array'],
             'account_types.*' => ['string', 'in:all,individual,business,marketer'],
             'whatsapp_template' => ['nullable', 'string', 'max:100'],
+            'include_guests' => ['nullable', 'boolean'],
         ]);
 
         // Only accept a template we actually know about (guards a bad/stale name
@@ -82,6 +83,7 @@ class AdminCampaignController extends Controller
                 'roles' => $data['roles'] ?? ['all'],
                 'account_types' => $data['account_types'] ?? ['all'],
                 'whatsapp_template' => $template,
+                'include_guests' => $data['include_guests'] ?? true,
             ],
             'status' => 'queued',
         ]);

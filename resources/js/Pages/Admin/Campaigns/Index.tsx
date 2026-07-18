@@ -165,6 +165,7 @@ type CampaignForm = {
     roles: string[];
     account_types: string[];
     whatsapp_template: string;
+    include_guests: boolean;
 };
 
 type AiCopyState = {
@@ -191,6 +192,7 @@ export default function CampaignsIndex({ campaigns, whatsappTemplates = [] }: Pr
         roles: ['all'],
         account_types: ['all'],
         whatsapp_template: 'marketing_broadcast',
+        include_guests: true,
     });
 
     const toggleArray = (field: 'channels' | 'roles' | 'account_types', value: string) => {
@@ -379,6 +381,18 @@ export default function CampaignsIndex({ campaigns, whatsappTemplates = [] }: Pr
                                         <p className="text-[11px] text-gray-400 mt-1">
                                             Pick a template you've had <strong>approved by Meta</strong> — its variables are filled from the name, subject and body above. Unapproved templates won't deliver outside the 24-hour window.
                                         </p>
+
+                                        <label className="mt-3 flex items-start gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={data.include_guests}
+                                                onChange={e => setData('include_guests', e.target.checked)}
+                                                className="mt-0.5 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                                            />
+                                            <span className="text-xs text-gray-600">
+                                                <strong>Also message WhatsApp contacts without an account</strong> — numbers that chatted with the bot but never registered. They ignore the role/type filters above, so leave this off for tightly-targeted campaigns.
+                                            </span>
+                                        </label>
                                     </div>
                                 )}
 

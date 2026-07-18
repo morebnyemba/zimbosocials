@@ -57,10 +57,14 @@ class SendMarketingBroadcastJob implements ShouldQueue
             $users = $query->get(['id', 'name', 'email', 'locale', 'whatsapp_number', 'notification_prefs']);
 
             $whatsappOn = in_array('whatsapp', $channels, true);
-            // A campaign that targets specific roles/account-types is a user-
-            // segment blast — guest WhatsApp contacts (no user, no role) are only
-            // swept in when the campaign is unfiltered ("all").
+            // LINKED WhatsApp accounts follow the campaign's role/type segment;
+            // an unfiltered campaign reaches all of them.
             $unfiltered = in_array('all', $roles, true) && in_array('all', $accountTypes, true);
+            // GUEST contacts (a number that messaged the bot but never made an
+            // account) have no role/type to match, so they're governed by their
+            // own switch — default ON so campaigns reach every WhatsApp contact,
+            // but an admin can turn it off to keep a targeted campaign tight.
+            $includeGuests = (bool) ($filters['include_guests'] ?? true);
 
             // Which WhatsApp template to send with. Marketing sends outside the
             // 24h window MUST use a Meta-approved template — an admin can point
@@ -142,7 +146,7 @@ class SendMarketingBroadcastJob implements ShouldQueue
                     ->with('user:id,name,locale,notification_prefs')
                     ->chunkById(500, function ($accounts) use (
                         &$sentWhatsApp, &$extraWhatsApp, &$sentPhones, $matchedUserIds,
-                        $unfiltered, $subjects, $bodies, $defaultSubject, $defaultBody, $campaign,
+                        $unfiltered, $includeGuests, $subjects, $bodies, $defaultSubject, $defaultBody, $campaign,
                         $waTemplate, $waParamLabels
                     ) {
                         foreach ($accounts as $account) {
@@ -153,14 +157,17 @@ class SendMarketingBroadcastJob implements ShouldQueue
 
                             $linked = $account->user;
 
-                            // Filtered campaign: only linked users who matched the
-                            // segment (guests have no role/type to match).
-                            if (! $unfiltered && (! $linked || ! isset($matchedUserIds[(int) $linked->id]))) {
-                                continue;
-                            }
-
-                            // Respect an explicit WhatsApp opt-out on the linked user.
-                            if ($linked && ($linked->notification_prefs['whatsapp'] ?? true) === false) {
+                            if ($linked) {
+                                // Linked account → honour the role/type segment
+                                // and the user's own WhatsApp opt-out.
+                                if (! $unfiltered && ! isset($matchedUserIds[(int) $linked->id])) {
+                                    continue;
+                                }
+                                if (($linked->notification_prefs['whatsapp'] ?? true) === false) {
+                                    continue;
+                                }
+                            } elseif (! $includeGuests) {
+                                // Contact with no account — only when opted into.
                                 continue;
                             }
 
