@@ -38,6 +38,19 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
             onFinish: () => setEnhancingId(null),
         });
     };
+
+    // Bulk: AI-clean every service on the current page in one request (the
+    // endpoint batches them into a single Gemini call). -1 flags "bulk running".
+    const enhanceVisible = () => {
+        const ids = services.data.map(s => s.id);
+        if (ids.length === 0) return;
+        if (!confirm(`AI-enhance the names of ${ids.length} service(s) on this page?`)) return;
+        setEnhancingId(-1);
+        router.post(route('admin.services.enhance-names'), { service_ids: ids }, {
+            preserveScroll: true,
+            onFinish: () => setEnhancingId(null),
+        });
+    };
     const [form, setForm] = useState<any>(emptyForm);
     const [pendingDeactivateId, setPendingDeactivateId] = useState<number | null>(null);
     const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
@@ -206,6 +219,17 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                         <button onClick={openCategoryModal} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition-all active:scale-95">
                             <Merge size={18} /> Merge Categories
                         </button>
+                        {services.data.length > 0 && (
+                            <button
+                                onClick={enhanceVisible}
+                                disabled={enhancingId === -1}
+                                title="AI-clean the names of every service shown on this page"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {enhancingId === -1 ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                                AI-enhance page ({services.data.length})
+                            </button>
+                        )}
                         {stats.inactive > 0 && (
                             <button onClick={() => setShowBulkDeleteConfirm(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 font-bold rounded-2xl bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-all active:scale-95">
                                 <Trash2 size={18} /> Delete {stats.inactive} Inactive
