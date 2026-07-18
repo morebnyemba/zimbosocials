@@ -1,5 +1,6 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
+import { useEffect, useRef, useState } from 'react';
 import { FaWhatsapp, FaArrowLeft, FaPaperPlane, FaHeadset, FaRedo, FaRobot } from 'react-icons/fa';
 
 interface Message {
@@ -30,8 +31,34 @@ interface Props {
     session: { flow: string | null; state: string | null; status: string } | null;
 }
 
+const POLL_MS = 5000;
+
 export default function Conversation({ account, messages, session }: Props) {
     const { data, setData, post, processing, reset } = useForm({ message: '' });
+    const [live, setLive] = useState(true);
+    const liveRef = useRef(live);
+    liveRef.current = live;
+    const bottomRef = useRef<HTMLDivElement>(null);
+    const lastCountRef = useRef(messages.length);
+
+    // Near-real-time transcript: reload just the messages on an interval. A
+    // partial reload with preserveState keeps the reply box (and everything the
+    // agent typed) intact, so this never interrupts them.
+    useEffect(() => {
+        const id = setInterval(() => {
+            if (!liveRef.current) return;
+            router.reload({ only: ['messages', 'session', 'account'] });
+        }, POLL_MS);
+        return () => clearInterval(id);
+    }, []);
+
+    // Auto-scroll to the newest message when the count grows.
+    useEffect(() => {
+        if (messages.length !== lastCountRef.current) {
+            bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            lastCountRef.current = messages.length;
+        }
+    }, [messages.length]);
 
     const sendReply = (e: React.FormEvent) => {
         e.preventDefault();
@@ -85,6 +112,19 @@ export default function Conversation({ account, messages, session }: Props) {
                     </div>
                 </div>
 
+                {/* Live toggle */}
+                <div className="flex items-center justify-end -mb-2">
+                    <button
+                        type="button"
+                        onClick={() => setLive((v) => !v)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 ${live ? 'bg-emerald-500 text-white' : 'bg-zinc-100 text-zinc-500'}`}
+                        title="Auto-refresh this chat"
+                    >
+                        <span className={`h-2 w-2 rounded-full ${live ? 'bg-white animate-pulse' : 'bg-zinc-400'}`} />
+                        {live ? 'Live' : 'Paused'}
+                    </button>
+                </div>
+
                 {/* Transcript */}
                 <div className="bg-zinc-50 rounded-2xl border border-zinc-200 p-4 md:p-6 space-y-3 max-h-[60vh] overflow-y-auto">
                     {messages.length === 0 && <p className="text-center text-zinc-400 py-12 font-medium">No messages yet.</p>}
@@ -100,6 +140,7 @@ export default function Conversation({ account, messages, session }: Props) {
                             </div>
                         </div>
                     ))}
+                    <div ref={bottomRef} />
                 </div>
 
                 {/* Agent reply */}

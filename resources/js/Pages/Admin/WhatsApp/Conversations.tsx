@@ -1,6 +1,6 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FaWhatsapp, FaSearch, FaRobot, FaUserCheck, FaComments, FaHeadset } from 'react-icons/fa';
 
 interface Conversation {
@@ -16,8 +16,18 @@ interface Conversation {
     last_direction: string | null;
 }
 
+interface Paginator<T> {
+    data: T[];
+    links: { url: string | null; label: string; active: boolean }[];
+    current_page: number;
+    last_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+}
+
 interface Props {
-    conversations: Conversation[];
+    conversations: Paginator<Conversation>;
     stats: Record<string, number>;
     filters: { search: string };
 }
@@ -31,8 +41,23 @@ const tiles: { key: string; label: string; icon: any }[] = [
     { key: 'in_handoff', label: 'In handoff', icon: FaHeadset },
 ];
 
+const POLL_MS = 12000;
+
 export default function Conversations({ conversations, stats, filters }: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
+    const [live, setLive] = useState(true);
+    const liveRef = useRef(live);
+    liveRef.current = live;
+
+    // Near-real-time: quietly refresh the list + stats on an interval without
+    // disrupting scroll, typing, or the current page.
+    useEffect(() => {
+        const id = setInterval(() => {
+            if (!liveRef.current) return;
+            router.reload({ only: ['conversations', 'stats'] });
+        }, POLL_MS);
+        return () => clearInterval(id);
+    }, []);
 
     const submitSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -81,16 +106,28 @@ export default function Conversations({ conversations, stats, filters }: Props) 
                     ))}
                 </div>
 
-                {/* Search */}
-                <form onSubmit={submitSearch} className="relative max-w-md">
-                    <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search phone or name…"
-                        className="w-full bg-white border-2 border-zinc-200 rounded-xl pl-11 pr-4 py-3 font-medium text-zinc-900 focus:outline-none focus:border-emerald-500 transition"
-                    />
-                </form>
+                {/* Search + live toggle */}
+                <div className="flex flex-wrap items-center gap-3">
+                    <form onSubmit={submitSearch} className="relative flex-1 min-w-[240px] max-w-md">
+                        <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
+                        <input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search phone, name, or email…"
+                            className="w-full bg-white border-2 border-zinc-200 rounded-xl pl-11 pr-4 py-3 font-medium text-zinc-900 focus:outline-none focus:border-emerald-500 transition"
+                        />
+                    </form>
+                    <button
+                        type="button"
+                        onClick={() => setLive((v) => !v)}
+                        className={`px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-2 ${live ? 'bg-emerald-500 text-white' : 'bg-zinc-100 text-zinc-500'}`}
+                        title="Auto-refresh the list"
+                    >
+                        <span className={`h-2 w-2 rounded-full ${live ? 'bg-white animate-pulse' : 'bg-zinc-400'}`} />
+                        {live ? 'Live' : 'Paused'}
+                    </button>
+                    <span className="text-xs font-semibold text-zinc-400">{conversations.total} total</span>
+                </div>
 
                 {/* Table */}
                 <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
@@ -106,10 +143,10 @@ export default function Conversations({ conversations, stats, filters }: Props) 
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-zinc-50">
-                                {conversations.length === 0 && (
+                                {conversations.data.length === 0 && (
                                     <tr><td colSpan={5} className="px-5 py-16 text-center text-zinc-400 font-medium">No conversations yet.</td></tr>
                                 )}
-                                {conversations.map((c) => (
+                                {conversations.data.map((c) => (
                                     <tr
                                         key={c.id}
                                         onClick={() => router.visit(route('admin.whatsapp.conversation', c.id))}
@@ -147,6 +184,28 @@ export default function Conversations({ conversations, stats, filters }: Props) 
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Pagination */}
+                    {conversations.last_page > 1 && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-t border-zinc-100">
+                            <span className="text-xs font-semibold text-zinc-400">
+                                {conversations.from}–{conversations.to} of {conversations.total}
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                                {conversations.links.map((l, i) => (
+                                    <button
+                                        key={i}
+                                        disabled={!l.url}
+                                        onClick={() => l.url && router.visit(l.url, { preserveScroll: true, preserveState: true })}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                                            l.active ? 'bg-emerald-500 text-white' : l.url ? 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200' : 'bg-transparent text-zinc-300 cursor-default'
+                                        }`}
+                                        dangerouslySetInnerHTML={{ __html: l.label }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </AdminLayout>

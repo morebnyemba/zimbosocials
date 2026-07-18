@@ -30,12 +30,14 @@ class AdminWhatsAppController extends Controller
 
         $accounts = WhatsAppAccount::query()
             ->with('user:id,name,email')
-            ->when($search !== '', fn ($q) => $q->where('wa_phone', 'like', "%{$search}%")
-                ->orWhere('display_name', 'like', "%{$search}%"))
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->where('wa_phone', 'like', "%{$search}%")
+                ->orWhere('display_name', 'like', "%{$search}%")
+                ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))))
             ->orderByDesc('last_seen_at')
-            ->limit(50)
-            ->get()
-            ->map(function (WhatsAppAccount $a) {
+            ->paginate(30)
+            ->withQueryString()
+            ->through(function (WhatsAppAccount $a) {
                 $last = WhatsAppMessage::where('wa_phone', $a->wa_phone)->latest('id')->first();
 
                 return [
