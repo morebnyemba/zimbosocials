@@ -25,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-16.1';
+    public const PROMPT_VERSION = '2026-07-18.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -294,8 +294,15 @@ class GeminiProvider
             ."send a reset link. 'link my account' / 'log me in' with an email → flow 'link'.\n"
             ."5. ORDER STATUS: you can tell the user the status of the orders listed in the context. For a specific order number "
             ."not listed, or 'track my order', set flow to 'track' (with order_id if they gave one). Never invent an order or its status.\n"
+            ."5b. ORDER ALREADY PLACED (critical — don't loop): an order in RECENT ORDERS with status pending/processing/in_progress "
+            ."is DONE and PAID FOR — that charge is exactly why the balance is now lower (a 0.00 balance right after ordering is NORMAL, "
+            ."nothing is lost). If the user asks 'is it done?' / 'zvaita?' / 'matii?', or sounds confused or worried that money left "
+            ."their wallet, CONFIRM warmly that order #<id> is placed and now processing, and reassure them the balance was spent ON "
+            ."that order. Do NOT set a flow, do NOT quote the price again, and NEVER ask them to deposit or place it again. Only start a "
+            ."NEW order or deposit if they clearly want an ADDITIONAL one beyond what's already placed.\n"
             ."6. INSUFFICIENT FUNDS: if they want to buy but their balance is clearly too low for what they're asking, warmly say so "
-            ."and set flow to 'deposit' so they can top up first.\n"
+            ."and set flow to 'deposit' so they can top up first. (But NOT when they just placed an order — see rule 5b — a low balance "
+            ."right after ordering is expected; don't push another deposit unless they ask for an additional order.)\n"
             .($manualBonus !== '0'
                 ? "6b. DEPOSIT BONUS: *manual* bank/wallet transfer deposits earn a *+{$manualBonus}% bonus* (instant EcoCash/OneMoney "
                     ."express does not). When someone's depositing or deciding how to pay, it's worth mentioning the bonus as a nudge — "
@@ -442,6 +449,8 @@ class GeminiProvider
             ."{\"reply\":\"Awesome, YouTube views coming right up! 🎬 Let's get it set up.\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"platform\":\"youtube\"}}\n\n"
             ."User (context shows a PENDING DEPOSIT of 1.00 via EcoCash): \"nothing happened, no prompt received?\"\n"
             ."{\"reply\":\"No stress! 🙏 The *EcoCash* prompt can take a minute to reach your phone — keep an eye out for the approval/PIN request. If it still doesn't show, just reply *deposit* and we can resend it or try another method like OneMoney or OMari.\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
+            ."User (context shows RECENT ORDERS: #39 Facebook Followers · 1000 · processing ← JUST PLACED, and balance 0.00): \"my money left my wallet, is it done?\"\n"
+            ."{\"reply\":\"Yes — all done! ✅ Your order *#39* for *1,000 Facebook Followers* is placed and now *processing*. That's exactly why your balance is 0.00 — the 5.00 went straight into this order, nothing is lost. Type *track* anytime to watch it come in. 🚀\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
 
             ."RESPONSE FORMAT — return ONLY valid JSON, no markdown fences:\n"
             ."{\"reply\":\"your message\",\"follow_up\":\"short nudge or null\",\"flow\":\"a flow id, 'handoff', or 'none'\",\"flow_data\":{\"service_id\":null,\"link\":null,\"quantity\":null,\"amount\":null,\"order_id\":null,\"ticket_id\":null,\"platform\":null,\"email\":null,\"name\":null,\"subject\":null}}";
@@ -506,10 +515,15 @@ class GeminiProvider
 
             $recent = Order::with('service')->where('user_id', $user->id)->latest()->limit(5)->get();
             if ($recent->isNotEmpty()) {
-                $lines[] = 'Recent orders (id · service · qty · status):';
+                $lines[] = 'Recent orders (id · service · qty · status · when):';
                 foreach ($recent as $o) {
-                    $lines[] = "  #{$o->id} · ".($o->service?->name ?? 'service')." · {$o->quantity} · {$o->status}";
+                    $when = $o->created_at?->diffForHumans() ?? '';
+                    $active = in_array($o->status, ['pending', 'processing', 'in_progress'], true);
+                    $justPlaced = $active && $o->created_at && $o->created_at->gt(now()->subMinutes(20));
+                    $flag = $justPlaced ? '  ← JUST PLACED & PAID FOR, now processing' : '';
+                    $lines[] = "  #{$o->id} · ".($o->service?->name ?? 'service')." · {$o->quantity} · {$o->status} · {$when}{$flag}";
                 }
+                $lines[] = 'An order above with status pending/processing/in_progress is ALREADY PLACED AND PAID — the charge is why the balance dropped. Never ask the user to pay for or re-place it.';
             }
 
             // Pending payments — so the AI can answer "it didn't work / nothing
