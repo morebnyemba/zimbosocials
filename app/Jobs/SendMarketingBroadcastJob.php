@@ -62,6 +62,13 @@ class SendMarketingBroadcastJob implements ShouldQueue
             // swept in when the campaign is unfiltered ("all").
             $unfiltered = in_array('all', $roles, true) && in_array('all', $accountTypes, true);
 
+            // Which WhatsApp template to send with. Marketing sends outside the
+            // 24h window MUST use a Meta-approved template — an admin can point
+            // the campaign at an already-approved one instead of marketing_broadcast.
+            $waTemplate = $filters['whatsapp_template'] ?? 'marketing_broadcast';
+            $waParamLabels = config("whatsapp-templates.templates.{$waTemplate}.params")
+                ?? ['user_name', 'subject', 'body'];
+
             $sentEmail = 0;
             $sentWhatsApp = 0;
             $sentInApp = 0;
@@ -111,10 +118,10 @@ class SendMarketingBroadcastJob implements ShouldQueue
                 if ($whatsappOn && ($prefs['whatsapp'] ?? true) && ! empty($user->whatsapp_number)) {
                     SendWhatsAppNotification::dispatch(
                         (string) $user->whatsapp_number,
-                        'marketing_broadcast',
+                        $waTemplate,
                         (string) $subject,
                         (string) $body,
-                        [(string) $user->name, (string) $subject, (string) $body],
+                        $this->templateParams($waParamLabels, (string) $user->name, (string) $subject, (string) $body),
                         $locale,
                     )->onQueue('notifications');
                     $sentWhatsApp++;
@@ -135,7 +142,8 @@ class SendMarketingBroadcastJob implements ShouldQueue
                     ->with('user:id,name,locale,notification_prefs')
                     ->chunkById(500, function ($accounts) use (
                         &$sentWhatsApp, &$extraWhatsApp, &$sentPhones, $matchedUserIds,
-                        $unfiltered, $subjects, $bodies, $defaultSubject, $defaultBody, $campaign
+                        $unfiltered, $subjects, $bodies, $defaultSubject, $defaultBody, $campaign,
+                        $waTemplate, $waParamLabels
                     ) {
                         foreach ($accounts as $account) {
                             $key = $this->phoneKey((string) $account->wa_phone);
@@ -163,10 +171,10 @@ class SendMarketingBroadcastJob implements ShouldQueue
 
                             SendWhatsAppNotification::dispatch(
                                 (string) $account->wa_phone,
-                                'marketing_broadcast',
+                                $waTemplate,
                                 (string) $subject,
                                 (string) $body,
-                                [(string) $name, (string) $subject, (string) $body],
+                                $this->templateParams($waParamLabels, (string) $name, (string) $subject, (string) $body),
                                 $locale,
                             )->onQueue('notifications');
 
@@ -203,5 +211,28 @@ class SendMarketingBroadcastJob implements ShouldQueue
     private function phoneKey(string $phone): string
     {
         return substr(preg_replace('/\D+/', '', $phone) ?? '', -9);
+    }
+
+    /**
+     * Fill a template's ordered params from the campaign's name/subject/body by
+     * matching each param LABEL, so an admin can point a campaign at any approved
+     * template whose variables are some arrangement of those three. Unmatched
+     * labels fall back to the body text (never empty — Meta rejects blank params).
+     *
+     * @param  array<int,string>  $labels
+     * @return array<int,string>
+     */
+    private function templateParams(array $labels, string $name, string $subject, string $body): array
+    {
+        return array_map(function ($label) use ($name, $subject, $body): string {
+            $l = mb_strtolower((string) $label);
+
+            return match (true) {
+                str_contains($l, 'name') => $name,
+                str_contains($l, 'subject') || str_contains($l, 'title') => $subject,
+                str_contains($l, 'body') || str_contains($l, 'message') || str_contains($l, 'content') => $body,
+                default => $body,
+            };
+        }, array_values($labels));
     }
 }

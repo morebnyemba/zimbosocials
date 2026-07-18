@@ -26,6 +26,8 @@ type Campaign = {
     creator?: { name: string; email: string };
 };
 
+type WhatsAppTemplate = { name: string; category: string; params: string[]; body: string };
+
 type Props = {
     campaigns: {
         data: Campaign[];
@@ -34,6 +36,7 @@ type Props = {
         current_page: number;
         last_page: number;
     };
+    whatsappTemplates?: WhatsAppTemplate[];
 };
 
 const STATUS_CONFIG: Record<Campaign['status'], { label: string; color: string; Icon: React.ElementType }> = {
@@ -161,6 +164,7 @@ type CampaignForm = {
     channels: string[];
     roles: string[];
     account_types: string[];
+    whatsapp_template: string;
 };
 
 type AiCopyState = {
@@ -170,7 +174,7 @@ type AiCopyState = {
     error: string | null;
 };
 
-export default function CampaignsIndex({ campaigns }: Props) {
+export default function CampaignsIndex({ campaigns, whatsappTemplates = [] }: Props) {
     const [showForm, setShowForm] = useState(false);
     const [activeLocale, setActiveLocale] = useState<'en' | 'sn' | 'nd'>('en');
     const [ai, setAi] = useState<AiCopyState>({ brief: '', tone: '', loading: false, error: null });
@@ -186,6 +190,7 @@ export default function CampaignsIndex({ campaigns }: Props) {
         channels: ['email'],
         roles: ['all'],
         account_types: ['all'],
+        whatsapp_template: 'marketing_broadcast',
     });
 
     const toggleArray = (field: 'channels' | 'roles' | 'account_types', value: string) => {
@@ -353,6 +358,29 @@ export default function CampaignsIndex({ campaigns }: Props) {
                                     </div>
                                     {errors.channels && <p className="text-xs text-red-600 mt-1">{errors.channels}</p>}
                                 </div>
+
+                                {/* WhatsApp template — marketing sends outside the 24h window need a Meta-approved template */}
+                                {data.channels.includes('whatsapp') && whatsappTemplates.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">
+                                            WhatsApp template
+                                        </label>
+                                        <select
+                                            value={data.whatsapp_template}
+                                            onChange={e => setData('whatsapp_template', e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-800 focus:border-brand-green focus:ring-brand-green"
+                                        >
+                                            {whatsappTemplates.map(t => (
+                                                <option key={t.name} value={t.name}>
+                                                    {t.name} · {t.category} ({t.params.length} vars)
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <p className="text-[11px] text-gray-400 mt-1">
+                                            Pick a template you've had <strong>approved by Meta</strong> — its variables are filled from the name, subject and body above. Unapproved templates won't deliver outside the 24-hour window.
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Audience Filters */}
                                 <div className="grid grid-cols-2 gap-4">

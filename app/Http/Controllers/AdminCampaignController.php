@@ -20,8 +20,21 @@ class AdminCampaignController extends Controller
             ->latest()
             ->paginate(15);
 
+        // WhatsApp templates the campaign can send with. Marketing sends outside
+        // the 24h window need a Meta-APPROVED template; the admin picks the one
+        // they've had approved. (Effective set = config overridden by DB edits.)
+        $templates = collect(config('whatsapp-templates.templates', []))
+            ->map(fn (array $tpl, string $name): array => [
+                'name' => $name,
+                'category' => $tpl['category'] ?? 'UTILITY',
+                'params' => array_values($tpl['params'] ?? []),
+                'body' => $tpl['body'] ?? '',
+            ])
+            ->values();
+
         return Inertia::render('Admin/Campaigns/Index', [
             'campaigns' => $campaigns,
+            'whatsappTemplates' => $templates,
         ]);
     }
 
@@ -41,7 +54,15 @@ class AdminCampaignController extends Controller
             'roles.*' => ['string', 'in:all,user,marketer,reseller,admin'],
             'account_types' => ['nullable', 'array'],
             'account_types.*' => ['string', 'in:all,individual,business,marketer'],
+            'whatsapp_template' => ['nullable', 'string', 'max:100'],
         ]);
+
+        // Only accept a template we actually know about (guards a bad/stale name
+        // that would make every WhatsApp send fall back to undeliverable text).
+        $template = $data['whatsapp_template'] ?? null;
+        if ($template !== null && ! array_key_exists($template, (array) config('whatsapp-templates.templates', []))) {
+            $template = null;
+        }
 
         $campaign = MarketingCampaign::query()->create([
             'created_by' => (int) $request->user()->id,
@@ -60,6 +81,7 @@ class AdminCampaignController extends Controller
             'filters' => [
                 'roles' => $data['roles'] ?? ['all'],
                 'account_types' => $data['account_types'] ?? ['all'],
+                'whatsapp_template' => $template,
             ],
             'status' => 'queued',
         ]);

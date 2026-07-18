@@ -41,6 +41,26 @@ class MarketingBroadcastTest extends TestCase
         ]);
     }
 
+    public function test_campaign_sends_via_the_chosen_approved_template(): void
+    {
+        Queue::fake();
+
+        User::factory()->create(['whatsapp_number' => '263772222222', 'is_active' => true, 'name' => 'Jane']);
+
+        // Point the campaign at an existing template other than the default —
+        // its params [user_name, ticket_subject] map from name/subject.
+        $campaign = $this->makeCampaign(['whatsapp'], [
+            'roles' => ['all'], 'account_types' => ['all'], 'whatsapp_template' => 'ticket_reply',
+        ]);
+        $this->runBroadcast($campaign->id);
+
+        Queue::assertPushed(SendWhatsAppNotification::class, function (SendWhatsAppNotification $job) {
+            return $job->templateName === 'ticket_reply'
+                && ($job->templateParams[0] ?? null) === 'Jane'
+                && ($job->templateParams[1] ?? null) === 'Big sale'; // subject → ticket_subject
+        });
+    }
+
     public function test_whatsapp_broadcast_reaches_contacts_without_a_user_account(): void
     {
         Queue::fake();
