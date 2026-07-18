@@ -6,13 +6,13 @@ use App\Models\Service;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WhatsAppAccount;
+use App\Models\WhatsAppSavedOrder;
 use App\WhatsApp\Flow\FlowEngine;
 use App\WhatsApp\Flow\FlowResult;
 use App\WhatsApp\Messaging\Responder;
 use App\WhatsApp\Persistence\AccountStore;
 use App\WhatsApp\Session\SessionContext;
 use App\WhatsApp\Session\SessionManager;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * "Finish your order after you top up." When a WhatsApp order stalls at confirm
@@ -27,9 +27,6 @@ use Illuminate\Support\Facades\Cache;
  */
 class OrderResumeService
 {
-    /** Stash lives longer than a session (deposits can confirm hours later). */
-    private const TTL_HOURS = 24;
-
     public function __construct(
         private readonly SessionManager $sessions,
         private readonly FlowEngine $engine,
@@ -40,12 +37,21 @@ class OrderResumeService
     /** Remember an order that couldn't be placed yet (called at confirm when short). */
     public static function stash(int $userId, string $phone, int $serviceId, string $link, int $quantity): void
     {
-        Cache::put(self::key($userId), compact('phone', 'serviceId', 'link', 'quantity'), now()->addHours(self::TTL_HOURS));
+        WhatsAppSavedOrder::updateOrCreate(
+            ['user_id' => $userId],
+            ['wa_phone' => $phone, 'service_id' => $serviceId, 'link' => $link, 'quantity' => $quantity, 'reminded_at' => null],
+        );
     }
 
     public static function clear(int $userId): void
     {
-        Cache::forget(self::key($userId));
+        WhatsAppSavedOrder::where('user_id', $userId)->delete();
+    }
+
+    /** The saved order for this user, if any. */
+    public static function saved(int $userId): ?WhatsAppSavedOrder
+    {
+        return WhatsAppSavedOrder::where('user_id', $userId)->first();
     }
 
     /**
@@ -54,20 +60,20 @@ class OrderResumeService
      */
     public function resumeAfterDeposit(int $userId): void
     {
-        $stash = Cache::get(self::key($userId));
-        if (! is_array($stash)) {
+        $stash = self::saved($userId);
+        if (! $stash) {
             return;
         }
 
         $user = User::find($userId);
-        $service = Service::active()->find($stash['serviceId'] ?? 0);
+        $service = Service::active()->find($stash->service_id);
         if (! $user || ! $service) {
             self::clear($userId);
 
             return;
         }
 
-        $qty = (int) ($stash['quantity'] ?? 0);
+        $qty = (int) $stash->quantity;
         $charge = $service->calculateCharge($qty);
 
         // Still short (they topped up less than needed) → keep the stash so the
@@ -76,7 +82,7 @@ class OrderResumeService
             return;
         }
 
-        $phone = (string) ($stash['phone'] ?? '');
+        $phone = (string) $stash->wa_phone;
         if ($phone === '') {
             self::clear($userId);
 
@@ -87,7 +93,7 @@ class OrderResumeService
         $ctx = $this->sessions->load($phone);
         $ctx->set('_user_id', $userId);
         $ctx->set('_prefill_service_id', $service->id);
-        $ctx->set('_prefill_link', $stash['link'] ?? '');
+        $ctx->set('_prefill_link', $stash->link);
         $ctx->set('_prefill_quantity', $qty);
 
         $res = $this->engine->start($ctx, 'order');
@@ -118,12 +124,12 @@ class OrderResumeService
     {
         $userId = (int) $tx->user_id;
 
-        if (Cache::get(self::key($userId)) !== null) {
+        if (self::saved($userId) !== null) {
             $this->resumeAfterDeposit($userId);
 
             // If the top-up still wasn't enough, the stash is kept and no resume
             // fired — fall through to a plain confirmation so they still hear back.
-            if (Cache::get(self::key($userId)) === null) {
+            if (self::saved($userId) === null) {
                 return;
             }
         }
@@ -170,7 +176,7 @@ class OrderResumeService
             ."Want to try again? Reply *deposit* to retry or pick another method (EcoCash, OneMoney, InnBucks, OMari).";
 
         // If an order was waiting on this top-up, reassure them it's still saved.
-        if (Cache::get(self::key((int) $tx->user_id)) !== null) {
+        if (self::saved((int) $tx->user_id) !== null) {
             $msg .= "\n\nYour order is still saved — top up and I'll finish it for you. 👍";
         }
 
@@ -222,10 +228,5 @@ class OrderResumeService
         $stripped = preg_replace('/[^\p{L}\p{N} ]+/u', ' ', $title) ?? $title;
 
         return trim((string) preg_replace('/\s+/u', ' ', mb_strtolower($stripped)));
-    }
-
-    private static function key(int $userId): string
-    {
-        return 'wa:resume_order:'.$userId;
     }
 }

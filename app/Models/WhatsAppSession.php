@@ -17,7 +17,7 @@ class WhatsAppSession extends Model
 
     protected $fillable = [
         'wa_phone', 'current_flow', 'current_state', 'state_stack',
-        'context', 'status', 'started_at', 'last_activity', 'expires_at',
+        'context', 'status', 'started_at', 'last_activity', 'expires_at', 'nudged_at',
     ];
 
     protected function casts(): array
@@ -28,6 +28,7 @@ class WhatsAppSession extends Model
             'started_at' => 'datetime',
             'last_activity' => 'datetime',
             'expires_at' => 'datetime',
+            'nudged_at' => 'datetime',
         ];
     }
 }

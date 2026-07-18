@@ -86,7 +86,7 @@ class OrderResumeAfterDepositTest extends TestCase
         $this->stallOrderAtConfirm($user);
 
         // Stash was set at the short-confirm step.
-        $this->assertNotNull(\Illuminate\Support\Facades\Cache::get('wa:resume_order:'.$user->id));
+        $this->assertDatabaseHas('whatsapp_saved_orders', ['user_id' => $user->id]);
 
         // Credit a $1 deposit — the resume fires from here.
         app(DepositService::class)->credit($this->pendingDeposit($user, 1.0), 'test');
@@ -103,7 +103,7 @@ class OrderResumeAfterDepositTest extends TestCase
         $this->assertStringContainsString('1000', $msg->body);
 
         // Stash consumed.
-        $this->assertNull(\Illuminate\Support\Facades\Cache::get('wa:resume_order:'.$user->id));
+        $this->assertDatabaseMissing('whatsapp_saved_orders', ['user_id' => $user->id]);
     }
 
     public function test_resumed_order_places_on_yes(): void
@@ -135,7 +135,7 @@ class OrderResumeAfterDepositTest extends TestCase
         app(DepositService::class)->credit($this->pendingDeposit($user, 3.0), 'test');
 
         // Stash preserved so the next top-up can finish it; no resume yet.
-        $this->assertNotNull(\Illuminate\Support\Facades\Cache::get('wa:resume_order:'.$user->id));
+        $this->assertDatabaseHas('whatsapp_saved_orders', ['user_id' => $user->id]);
     }
 
     public function test_deposit_without_a_stashed_order_sends_plain_confirmation(): void
@@ -179,6 +179,6 @@ class OrderResumeAfterDepositTest extends TestCase
         $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
         $this->assertStringContainsString('order is still saved', (string) $out->body);
         // Stash preserved so a later top-up still finishes it.
-        $this->assertNotNull(\Illuminate\Support\Facades\Cache::get('wa:resume_order:'.$user->id));
+        $this->assertDatabaseHas('whatsapp_saved_orders', ['user_id' => $user->id]);
     }
 }

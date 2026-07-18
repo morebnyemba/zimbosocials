@@ -56,6 +56,11 @@ Schedule::command('orders:recover-pending')->everyFiveMinutes()->withoutOverlapp
 // Flag active orders with no status movement for 5+ days
 Schedule::command('orders:flag-stuck')->dailyAt('08:00')->withoutOverlapping();
 
+// Drop-off recovery: nudge customers who stalled mid-flow (once, within the
+// 24h window), and remind those who saved an order but never topped up.
+Schedule::command('whatsapp:nudge-stalled')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('whatsapp:remind-saved-orders')->hourly()->withoutOverlapping();
+
 // Nightly database dump to storage/app/backups (keeps the last 14)
 Schedule::command('db:backup')->dailyAt('03:30')->withoutOverlapping();
 
