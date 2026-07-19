@@ -36,6 +36,7 @@ class MenuProvider
         'fl_settings' => 'settings',
         'fl_faq' => 'faq',
         'fl_ai' => 'ask_ai',
+        'fl_advertise' => 'advertise',
         'fl_referral' => 'referral',
         'fl_register' => 'register',
         'fl_login' => 'link',
@@ -74,10 +75,12 @@ class MenuProvider
                     ['id' => 'fl_history', 'title' => '🧾 History', 'description' => 'Deposits, orders & refunds'],
                 ]],
                 ['title' => 'More', 'rows' => [
+                    // Advertise takes the old "Ask AI" slot (the assistant IS the
+                    // AI, so that row was redundant — 'ai' still works by typing).
+                    ['id' => 'fl_advertise', 'title' => '📣 Advertise', 'description' => 'Sponsored ads to reach customers'],
                     ['id' => 'fl_browse', 'title' => '📂 Services', 'description' => 'Browse the full catalogue'],
                     ['id' => 'fl_support', 'title' => '🆘 Support', 'description' => 'Your tickets & our replies'],
                     ['id' => 'fl_profile', 'title' => '👤 My account', 'description' => 'Profile & settings'],
-                    ['id' => 'fl_ai', 'title' => '🤖 Ask AI', 'description' => 'Ask me anything about us'],
                 ]],
             ],
         ];

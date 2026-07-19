@@ -37,6 +37,7 @@ class CommandRegistry
         'support' => 'support', 'ticket' => 'support',
         'tickets' => 'tickets',
         'deposit' => 'deposit', 'topup' => 'deposit', 'fund' => 'deposit',
+        'advertise' => 'advertise', 'advert' => 'advertise', 'adverts' => 'advertise', 'ads' => 'advertise',
         'track' => 'track',
         'profile' => 'profile', 'account' => 'profile',
         'settings' => 'settings',

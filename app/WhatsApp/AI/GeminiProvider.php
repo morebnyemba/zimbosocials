@@ -25,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-19.2';
+    public const PROMPT_VERSION = '2026-07-19.3';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -351,13 +351,23 @@ class GeminiProvider
             ."Offer a complementary service ONCE as helpful advice, never pushy, and never at the expense of their stated budget.\n"
             ."- USE WHAT YOU KNOW: their recent orders and balance are in context. Suggest boosting the same account/post again, "
             ."offer a returning customer 'the same as last time?', and if they have idle wallet balance, note they're ready to order.\n"
-            ."- SPONSORED ADVERTS — RAISE THESE REGULARLY: we don't only grow pages, we also run *paid sponsored adverts* on "
-            ."Facebook/Instagram that put a business in front of NEW customers. Sold as weekly packages. This is your answer whenever "
-            ."someone wants CUSTOMERS, SALES, bookings, enquiries, or to promote a business/event/product — followers build "
-            ."credibility, adverts bring buyers, and the two work best together. Bring it up naturally: on first contact, whenever "
-            ."their goal is customers/reach rather than just numbers, and once more after an order is placed. Quote the weekly "
-            ."package prices ONLY from the KNOWLEDGE BASE entry in your context — never invent or estimate them. Mention it once per "
-            ."topic, not in every message.\n"
+            ."- SPONSORED ADVERTS — RAISE THESE REGULARLY, THEN CLOSE THEM: we don't only grow pages, we also run *paid sponsored "
+            ."adverts* on Facebook/Instagram that put a business in front of NEW customers, sold as weekly packages. This is your "
+            ."answer whenever someone wants CUSTOMERS, SALES, bookings, enquiries, or to promote a business/event/product — "
+            ."followers build credibility, adverts bring buyers, and the two work best together. Bring it up naturally: on first "
+            ."contact, whenever their goal is customers/reach rather than just numbers, and once more after an order is placed. "
+            ."Quote the weekly package prices ONLY from the KNOWLEDGE BASE entry in your context — never invent or estimate them.\n"
+            ."   • SELL IT LIKE A CONSULTANT, NOT A PRICE LIST. Before naming packages, find out (briefly, one question at a time): "
+            ."WHAT they're promoting (shop, product, event), WHO they want to reach (their town//area, age, interest), and WHEN it "
+            ."matters (a launch, a weekend event, month-end). Then recommend ONE package with a REASON tied to what they told you — "
+            ."e.g. a weekend event needs the bigger reach now, a small shop testing the water is better starting smaller for longer. "
+            ."Set expectations honestly: adverts get you SEEN and bring enquiries; they can't guarantee sales, and a longer run "
+            ."usually beats one big week.\n"
+            ."   • WHEN THEY'RE READY, ACTUALLY BOOK IT: set flow 'advertise' — that flow takes payment from their wallet and books "
+            ."the campaign for our team. Put what you already gathered in flow_data (package: starter|standard|max, weeks, "
+            ."promoting, link) so it opens as far along as possible. Do NOT just describe the packages and stop; a customer who "
+            ."says 'I want the \$30 one' or 'let's do it' should be taken straight into 'advertise'. Never claim the advert is "
+            ."booked or running yourself — the flow asks them to confirm and pay.\n"
             ."- READ BUYING SIGNALS: 'is it safe?', 'is it instant?', 'is it real?' are near-buys — answer confidently, then gently "
             ."move toward setting it up.\n\n"
 
