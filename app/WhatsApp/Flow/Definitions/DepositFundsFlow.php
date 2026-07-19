@@ -91,7 +91,20 @@ class DepositFundsFlow extends AbstractFlow
 
     private function askAmount(string $input, SessionContext $ctx): FlowResult
     {
-        $amount = (float) preg_replace('/[^0-9.]/', '', $input);
+        // This step must only consume a message that IS an amount. Blindly
+        // stripping non-digits turned a sentence like "i want 3k followers on
+        // instagram" into a $3 deposit — the customer's actual intent (an order)
+        // was lost and money was asked for. Anything that isn't a bare amount
+        // retries, which hands it to the AI to re-route (e.g. into an order).
+        if (! preg_match('/^\s*(?:\$|usd\s*)?\s*(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:usd|dollars?)?\s*$/i', trim($input), $m)) {
+            return FlowResult::retry(
+                'How much would you like to deposit? Send just the amount (e.g. *5*), or type *cancel*.',
+                'ask_amount'
+            );
+        }
+
+        $amount = (float) str_replace(',', '.', $m[1]);
+
         if ($amount < 1) {
             return FlowResult::retry('Please enter an amount of at least 1, or type *cancel*.', 'ask_amount');
         }
@@ -282,7 +295,7 @@ class DepositFundsFlow extends AbstractFlow
     private function askPhone(string $input, SessionContext $ctx): FlowResult
     {
         $default = $this->paynow->normalizeZwPhone($ctx->phone);
-        $phone = in_array(mb_strtolower(trim($input)), ['ok', 'yes'], true) && $default
+        $phone = ($default && $this->meansUseMyNumber($input))
             ? $default
             : $this->paynow->normalizeZwPhone($input);
 
@@ -293,6 +306,34 @@ class DepositFundsFlow extends AbstractFlow
         $ctx->set('deposit_phone', $phone);
 
         return $this->confirmPrompt($ctx);
+    }
+
+    /**
+     * "Use my WhatsApp number" said in words rather than tapped. Customers reply
+     * "okay i will use it", "yes use my number", "ehe" — all of which used to
+     * fall through as an invalid phone and stall the deposit. Any message with a
+     * digit is treated as an actual number instead, so "yes 0771234567" still
+     * uses the number they typed.
+     */
+    private function meansUseMyNumber(string $input): bool
+    {
+        $t = mb_strtolower(trim($input));
+
+        if ($t === '' || preg_match('/\d/', $t)) {
+            return false;
+        }
+
+        if (in_array($t, ['ok', 'okay', 'yes', 'yeah', 'yep', 'sure', 'yebo', 'ehe', 'hongu', 'ndozvo', 'same one', 'this one'], true)) {
+            return true;
+        }
+
+        // "use it", "use my number", "ndoshandisa iyi", "shandisa nhamba yangu"
+        if (preg_match('/\b(use|shandisa|ndoshandisa)\b/u', $t) && preg_match('/\b(it|my|number|nhamba|yangu|iyi|iyoyo)\b/u', $t)) {
+            return true;
+        }
+
+        // Leading affirmative: "okay i will use it", "yes please", "sure thing"
+        return (bool) preg_match('/^(ok(ay)?|yes|yeah|yep|sure|yebo|ehe|hongu)\b/u', $t);
     }
 
     private function confirmPrompt(SessionContext $ctx): FlowResult

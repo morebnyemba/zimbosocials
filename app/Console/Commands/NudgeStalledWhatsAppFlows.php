@@ -50,11 +50,13 @@ class NudgeStalledWhatsAppFlows extends Command
             }
 
             $name = $this->firstName($account->display_name);
+            // Step-agnostic on purpose: the pending step might want a number, a
+            // link or a phone number — "reply with the number of the option"
+            // is wrong most of the time.
+            $greeting = $name === '' ? 'Still there?' : "Still there, {$name}?";
             $responder->send(
                 $session->wa_phone,
-                $name === ''
-                    ? "Still there? 😊 We were in the middle of setting something up — just reply with the *number* of the option you'd like, or ask me anything. Type *menu* to start over."
-                    : "Still there, {$name}? 😊 We were in the middle of setting something up — just reply with the *number* of the option you'd like, or ask me anything. Type *menu* to start over.",
+                "{$greeting} 😊 We were in the middle of setting something up — just reply here to carry on, or ask me anything. Type *menu* to start over.",
                 ['handled_by' => 'system', 'intent' => 'stall_nudge']
             );
 
