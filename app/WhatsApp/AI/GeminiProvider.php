@@ -25,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-19.1';
+    public const PROMPT_VERSION = '2026-07-19.2';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -276,11 +276,18 @@ class GeminiProvider
             ."over interrogating them; ask a clarifying question only when you genuinely can't proceed. Handle multi-part messages "
             ."gracefully — do the main thing, acknowledge the rest.\n"
             ."2. Ground answers in the CONTEXT below; if you don't know, say so and suggest *support*.\n"
-            ."3. SERVICE LISTS — present services as a numbered list in EXACTLY this shape, one per line:\n"
+            ."3. SERVICE LISTS — GROUP BY PLATFORM, THEN BY TYPE. Never dump followers, likes and views together in one run of "
+            ."numbers: the customer is shopping for ONE kind of thing. Use the platform as the heading and the service TYPE as a "
+            ."sub-heading, exactly as they are grouped in the CATALOGUE below, and restart numbering under each type:\n"
+            ."   *FACEBOOK*\n"
+            ."   _Followers_\n"
+            ."   1. *Service Name* — \$PRICE per 1,000 (minimum N)\n"
+            ."   _Likes_\n"
             ."   1. *Service Name* — \$PRICE per 1,000 (minimum N)\n"
             ."   Show ONLY the name, price and minimum. NEVER print the internal id (the id= value in the catalogue) and "
             ."NEVER print the maximum — the max is context for YOU (to validate quantities), not for the user. When the "
             ."user picks, map their choice back to the real numeric id and put it in flow_data.service_id.\n"
+            ."   If they asked about ONE type ('how much for followers?'), list only that type — don't dump the whole catalogue.\n"
             ."4. ORDERS — YOU gather, the flow only confirms. You are the salesperson; the order flow is just the final "
             ."confirm-and-place step. When someone wants to buy, collect the details YOURSELF in natural conversation: which "
             ."service (map it to a real catalogue service_id), the link, and the quantity (respect its min/max). Ask for whatever's "
@@ -471,6 +478,39 @@ class GeminiProvider
             ."{\"reply\":\"your message\",\"follow_up\":\"short nudge or null\",\"flow\":\"a flow id, 'handoff', or 'none'\",\"flow_data\":{\"service_id\":null,\"link\":null,\"quantity\":null,\"amount\":null,\"order_id\":null,\"ticket_id\":null,\"platform\":null,\"email\":null,\"name\":null,\"subject\":null}}";
     }
 
+    /**
+     * What a service actually delivers — Followers / Likes / Views / … — used to
+     * sub-group the catalogue so a listing never mixes them into one numbered
+     * run. The `type` column is often the useless default 'default', so fall
+     * back to reading the name, which always says what it sells.
+     */
+    private function serviceTypeLabel(Service $service): string
+    {
+        $haystack = mb_strtolower($service->name.' '.(string) $service->type);
+
+        // Ordered: the first match wins, so more specific terms come first.
+        $types = [
+            'Subscribers' => ['subscriber', 'subscribe'],
+            'Members' => ['member'],
+            'Followers' => ['follower', 'follow'],
+            'Likes' => ['like', 'reaction'],
+            'Views' => ['view', 'play', 'watch', 'impression'],
+            'Comments' => ['comment'],
+            'Shares' => ['share', 'repost', 'retweet'],
+            'Saves' => ['save', 'bookmark'],
+        ];
+
+        foreach ($types as $label => $needles) {
+            foreach ($needles as $needle) {
+                if (str_contains($haystack, $needle)) {
+                    return $label;
+                }
+            }
+        }
+
+        return 'Other';
+    }
+
     private function buildContext(string $query, ?User $user): string
     {
         $lines = [];
@@ -496,16 +536,23 @@ class GeminiProvider
         if ($max > 0) {
             $catalog->limit($max);
         }
-        $services = $catalog->get(['id', 'name', 'category', 'rate', 'min_qty', 'max_qty']);
+        $services = $catalog->get(['id', 'name', 'category', 'type', 'rate', 'min_qty', 'max_qty']);
         if ($services->isNotEmpty()) {
             $lines[] = '=== SERVICE CATALOGUE (all active services — recommend/quote any; prices are per 1,000 in USD) ===';
+            $lines[] = 'Grouped as [Platform] then <Type>. Mirror BOTH levels when you list services to a customer.';
             foreach ($services->groupBy('category') as $category => $group) {
                 $lines[] = "[{$category}]";
-                foreach ($group as $s) {
-                    $price = rtrim(rtrim(number_format((float) $s->rate, 4), '0'), '.');
-                    // 'id=' (not '#') so the model never confuses service ids
-                    // with user-facing order numbers like #1231.
-                    $lines[] = "  id={$s->id} {$s->name} — {$price}/1000 (min:{$s->min_qty} max:{$s->max_qty})";
+                // Sub-group by what the service actually delivers (followers vs
+                // likes vs views) so a listing never mixes them into one run.
+                $byType = $group->groupBy(fn (Service $s) => $this->serviceTypeLabel($s))->sortKeys();
+                foreach ($byType as $type => $ofType) {
+                    $lines[] = "  <{$type}>";
+                    foreach ($ofType as $s) {
+                        $price = rtrim(rtrim(number_format((float) $s->rate, 4), '0'), '.');
+                        // 'id=' (not '#') so the model never confuses service ids
+                        // with user-facing order numbers like #1231.
+                        $lines[] = "    id={$s->id} {$s->name} — {$price}/1000 (min:{$s->min_qty} max:{$s->max_qty})";
+                    }
                 }
             }
             $lines[] = '===';
