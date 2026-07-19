@@ -57,6 +57,7 @@ export default function AdminLayout({
         { href: route('admin.upstream-providers.index'), name: 'admin.upstream-providers.index', label: 'API Providers', icon: Plug },
         { href: route('admin.whatsapp.templates'), name: 'admin.whatsapp.templates', label: 'WhatsApp', icon: MessageSquare },
         { href: route('admin.whatsapp.conversations'), name: 'admin.whatsapp.conversations', label: 'WA Assistant', icon: Bot },
+        { href: route('admin.adverts.index'), name: 'admin.adverts.*', label: 'Adverts', icon: Megaphone },
         { href: route('admin.campaigns.index'), name: 'admin.campaigns.*', label: 'Campaigns', icon: Megaphone },
         { href: route('admin.seo.index'), name: 'admin.seo.index', label: 'AI SEO', icon: PenTool },
         { href: route('admin.translations.index'), name: 'admin.translations.index', label: t('translation_review'), icon: Languages },

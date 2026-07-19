@@ -191,6 +191,12 @@ Route::middleware('auth')->group(function () {
         Route::put('/services/{service}', [AdminServiceController::class, 'update'])->name('services.update');
         Route::delete('/services/{service}', [AdminServiceController::class, 'destroy'])->name('services.destroy');
 
+        // Sponsored advert bookings (human-fulfilled campaigns)
+        Route::get('/adverts', [\App\Http\Controllers\AdminAdvertController::class, 'index'])->name('adverts.index');
+        Route::post('/adverts/{advert}/status', [\App\Http\Controllers\AdminAdvertController::class, 'updateStatus'])->name('adverts.status');
+        Route::post('/adverts/{advert}/refund', [\App\Http\Controllers\AdminAdvertController::class, 'refund'])->name('adverts.refund');
+        Route::post('/adverts/{advert}/message', [\App\Http\Controllers\AdminAdvertController::class, 'message'])->name('adverts.message');
+
         // Order management
         Route::get('/orders', [AdminOrderController::class, 'index'])->name('orders.index');
         Route::post('/orders', [AdminOrderController::class, 'store'])->name('orders.store');
