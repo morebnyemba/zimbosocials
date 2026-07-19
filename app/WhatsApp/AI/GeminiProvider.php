@@ -25,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-18.3';
+    public const PROMPT_VERSION = '2026-07-19.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -609,7 +609,9 @@ class GeminiProvider
             ."This is this person's very first message to us — they don't know who answered.{$source} "
             ."START your reply with ONE warm sentence introducing yourself and *{$site}* — say we do BOTH: grow social media "
             ."(followers, likes, views) AND run *sponsored adverts* that put their business in front of new customers — all "
-            ."ordered right here on WhatsApp. THEN address their message. Keep the whole reply short and inviting.";
+            ."ordered right here on WhatsApp. Then add ONE short line lowering the barrier: asking questions and advice are "
+            ."*free* (they only ever pay for a service they choose to order), and you're happy to help in *English*, *Shona* "
+            ."or *Ndebele*. THEN address their message. Keep the whole reply short and inviting.";
     }
 
     /**

@@ -69,6 +69,19 @@ class SponsoredAdvertsTest extends TestCase
         $this->assertStringContainsStringIgnoringCase('sponsored advert', (string) $out->body);
     }
 
+    public function test_first_contact_says_help_is_free_and_names_the_languages(): void
+    {
+        app(MessageRouter::class)->handle($this->msg('hi'), 'Tarisai');
+
+        $body = (string) WhatsAppMessage::where('wa_phone', self::PHONE)
+            ->where('direction', 'out')->latest('id')->first()?->body;
+
+        $this->assertStringContainsStringIgnoringCase('free', $body);
+        foreach (['English', 'Shona', 'Ndebele'] as $language) {
+            $this->assertStringContainsString($language, $body, "first contact should offer {$language}");
+        }
+    }
+
     public function test_first_contact_still_invites_growth_orders_too(): void
     {
         app(MessageRouter::class)->handle($this->msg('hello'), 'Tarisai');
