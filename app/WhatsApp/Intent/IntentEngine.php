@@ -23,7 +23,7 @@ class IntentEngine
      * @param  array{user:?\App\Models\User, authenticated:bool, current_flow:?string, history:array}  $context
      * @return array{handled:bool, reply?:string, flow?:?string, flow_data?:array}
      */
-    public function resolve(string $text, string $phone, array $context): array
+    public function resolve(string $text, string $phone, array $context, array $media = []): array
     {
         if (! $this->ai->isConfigured()) {
             return ['handled' => false, 'reason' => 'not_configured'];
@@ -38,7 +38,7 @@ class IntentEngine
         // An AI failure must degrade to the menu, never break the conversation —
         // and it shouldn't count against the user's daily AI budget either.
         try {
-            $res = $this->ai->respond($text, $context);
+            $res = $this->ai->respond($text, $context, $media);
         } catch (\Throwable $e) {
             Log::error('WhatsApp AI resolve failed', ['message' => $e->getMessage()]);
 

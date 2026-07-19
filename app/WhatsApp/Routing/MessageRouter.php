@@ -44,6 +44,7 @@ class MessageRouter
         private readonly RateLimiter $limiter,
         private readonly IntentEngine $intent,
         private readonly \App\WhatsApp\Deposit\ProofIntake $proof,
+        private readonly \App\WhatsApp\Messaging\WhatsAppGateway $gateway,
     ) {}
 
     public function handle(array $msg, ?string $displayName = null): void
@@ -126,7 +127,8 @@ class MessageRouter
             try {
                 $media = $msg['media'] ?? null;
                 if (is_array($media) && ! empty($media['id'])) {
-                    $tag = $this->handleMedia($account, $ctx, $media);
+                    // Any caption rides on the message, not the media node.
+                    $tag = $this->handleMedia($account, $ctx, $media + ['caption' => $text]);
                 } else {
                     $tag = $this->dispatch($ctx, $account, $text, $selection, $ad);
                 }
@@ -350,7 +352,7 @@ class MessageRouter
      * Returns false when AI is unavailable/over budget so the caller can fall
      * back deterministically.
      */
-    private function consultAi(SessionContext $ctx, WhatsAppAccount $account, string $text, bool $inFlow): bool
+    private function consultAi(SessionContext $ctx, WhatsAppAccount $account, string $text, bool $inFlow, array $media = []): bool
     {
         $authenticated = $account->isLinked();
         $history = (array) $ctx->get('_ai_history', []);
@@ -367,7 +369,7 @@ class MessageRouter
             // with a one-line introduction of itself and the platform.
             'first_contact' => $account->wasRecentlyCreated && ! $authenticated,
             'ad_headline' => $ctx->get('_ad_headline'),
-        ]);
+        ], $media);
 
         if (empty($r['handled'])) {
             return false;
@@ -517,7 +519,17 @@ class MessageRouter
             return ['handled_by' => 'system', 'intent' => 'media_no_user'];
         }
 
+        // Proof of payment comes first — money before conversation. intake()
+        // only claims the file when a manual deposit is actually awaiting one.
         $res = $this->proof->intake($account->user, $media);
+
+        // Nothing was waiting on proof → it's a normal message that happens to
+        // be a photo or a voice note. Let the AI actually look/listen.
+        if (empty($res['ok']) && ($res['reason'] ?? '') === 'no_pending'
+            && $this->understandMedia($ctx, $account, $media)
+        ) {
+            return ['handled_by' => 'ai', 'intent' => 'media', 'ai_used' => true];
+        }
 
         if (! empty($res['ok'])) {
             $tx = $res['transaction'];
@@ -546,6 +558,54 @@ class MessageRouter
         $this->responder->send($ctx->phone, $message, ['handled_by' => 'system', 'intent' => 'proof_'.($res['reason'] ?? 'error')]);
 
         return ['handled_by' => 'system', 'intent' => 'proof_'.($res['reason'] ?? 'error')];
+    }
+
+    /**
+     * Hand a photo / voice note to the AI so it answers what the media actually
+     * contains. Returns false when media understanding is off, the type isn't
+     * supported, the download fails, or the AI is unavailable — the caller then
+     * falls back to the normal guidance message.
+     */
+    private function understandMedia(SessionContext $ctx, WhatsAppAccount $account, array $media): bool
+    {
+        if (! config('services.whatsapp.media_ai', true)) {
+            return false;
+        }
+
+        $mime = strtolower(trim(explode(';', (string) ($media['mime'] ?? ''))[0]));
+        $kind = (string) ($media['kind'] ?? 'file');
+
+        $imageOk = str_starts_with($mime, 'image/');
+        // Audio is gated separately: WhatsApp voice notes are OGG/Opus and not
+        // every deployment wants to pay for / rely on speech understanding.
+        $audioOk = str_starts_with($mime, 'audio/') && config('services.whatsapp.audio_ai', true);
+
+        if (! $imageOk && ! $audioOk) {
+            return false;
+        }
+
+        $dl = $this->gateway->downloadMedia((string) $media['id']);
+        if (empty($dl['ok']) || ($dl['contents'] ?? '') === '') {
+            return false;
+        }
+
+        // Inline parts must stay well under the request cap.
+        $maxBytes = (int) config('services.whatsapp.media_ai_max_bytes', 8 * 1024 * 1024);
+        if (strlen((string) $dl['contents']) > $maxBytes) {
+            return false;
+        }
+
+        return $this->consultAi(
+            $ctx,
+            $account,
+            trim((string) ($media['caption'] ?? '')),
+            inFlow: $ctx->inFlow(),
+            media: [[
+                'mime' => (string) ($dl['mime'] ?: $mime),
+                'data' => (string) $dl['contents'],
+                'kind' => $kind === 'audio' && ! empty($media['voice']) ? 'voice note' : $kind,
+            ]],
+        );
     }
 
     /**

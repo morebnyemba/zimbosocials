@@ -59,6 +59,13 @@ return [
         // email job); users can attach a real email later via register/link.
         'auto_email_domain' => env('WHATSAPP_AUTO_EMAIL_DOMAIN', 'zimbosocials.co.zw'),
         'ai_global_daily_limit' => (int) env('WHATSAPP_AI_GLOBAL_DAILY_LIMIT', 0), // AI calls per day across ALL users; 0 = unlimited
+        // Let the assistant actually look at photos / listen to voice notes a
+        // customer sends (Gemini is multimodal). Audio is gated separately:
+        // WhatsApp voice notes are OGG/Opus, so it can be switched off if a
+        // deployment hits codec trouble, leaving photos working.
+        'media_ai' => (bool) env('WHATSAPP_MEDIA_AI', true),
+        'audio_ai' => (bool) env('WHATSAPP_AUDIO_AI', true),
+        'media_ai_max_bytes' => (int) env('WHATSAPP_MEDIA_AI_MAX_BYTES', 8388608), // 8MB inline cap
         'twilio_sid' => env('TWILIO_SID'),
         'twilio_from' => env('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
     ],
@@ -204,6 +211,9 @@ return [
         // WhatsApp chat path only: the webhook processes inline, and Meta
         // retries slow webhooks — keep the conversational budget tight.
         'chat_timeout' => (int) env('GEMINI_CHAT_TIMEOUT', 10),
+        // Vision/audio turns are slower than text — give them more room, but
+        // still bounded so a slow model can't hang the webhook.
+        'media_timeout' => (int) env('GEMINI_MEDIA_TIMEOUT', 25),
     ],
 
 ];

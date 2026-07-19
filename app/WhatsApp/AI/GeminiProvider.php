@@ -53,10 +53,16 @@ class GeminiProvider
      * @param  array{user:?User, authenticated:bool, history:array<int,array{user:string,model:string}>}  $context
      * @return array{reply:string, flow:?string, flow_data:array}|null
      */
-    public function respond(string $text, array $context): ?array
+    /**
+     * @param  array<int, array{mime:string, data:string, kind?:string}>  $media
+     *         Photos / voice notes the customer sent, passed to the model inline.
+     */
+    public function respond(string $text, array $context, array $media = []): ?array
     {
         $text = $this->sanitize($text);
-        if ($text === '') {
+        // A voice note or photo usually arrives with NO caption — that's still a
+        // real message, so only bail when there's nothing at all to go on.
+        if ($text === '' && $media === []) {
             return null;
         }
 
@@ -68,14 +74,22 @@ class GeminiProvider
             .$this->referralBlock($context)
             .$this->activeFlowBlock($context)
             .$this->historyBlock($context['history'] ?? [])
-            ."\n\n=== USER MESSAGE ===\n".$text;
+            .$this->mediaBlock($media)
+            ."\n\n=== USER MESSAGE ===\n".($text !== '' ? $text : '(no text — see the attached media above)');
+
+        // Audio/vision take longer than a text turn; give them room rather than
+        // timing out mid-answer.
+        $timeout = $media === []
+            ? (int) config('services.gemini.chat_timeout', 10)
+            : (int) config('services.gemini.media_timeout', 25);
 
         $json = $this->client->generateJson(
             $prompt,
             0.4,
             schema: self::responseSchema(),
             system: $this->systemPrompt(),
-            timeout: (int) config('services.gemini.chat_timeout', 10),
+            timeout: $timeout,
+            media: $media,
         );
         if (! is_array($json) || empty($json['reply'])) {
             return null;
@@ -616,6 +630,36 @@ class GeminiProvider
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Tell the model what it's actually looking at / listening to. The bytes
+     * ride as inline parts; this just frames them so the reply addresses the
+     * media rather than ignoring it.
+     *
+     * @param  array<int, array{mime:string, data:string, kind?:string}>  $media
+     */
+    private function mediaBlock(array $media): string
+    {
+        if ($media === []) {
+            return '';
+        }
+
+        $kinds = [];
+        foreach ($media as $item) {
+            $kinds[] = ($item['kind'] ?? 'file').' ('.($item['mime'] ?? 'unknown').')';
+        }
+
+        return "\n\n=== THE CUSTOMER SENT MEDIA ===\n"
+            .'Attached above: '.implode(', ', $kinds).".\n"
+            ."Actually look at / listen to it and respond to what it CONTAINS — never say you can't open files.\n"
+            ."- A VOICE NOTE: treat it exactly like they typed it. Answer in the language they SPOKE.\n"
+            ."- A screenshot of a social profile or post: that's what they want grown — say what you can see, and offer the "
+            ."matching service. If a username or link is legible, use it.\n"
+            ."- A payment screenshot/receipt: if they have a deposit awaiting proof it's already been filed, so just reassure "
+            ."them the team will verify it. Otherwise explain how to top up. NEVER confirm a payment yourself or credit a balance.\n"
+            ."- A product, shop, flyer or event photo: this is a selling moment — that's exactly what a *sponsored advert* is for.\n"
+            .'- Anything unrelated: say briefly what you see, then steer back to how you can help them grow.';
     }
 
     /**

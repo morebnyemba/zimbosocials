@@ -40,7 +40,7 @@ class GeminiClient
      * @param  int|null  $timeout  Per-call timeout override (seconds).
      * @return array<mixed>|null
      */
-    public function generateJson(string $prompt, float $temperature = 0.2, ?array $schema = null, ?string $system = null, ?int $timeout = null): ?array
+    public function generateJson(string $prompt, float $temperature = 0.2, ?array $schema = null, ?string $system = null, ?int $timeout = null, array $media = []): ?array
     {
         $config = ['responseMimeType' => 'application/json', 'temperature' => $temperature];
         if ($schema !== null) {
@@ -50,7 +50,7 @@ class GeminiClient
         // One retry: a transient malformed body is common enough to be worth
         // a single second attempt before giving up to the deterministic path.
         foreach ([1, 2] as $attempt) {
-            $text = $this->send($prompt, $config, $system, $timeout);
+            $text = $this->send($prompt, $config, $system, $timeout, $media);
 
             // Safety net: if the API rejects the schema itself (endpoint/version
             // quirks), degrade to a schema-less JSON call instead of turning
@@ -58,7 +58,7 @@ class GeminiClient
             if (! is_string($text) && isset($config['responseSchema']) && $this->lastStatus === 400) {
                 Log::warning('Gemini rejected responseSchema — retrying without it');
                 unset($config['responseSchema']);
-                $text = $this->send($prompt, $config, $system, $timeout);
+                $text = $this->send($prompt, $config, $system, $timeout, $media);
             }
 
             if (! is_string($text)) {
@@ -78,8 +78,12 @@ class GeminiClient
 
     /**
      * @param  array<string, mixed>  $generationConfig
+     * @param  array<int, array{mime:string, data:string}>  $media  Raw bytes to send
+     *                                    alongside the prompt (images, audio, PDF).
+     *                                    Sent inline, so keep the total well under
+     *                                    the ~20MB request cap — WhatsApp media is.
      */
-    private function send(string $prompt, array $generationConfig, ?string $system = null, ?int $timeout = null): ?string
+    private function send(string $prompt, array $generationConfig, ?string $system = null, ?int $timeout = null, array $media = []): ?string
     {
         if (! $this->isConfigured()) {
             return null;
@@ -89,10 +93,24 @@ class GeminiClient
         $baseUrl = rtrim((string) config('services.gemini.base_url'), '/');
         $endpoint = "{$baseUrl}/models/{$model}:generateContent";
 
+        // Media first, then the instruction — Gemini follows a prompt that comes
+        // after the thing it's being asked about more reliably.
+        $parts = [];
+        foreach ($media as $item) {
+            if (! isset($item['mime'], $item['data']) || $item['data'] === '') {
+                continue;
+            }
+            $parts[] = ['inline_data' => [
+                'mime_type' => $item['mime'],
+                'data' => base64_encode($item['data']),
+            ]];
+        }
+        $parts[] = ['text' => $prompt];
+
         $payload = [
             'contents' => [[
                 'role' => 'user',
-                'parts' => [['text' => $prompt]],
+                'parts' => $parts,
             ]],
             'generationConfig' => $generationConfig,
         ];

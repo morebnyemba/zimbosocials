@@ -88,6 +88,24 @@ class InboundNormalizer
                 ];
                 $text = $m['document']['caption'] ?? null;
                 break;
+            case 'audio':
+                // Voice notes and shared audio files both arrive as 'audio';
+                // voice:true distinguishes a recorded note from a music file.
+                $media = [
+                    'id' => $m['audio']['id'] ?? null,
+                    'mime' => $m['audio']['mime_type'] ?? null,
+                    'kind' => 'audio',
+                    'voice' => (bool) ($m['audio']['voice'] ?? false),
+                ];
+                break;
+            case 'video':
+                $media = [
+                    'id' => $m['video']['id'] ?? null,
+                    'mime' => $m['video']['mime_type'] ?? null,
+                    'kind' => 'video',
+                ];
+                $text = $m['video']['caption'] ?? null;
+                break;
             case 'interactive':
                 $inter = $m['interactive'] ?? [];
                 if (($inter['type'] ?? null) === 'list_reply') {
