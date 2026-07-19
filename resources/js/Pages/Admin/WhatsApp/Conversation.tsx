@@ -11,7 +11,29 @@ interface Message {
     handled_by: string | null;
     intent: string | null;
     ai_used: boolean;
+    delivery_status: string | null;
     created_at: string | null;
+}
+
+/**
+ * WhatsApp-style receipts for messages WE sent, driven by Meta's status
+ * webhooks: ✓ sent, ✓✓ delivered, blue ✓✓ read, ⚠ failed. No status yet means
+ * it's still in flight (or the number never reported back).
+ */
+function DeliveryTicks({ status }: { status: string | null }) {
+    const map: Record<string, { mark: string; className: string; label: string }> = {
+        sent: { mark: '✓', className: 'text-emerald-100', label: 'Sent' },
+        delivered: { mark: '✓✓', className: 'text-emerald-100', label: 'Delivered' },
+        read: { mark: '✓✓', className: 'text-sky-300 font-bold', label: 'Read by contact' },
+        failed: { mark: '⚠', className: 'text-red-200 font-bold', label: 'Failed to deliver' },
+    };
+
+    const s = status ? map[status] : undefined;
+    if (!s) {
+        return <span className="opacity-60" title="Sending…">🕘</span>;
+    }
+
+    return <span className={s.className} title={s.label}>{s.mark}</span>;
 }
 
 interface Account {
@@ -136,6 +158,7 @@ export default function Conversation({ account, messages, session }: Props) {
                                     <span>{time(m.created_at)}</span>
                                     {m.handled_by && <span className="uppercase font-bold">· {m.handled_by}</span>}
                                     {m.ai_used && <FaRobot title="AI" />}
+                                    {m.direction === 'out' && <DeliveryTicks status={m.delivery_status} />}
                                 </div>
                             </div>
                         </div>

@@ -51,6 +51,7 @@ class AdminWhatsAppController extends Controller
                     'last_seen_at' => $a->last_seen_at?->toIso8601String(),
                     'last_message' => $last ? mb_substr((string) $last->body, 0, 60) : null,
                     'last_direction' => $last?->direction,
+                    'last_delivery_status' => $last?->direction === 'out' ? $last->delivery_status : null,
                 ];
             });
 
@@ -76,6 +77,8 @@ class AdminWhatsAppController extends Controller
                 'handled_by' => $m->handled_by,
                 'intent' => $m->intent,
                 'ai_used' => $m->ai_used,
+                // sent | delivered | read | failed (from Meta's status webhooks)
+                'delivery_status' => $m->delivery_status,
                 'created_at' => $m->created_at?->toIso8601String(),
             ])->values();
 

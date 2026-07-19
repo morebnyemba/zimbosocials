@@ -14,7 +14,19 @@ interface Conversation {
     last_seen_at: string | null;
     last_message: string | null;
     last_direction: string | null;
+    last_delivery_status: string | null;
 }
+
+/** Compact receipt for the last outbound message in the list. */
+const receipt = (status: string | null) => {
+    switch (status) {
+        case 'read': return <span className="text-sky-500 font-bold" title="Read by contact">✓✓</span>;
+        case 'delivered': return <span className="text-zinc-400" title="Delivered">✓✓</span>;
+        case 'sent': return <span className="text-zinc-300" title="Sent">✓</span>;
+        case 'failed': return <span className="text-red-500 font-bold" title="Failed to deliver">⚠</span>;
+        default: return null;
+    }
+};
 
 interface Paginator<T> {
     data: T[];
@@ -167,6 +179,7 @@ export default function Conversations({ conversations, stats, filters }: Props) 
                                             <span className="text-zinc-500 line-clamp-1">
                                                 {c.last_direction === 'out' && <span className="text-emerald-500">↩ </span>}
                                                 {c.last_message || '—'}
+                                                {c.last_direction === 'out' && <span className="ml-1.5">{receipt(c.last_delivery_status)}</span>}
                                             </span>
                                         </td>
                                         <td className="px-5 py-4">
