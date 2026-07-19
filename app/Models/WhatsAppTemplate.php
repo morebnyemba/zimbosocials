@@ -43,14 +43,28 @@ class WhatsAppTemplate extends Model
      * Build the Meta "create template" API payload for a config-shaped entry.
      * Shared by the sync command and the admin per-template push action.
      */
+    /**
+     * The language code a template is actually REGISTERED under on Meta.
+     *
+     * Meta only accepts its own supported codes — Shona/Ndebele (this app's
+     * locales) aren't among them — so those register under English. Sends MUST
+     * use this same mapping: asking Meta for `marketing_broadcast` in "sn"
+     * fails ("template does not exist"), and the caller then degrades to a
+     * free-form message, which Meta refuses outside the 24-hour window. That is
+     * exactly how a broadcast silently reaches only recently-active contacts.
+     */
+    public static function metaLanguage(?string $locale): string
+    {
+        $language = (string) ($locale ?: '') ?: 'en';
+
+        return preg_match('/^(en(_(US|GB))?|af|zu|pt_(BR|PT)|fr|es(_(AR|ES|MX))?|sw)$/', $language)
+            ? $language
+            : 'en';
+    }
+
     public static function metaPayload(string $name, array $tpl, string $language): array
     {
-        // Meta only accepts its supported language codes — Shona/Ndebele (this
-        // app's locales) aren't among them and cause "Invalid parameter" on
-        // every submission. Register under English; sends still work.
-        if (! preg_match('/^(en(_(US|GB))?|af|zu|pt_(BR|PT)|fr|es(_(AR|ES|MX))?|sw)$/', $language)) {
-            $language = 'en';
-        }
+        $language = self::metaLanguage($language);
 
         $components = [];
 

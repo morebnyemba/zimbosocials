@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class SendWhatsAppNotification implements ShouldQueue
 {
@@ -36,9 +37,13 @@ class SendWhatsAppNotification implements ShouldQueue
     public function handle(WhatsAppService $whatsapp): void
     {
         $templates = config('whatsapp-templates.templates', []);
-        $language = in_array($this->locale, ['en', 'sn', 'nd'], true)
-            ? $this->locale
-            : config('whatsapp-templates.language', 'en');
+
+        // MUST match the language the template was REGISTERED under, not the
+        // user's locale: Shona/Ndebele templates live on Meta as English (Meta
+        // has no sn/nd), so asking for "sn" fails and we'd silently degrade to
+        // free-form — undeliverable outside the 24h window. The message text
+        // itself stays localised; it rides in the template PARAMETERS.
+        $language = \App\Models\WhatsAppTemplate::metaLanguage($this->locale);
 
         // If template exists in config, try sending as a template message
         if (isset($templates[$this->templateName])) {
@@ -54,8 +59,17 @@ class SendWhatsAppNotification implements ShouldQueue
                 return;
             }
 
-            // If template isn't approved yet, fall back to plain text
-            // (Meta returns error 132001 for unapproved templates)
+            // Template unusable (not approved, wrong name, params mismatch).
+            // The plain-text fallback below ONLY reaches contacts inside the
+            // 24-hour service window, so make the reason loud — a broadcast
+            // that quietly reaches a fraction of the audience looks like a
+            // delivery mystery otherwise.
+            Log::warning('WhatsApp template send failed — falling back to free-form text (delivers only inside the 24h window)', [
+                'template' => $this->templateName,
+                'language' => $language,
+                'to' => $this->to,
+                'error' => $result['error'] ?? null,
+            ]);
         }
 
         // Fallback: plain text message
