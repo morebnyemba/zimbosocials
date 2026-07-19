@@ -164,7 +164,10 @@ class MessageRouter
             $fromAd = $ad !== null || $this->looksLikeAdCta($text);
 
             if (in_array(mb_strtolower($text), $greetings, true) || ($fromAd && ! $this->mentionsAProduct($text))) {
-                $name = $account->display_name ? " {$account->display_name}" : '';
+                // Profile names are free text and are often an email or a phone
+                // number — greet by name only when it actually looks like one.
+                $friendly = $account->firstName();
+                $name = $friendly !== null ? " {$friendly}" : '';
                 $site = \App\WhatsApp\AI\GeminiProvider::siteName();
                 $intro = $fromAd
                     ? "👋 Hi{$name}, thanks for reaching out! You've found *{$site}* — we grow social media accounts: followers, likes, views and more, plus *sponsored adverts* that put your business in front of new customers. Delivered fast and paid with EcoCash and other local methods, all right here on WhatsApp."

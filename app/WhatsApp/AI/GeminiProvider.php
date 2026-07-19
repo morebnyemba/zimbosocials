@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AI\GeminiClient;
 use App\WhatsApp\Intent\KnowledgeBase;
 use App\WhatsApp\Messaging\WhatsAppFormatter;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The assistant's AI brain (Gemini). On each message it returns a single JSON
@@ -25,7 +26,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-19.3';
+    public const PROMPT_VERSION = '2026-07-19.4';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -144,6 +145,10 @@ class GeminiProvider
             ."RULES:\n"
             ."- Include EVERY fact, number, name and instruction from the STEP PROMPT (service names, minimums, maximums, "
             ."examples, commands like *cancel*). Copy numbers and names EXACTLY — never change, drop or invent any.\n"
+            ."- THE STEP PROMPT WINS. If the DRAFT promises something different from what the step actually does (e.g. it says "
+            ."'just confirm next' while the step is still ASKING for a quantity or a link), follow the STEP and quietly drop the "
+            ."draft's promise. Your message MUST end by asking for exactly what the step asks for — never leave the customer "
+            ."with nothing to answer.\n"
             ."- Keep the draft's warmth and any acknowledgement it makes; drop anything the draft repeats from the step prompt.\n"
             ."- Mirror the language of the USER MESSAGE (default English).\n"
             ."- WhatsApp formatting only: *bold*, _italic_, real newlines. Short — under 500 characters. No preamble, no quotes: "
@@ -167,7 +172,39 @@ class GeminiProvider
             return null;
         }
 
+        // HARD GUARD: if the step is asking the customer something, the fused
+        // message must still ask it. Seen in production — the draft said "just
+        // confirm on the next step" while the flow was actually still asking
+        // for a quantity, and the fusion dropped the question entirely: the
+        // customer got a dead end with nothing to reply to and a human had to
+        // rescue the sale. When that happens, send the scripted step instead.
+        if ($this->asksSomething($scripted) && ! $this->asksSomething($voiced)) {
+            Log::warning('Voice pass dropped the step question — falling back to the scripted prompt', [
+                'scripted' => mb_substr($scripted, 0, 120),
+                'voiced' => mb_substr($voiced, 0, 120),
+            ]);
+
+            return null;
+        }
+
         return $voiced;
+    }
+
+    /**
+     * Does this message actually ask the customer for something? A question
+     * mark, or an imperative the flows use to request input ("send the link",
+     * "enter the amount", "reply with…", "tap …").
+     */
+    private function asksSomething(string $text): bool
+    {
+        if (str_contains($text, '?')) {
+            return true;
+        }
+
+        return (bool) preg_match(
+            '/\b(send|enter|reply|type|paste|choose|pick|select|tap|share)\b/i',
+            $text
+        );
     }
 
     /**

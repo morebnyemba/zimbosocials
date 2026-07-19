@@ -61,7 +61,7 @@ class RemindSavedWhatsAppOrders extends Command
 
             $qty = number_format((int) $order->quantity);
             $amount = number_format($charge, 2);
-            $name = $this->firstName($account->display_name);
+            $name = (string) ($account->firstName() ?? '');
             $hi = $name === '' ? 'Hi!' : "Hi {$name}!";
 
             $responder->send(
@@ -77,10 +77,5 @@ class RemindSavedWhatsAppOrders extends Command
         $this->info("Reminded {$sent} saved order(s).");
 
         return self::SUCCESS;
-    }
-
-    private function firstName(?string $name): string
-    {
-        return trim(explode(' ', trim((string) $name))[0] ?? '');
     }
 }

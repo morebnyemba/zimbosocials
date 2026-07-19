@@ -49,7 +49,7 @@ class NudgeStalledWhatsAppFlows extends Command
                 continue;
             }
 
-            $name = $this->firstName($account->display_name);
+            $name = (string) ($account->firstName() ?? '');
             // Step-agnostic on purpose: the pending step might want a number, a
             // link or a phone number — "reply with the number of the option"
             // is wrong most of the time.
@@ -67,10 +67,5 @@ class NudgeStalledWhatsAppFlows extends Command
         $this->info("Nudged {$sent} stalled conversation(s).");
 
         return self::SUCCESS;
-    }
-
-    private function firstName(?string $name): string
-    {
-        return trim(explode(' ', trim((string) $name))[0] ?? '');
     }
 }

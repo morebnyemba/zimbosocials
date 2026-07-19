@@ -39,6 +39,48 @@ class WhatsAppAccount extends Model
         return $this->link_status === 'linked' && $this->user_id !== null;
     }
 
+    /**
+     * A name we can safely greet someone by. WhatsApp profile names are free
+     * text and are often an email address, a phone number or a shop slogan —
+     * "Hi megaman_music@gmail.com" reads like spam, so anything that isn't
+     * name-shaped returns null and the caller greets without a name.
+     */
+    public function friendlyName(): ?string
+    {
+        $name = trim((string) $this->display_name);
+
+        if ($name === '' || mb_strlen($name) > 40) {
+            return null;
+        }
+        // Emails, handles and URLs.
+        if (preg_match('/[@\/]|https?:/i', $name)) {
+            return null;
+        }
+        // Phone numbers / anything mostly digits.
+        if (preg_match('/^[\d\s+()-]+$/', $name)) {
+            return null;
+        }
+        // Must contain at least one run of letters to be a name at all.
+        if (! preg_match('/\p{L}{2,}/u', $name)) {
+            return null;
+        }
+
+        return $name;
+    }
+
+    /** Just the first name, for a natural greeting ("Hi Tendai"). */
+    public function firstName(): ?string
+    {
+        $name = $this->friendlyName();
+        if ($name === null) {
+            return null;
+        }
+
+        $first = trim(explode(' ', $name)[0]);
+
+        return $first !== '' ? $first : null;
+    }
+
     public function inAgentHandoff(): bool
     {
         return $this->agent_handoff_until !== null && $this->agent_handoff_until->isFuture();
