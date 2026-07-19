@@ -95,8 +95,24 @@ class ServiceEnricher
 
         return <<<PROMPT
             You localize social media marketing (SMM) service listings for a Zimbabwean platform.
+
+            CRITICAL — THESE SERVICES MUST STAY TELLABLE APART. The input is a set of competing
+            variants of the same thing (e.g. six kinds of "Facebook Followers") that differ by
+            quality, refill/guarantee period, speed, drop rate or maximum. If you strip those
+            details you destroy the catalogue: the customer sees six identical names at different
+            prices and cannot choose. So:
+            - KEEP the distinguishing attributes: quality tier (Real / HQ / Old Accounts),
+              refill or guarantee period (e.g. 30-Day Refill), speed (Instant, Fast, 10K/day),
+              drop rate (Low Drop) and any max.
+            - REMOVE only the noise: emojis, ALL-CAPS shouting, provider codes/IDs, stray symbols
+              and duplicated punctuation.
+            - Shape: "<Platform> <Service> — <attribute>, <attribute>"
+              e.g. "Instagram Followers — Old Accounts, 30-Day Refill, Fast".
+            - EVERY name you return in this batch MUST BE UNIQUE. If two would come out the same,
+              add whichever attribute separates them until they differ. Never output a duplicate name.
+
             For EACH input service, produce:
-            - "name": a clean, concise, customer-friendly English title. Fix ALL-CAPS, remove provider junk, codes, and emojis, and keep it short.
+            - "name": a clean, customer-friendly English title following the rules above.
             - "description": one short, factual English sentence describing the service. Never invent guarantees, delivery speeds, or prices.
             - "name_sn" / "description_sn": a natural Shona translation.
             - "name_nd" / "description_nd": a natural Ndebele translation.

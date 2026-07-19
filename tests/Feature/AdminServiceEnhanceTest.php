@@ -64,6 +64,51 @@ class AdminServiceEnhanceTest extends TestCase
         $this->assertSame('keep me', $service->description);
     }
 
+    /**
+     * The failure that hit production: the model flattened a whole group of
+     * sibling services to one generic title. A colliding name must be refused so
+     * the catalogue never ends up with six identical "Facebook Followers".
+     */
+    public function test_a_colliding_name_is_refused_and_the_original_kept(): void
+    {
+        $a = $this->ugly();
+        $b = Service::create([
+            'name' => 'Facebook Followers HQ 30D', 'name_sn' => '', 'name_nd' => '',
+            'description' => '', 'description_sn' => '',
+            'category' => 'Instagram', 'type' => 'followers', 'rate' => 2.0,
+            'min_qty' => 100, 'max_qty' => 10000, 'is_active' => true,
+        ]);
+
+        // The AI returns the SAME name for both services.
+        $this->fakeEnricher(true, [
+            (string) $a->id => ['name' => 'Facebook Followers'],
+            (string) $b->id => ['name' => 'Facebook Followers'],
+        ]);
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.services.enhance-names'), ['service_ids' => [$a->id, $b->id]])
+            ->assertRedirect();
+
+        // First one takes the name; the second keeps its original — never a duplicate.
+        $this->assertSame('Facebook Followers', $a->fresh()->name);
+        $this->assertSame('Facebook Followers HQ 30D', $b->fresh()->name);
+    }
+
+    public function test_names_are_restorable_from_the_audit_trail(): void
+    {
+        $service = $this->ugly();
+        $original = $service->name;
+        $this->fakeEnricher(true, [(string) $service->id => ['name' => 'Instagram Followers']]);
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.services.enhance-names'), ['service_ids' => [$service->id]]);
+        $this->assertSame('Instagram Followers', $service->fresh()->name);
+
+        $this->artisan('services:restore-names')->assertSuccessful();
+
+        $this->assertSame($original, $service->fresh()->name);
+    }
+
     public function test_enhance_is_a_noop_when_ai_is_unavailable(): void
     {
         $service = $this->ugly();

@@ -263,15 +263,35 @@ class AdminServiceController extends Controller
         ])->all());
 
         $updated = 0;
+        $collided = 0;
+        // Guard the catalogue: an over-eager model can strip the very details
+        // that tell sibling services apart and hand six of them the same title.
+        // Any name that would collide with another service is refused outright —
+        // that service simply keeps its original name.
+        $claimed = [];
+
         foreach ($services as $service) {
             $entry = $map[(string) $service->id] ?? null;
             if (! $entry || empty($entry['name'])) {
                 continue;
             }
 
+            $newName = (string) $entry['name'];
+            $key = mb_strtolower(trim($newName));
+
+            $collides = isset($claimed[$key])
+                || Service::where('name', $newName)->where('id', '!=', $service->id)->exists();
+
+            if ($collides) {
+                $collided++;
+
+                continue;
+            }
+            $claimed[$key] = true;
+
             // Names only — keep any curated descriptions.
             $updates = array_filter([
-                'name' => $entry['name'] ?? null,
+                'name' => $newName,
                 'name_sn' => $entry['name_sn'] ?? null,
                 'name_nd' => $entry['name_nd'] ?? null,
             ], fn ($v) => is_string($v) && $v !== '');
@@ -288,13 +308,17 @@ class AdminServiceController extends Controller
                 ['name' => $old], ['name' => $service->name]);
         }
 
+        $kept = $collided > 0
+            ? " {$collided} kept their original name (the suggestion clashed with another service)."
+            : '';
+
         if ($updated === 0) {
-            return back()->with('info', 'AI could not improve the selected service(s) right now — nothing changed.');
+            return back()->with('info', 'No names changed — the AI\'s suggestions were unusable or clashed with existing services.');
         }
 
-        return back()->with('success', $updated === 1
+        return back()->with('success', ($updated === 1
             ? 'AI enhanced 1 service name.'
-            : "AI enhanced {$updated} service names.");
+            : "AI enhanced {$updated} service names.").$kept);
     }
 
     /**
