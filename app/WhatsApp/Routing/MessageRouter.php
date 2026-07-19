@@ -165,14 +165,14 @@ class MessageRouter
                 $name = $account->display_name ? " {$account->display_name}" : '';
                 $site = \App\WhatsApp\AI\GeminiProvider::siteName();
                 $intro = $fromAd
-                    ? "👋 Hi{$name}, thanks for reaching out! You've found *{$site}* — we grow social media accounts: followers, likes, views and more, delivered fast and paid with EcoCash and other local methods, all right here on WhatsApp."
-                    : "👋 Hi{$name}! Welcome to *{$site}* — followers, likes, views and more, right here on WhatsApp.";
+                    ? "👋 Hi{$name}, thanks for reaching out! You've found *{$site}* — we grow social media accounts: followers, likes, views and more, plus *sponsored adverts* that put your business in front of new customers. Delivered fast and paid with EcoCash and other local methods, all right here on WhatsApp."
+                    : "👋 Hi{$name}! Welcome to *{$site}* — followers, likes, views, and *sponsored adverts* to reach new customers, right here on WhatsApp.";
 
                 // No signup hurdle: the account is created silently the moment
                 // they take an action — so go straight to business.
                 $this->responder->send(
                     $phone,
-                    $intro."\n\nSo — what would you like to grow today? Just tell me (e.g. *\"1000 Instagram followers\"*), or type *menu* to browse. 🚀",
+                    $intro."\n\nSo — what would you like to do today? Grow your page (e.g. *\"1000 Instagram followers\"*), run a *sponsored advert* to find customers, or type *menu* to browse. 🚀",
                     ['handled_by' => 'system', 'intent' => $fromAd ? 'first_contact_ad' : 'first_contact']
                 );
 

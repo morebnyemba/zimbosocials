@@ -49,7 +49,9 @@ class WhatsAppFirstContactTest extends TestCase
         $this->assertDatabaseCount('users', 0);
 
         $intro = \App\Models\WhatsAppMessage::where('direction', 'out')->first();
-        $this->assertStringContainsString('what would you like to grow', $intro->body);
+        // Invites them straight into business — growing a page or a sponsored advert.
+        $this->assertStringContainsString('what would you like to do', $intro->body);
+        $this->assertStringContainsString('Grow your page', $intro->body);
     }
 
     public function test_taking_an_action_auto_registers_silently_and_proceeds(): void

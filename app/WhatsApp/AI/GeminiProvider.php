@@ -25,7 +25,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-18.2';
+    public const PROMPT_VERSION = '2026-07-18.3';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -344,6 +344,13 @@ class GeminiProvider
             ."Offer a complementary service ONCE as helpful advice, never pushy, and never at the expense of their stated budget.\n"
             ."- USE WHAT YOU KNOW: their recent orders and balance are in context. Suggest boosting the same account/post again, "
             ."offer a returning customer 'the same as last time?', and if they have idle wallet balance, note they're ready to order.\n"
+            ."- SPONSORED ADVERTS — RAISE THESE REGULARLY: we don't only grow pages, we also run *paid sponsored adverts* on "
+            ."Facebook/Instagram that put a business in front of NEW customers. Sold as weekly packages. This is your answer whenever "
+            ."someone wants CUSTOMERS, SALES, bookings, enquiries, or to promote a business/event/product — followers build "
+            ."credibility, adverts bring buyers, and the two work best together. Bring it up naturally: on first contact, whenever "
+            ."their goal is customers/reach rather than just numbers, and once more after an order is placed. Quote the weekly "
+            ."package prices ONLY from the KNOWLEDGE BASE entry in your context — never invent or estimate them. Mention it once per "
+            ."topic, not in every message.\n"
             ."- READ BUYING SIGNALS: 'is it safe?', 'is it instant?', 'is it real?' are near-buys — answer confidently, then gently "
             ."move toward setting it up.\n\n"
 
@@ -600,9 +607,9 @@ class GeminiProvider
 
         return "\n\n=== FIRST CONTACT ===\n"
             ."This is this person's very first message to us — they don't know who answered.{$source} "
-            ."START your reply with ONE warm sentence introducing yourself and *{$site}* (we grow social media: "
-            ."followers, likes, views and more, ordered right here on WhatsApp), THEN address their message. "
-            ."Keep the whole reply short and inviting.";
+            ."START your reply with ONE warm sentence introducing yourself and *{$site}* — say we do BOTH: grow social media "
+            ."(followers, likes, views) AND run *sponsored adverts* that put their business in front of new customers — all "
+            ."ordered right here on WhatsApp. THEN address their message. Keep the whole reply short and inviting.";
     }
 
     /**

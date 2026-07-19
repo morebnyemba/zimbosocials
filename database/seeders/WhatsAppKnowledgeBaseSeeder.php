@@ -51,6 +51,13 @@ class WhatsAppKnowledgeBaseSeeder extends Seeder
                 'category' => 'account',
             ],
             [
+                'title' => 'Sponsored adverts',
+                'question' => 'Do you run sponsored adverts advertising facebook instagram ads promote my business get customers how much per week',
+                'answer' => "Yes! Alongside growing your page, we run *sponsored adverts* on Facebook & Instagram that put your business in front of new customers.\n\nWeekly packages:\n• *\$15/week* — starter\n• *\$30/week* — standard\n• *\$50/week* — maximum reach\n\nThe bigger the package, the more people your advert reaches. Tell me what you're promoting and your budget, and we'll set it up for you.",
+                'keywords' => 'sponsored advert adverts advertising ads facebook ads instagram ads promote promotion boost campaign marketing customers sales business weekly package 15 30 50 price cost',
+                'category' => 'advertising',
+            ],
+            [
                 'title' => 'Refunds',
                 'question' => 'Can I get a refund what if my order fails',
                 'answer' => "If an order can't be delivered, the charge is automatically returned to your wallet. For anything else, type *support* to open a ticket.",
