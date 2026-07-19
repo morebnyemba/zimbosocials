@@ -168,6 +168,19 @@ class OrderResumeService
         $amount = number_format((float) abs($tx->amount), 2);
         $method = $tx->method ? ucfirst((string) $tx->method) : 'payment';
 
+        // A MANUAL transfer means the customer sent real money to our account.
+        // Telling them "no money was taken" would be false and reads like we
+        // pocketed it — never say that for a manual method.
+        if (app(\App\Services\DepositService::class)->isManualMethod($tx->method)) {
+            $msg = "⚠️ Your *{$amount} {$cur}* {$method} deposit hasn't been credited yet.\n\n"
+                ."If you've already sent the money, don't worry — just send us the *proof of payment* (a screenshot right here "
+                ."works 📸) and our team will check it and credit your wallet. If you haven't paid yet, reply *deposit* to start again.";
+
+            $this->responder->send($phone, $msg, ['handled_by' => 'system', 'intent' => 'deposit_needs_proof']);
+
+            return;
+        }
+
         $reason = $expired
             ? "we didn't receive the payment in time"
             : "the payment was declined or failed (often not enough funds)";

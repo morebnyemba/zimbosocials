@@ -67,9 +67,24 @@ class CleanupStaleTransactions extends Command
         $rejected = 0;
         $skipped = 0;
 
+        $manualPending = 0;
+
         foreach ($stale as $transaction) {
             // Proof already submitted — it's in the admin review queue, not stale.
             if (! empty($transaction->proof_url)) {
+                $skipped++;
+
+                continue;
+            }
+
+            // MANUAL (non-gateway) deposits are settled by a human and must
+            // NEVER be auto-expired. The customer sent real money to our
+            // account; they may simply not have uploaded proof yet. Expiring it
+            // tells a paying customer "no money was taken" — false, and exactly
+            // the kind of thing that makes people think we stole from them.
+            // Surface them to admins instead, like pending withdrawals.
+            if ($this->depositService->isManualMethod((string) $transaction->method)) {
+                $manualPending++;
                 $skipped++;
 
                 continue;
@@ -111,6 +126,8 @@ class CleanupStaleTransactions extends Command
 
             return self::SUCCESS;
         }
+
+        $this->nudgeAdminsAboutManualDeposits($manualPending);
 
         Log::info("CleanupStaleTransactions: expired {$expired}, credited {$credited} (late payment), rejected {$rejected}, skipped {$skipped} (proof under review).");
         $this->info("Expired {$expired}, credited {$credited} (late payment found), rejected {$rejected}, skipped {$skipped} (proof under review).");
@@ -162,6 +179,29 @@ class CleanupStaleTransactions extends Command
             route('paynow.return'),
             route('paynow.update')
         );
+    }
+
+    /**
+     * Manual deposits waiting on a human. They're never auto-expired, so an
+     * unattended one would sit forever — nudge admins once a day instead.
+     */
+    private function nudgeAdminsAboutManualDeposits(int $count): void
+    {
+        if ($count === 0) {
+            return;
+        }
+
+        $this->warn("{$count} manual deposit(s) are older than the TTL — left for admin review (the customer may have paid).");
+
+        if (\Illuminate\Support\Facades\Cache::add('admin:stale_manual_deposits_notified', true, now()->addDay())) {
+            NotificationService::notifyAdmins(
+                'admin_stale_manual_deposits',
+                'Manual deposits awaiting review',
+                "{$count} manual deposit(s) have been pending for over 24 hours. Verify the proof and credit (or reject) them — "
+                .'the customer may have already sent the money.',
+                ['count' => $count],
+            );
+        }
     }
 
     /**
