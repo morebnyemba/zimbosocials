@@ -63,6 +63,14 @@ return [
         // customer sends (Gemini is multimodal). Audio is gated separately:
         // WhatsApp voice notes are OGG/Opus, so it can be switched off if a
         // deployment hits codec trouble, leaving photos working.
+        // Marketing Messages (MM Lite). Meta routes marketing templates through
+        // its own delivery-optimising infrastructure — better delivery rates,
+        // engagement-based reach, and it is expected to become the only path
+        // for marketing. Requires MM Lite onboarding on the WABA first (TOS +
+        // enablement); until then leave this off. Falls back to the standard
+        // endpoint automatically on any failure, so enabling it is never fatal.
+        'mm_lite' => (bool) env('WHATSAPP_MM_LITE', false),
+        'mm_lite_path' => env('WHATSAPP_MM_LITE_PATH', 'marketing_messages'),
         'media_ai' => (bool) env('WHATSAPP_MEDIA_AI', true),
         'audio_ai' => (bool) env('WHATSAPP_AUDIO_AI', true),
         'media_ai_max_bytes' => (int) env('WHATSAPP_MEDIA_AI_MAX_BYTES', 8388608), // 8MB inline cap

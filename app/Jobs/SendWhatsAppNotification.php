@@ -59,6 +59,9 @@ class SendWhatsAppNotification implements ShouldQueue
                 $this->templateName,
                 $language,
                 $this->templateParams,
+                // Route campaign sends through MM Lite when it's enabled — it's
+                // the marketing-optimised path (and Meta's future-only one).
+                marketing: $this->requireTemplate,
             );
 
             // If template send succeeded, we're done

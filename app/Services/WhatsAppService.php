@@ -80,6 +80,7 @@ class WhatsAppService
         string $language = 'en',
         array $bodyParams = [],
         array $headerParams = [],
+        bool $marketing = false,
     ): array {
         if (empty($this->apiToken)) {
             return ['ok' => false, 'message_id' => null, 'error' => 'API token not configured'];
@@ -88,6 +89,27 @@ class WhatsAppService
         if ($this->provider === 'twilio') {
             // Twilio uses Content SID for templates, fallback to text
             return $this->sendViaTwilio($to, $this->interpolateTemplate($templateName, $bodyParams));
+        }
+
+        // Marketing Messages (MM Lite): Meta routes marketing templates through
+        // its own delivery-optimising infrastructure — it picks the moment the
+        // recipient is most likely to engage (within a 24h window) and gives
+        // higher-engagement templates more reach. Same payload as Cloud API,
+        // different endpoint, and it must be enabled on the WABA first.
+        // Off by default; falls back to the normal endpoint on any failure so
+        // an un-enabled account can never lose a send.
+        if ($marketing && config('services.whatsapp.mm_lite', false)) {
+            $result = $this->sendTemplateViaMeta($to, $templateName, $language, $bodyParams, $headerParams, marketing: true);
+
+            if ($result['ok']) {
+                return $result;
+            }
+
+            Log::warning('MM Lite send failed — retrying on the standard Cloud API endpoint', [
+                'template' => $templateName,
+                'error' => $result['error'] ?? null,
+                'code' => $result['error_code'] ?? null,
+            ]);
         }
 
         return $this->sendTemplateViaMeta($to, $templateName, $language, $bodyParams, $headerParams);
@@ -102,6 +124,7 @@ class WhatsAppService
         string $language,
         array $bodyParams,
         array $headerParams,
+        bool $marketing = false,
     ): array {
         $components = [];
 
@@ -134,13 +157,21 @@ class WhatsAppService
                 $payload['template']['components'] = $components;
             }
 
+            // MM Lite exposes the same payload on its own endpoint; the graph
+            // version is configurable because the two can move independently.
+            $version = (string) config('services.whatsapp.graph_version', 'v21.0');
+            $path = $marketing
+                ? (string) config('services.whatsapp.mm_lite_path', 'marketing_messages')
+                : 'messages';
+
             $response = Http::withToken($this->apiToken)
                 ->timeout(15)
-                ->post("https://graph.facebook.com/v21.0/{$this->phoneNumberId}/messages", $payload);
+                ->post("https://graph.facebook.com/{$version}/{$this->phoneNumberId}/{$path}", $payload);
 
             if ($response->successful()) {
                 $msgId = $response->json('messages.0.id');
-                Log::info("WhatsApp [Template]: Sent '{$templateName}' to {$to}", ['message_id' => $msgId]);
+                $via = $marketing ? 'MM Lite' : 'Template';
+                Log::info("WhatsApp [{$via}]: Sent '{$templateName}' to {$to}", ['message_id' => $msgId]);
 
                 return ['ok' => true, 'message_id' => $msgId, 'error' => null];
             }
