@@ -63,8 +63,16 @@ class SendWhatsAppNotification implements ShouldQueue
 
             // If template send succeeded, we're done
             if ($result['ok']) {
+                $this->recordOutbound($result['message_id'] ?? null, null, null);
+
                 return;
             }
+
+            // Record the failure so it is visible per-recipient in the admin
+            // console instead of vanishing into the log. Meta code 131049 means
+            // the person has hit their daily marketing cap ACROSS ALL
+            // businesses — nothing we can change; utility messages still land.
+            $this->recordOutbound(null, $result['error'] ?? 'unknown', $result['error_code'] ?? null);
 
             // Template unusable (not approved, wrong name, params mismatch).
             // The plain-text fallback below ONLY reaches contacts inside the
@@ -94,6 +102,36 @@ class SendWhatsAppNotification implements ShouldQueue
 
         // Fallback: plain text message
         $message = "🔔 *{$this->title}*\n\n{$this->body}\n\n— Zimbo Socials";
-        $whatsapp->sendMessage($this->to, $message);
+        $res = $whatsapp->sendMessage($this->to, $message);
+        $this->recordOutbound($res['message_id'] ?? null, empty($res['ok']) ? ($res['error'] ?? 'send failed') : null, null, $message);
+    }
+
+    /**
+     * Put every template send in the transcript. Without this a campaign is
+     * invisible: no admin can see who was messaged, and with no wa_message_id
+     * Meta's delivery receipts (sent/delivered/read/failed) can never be matched
+     * back — which is exactly how a broadcast looks like "nothing happened".
+     */
+    private function recordOutbound(?string $messageId, ?string $error, ?int $errorCode, ?string $body = null): void
+    {
+        try {
+            \App\Models\WhatsAppMessage::create([
+                'wa_phone' => $this->to,
+                'direction' => 'out',
+                'wa_message_id' => $messageId,
+                'msg_type' => 'template',
+                'body' => $body ?? "*{$this->title}*\n\n{$this->body}",
+                'handled_by' => 'system',
+                'intent' => $this->templateName,
+                // Meta never reports a receipt for a send it rejected, so mark
+                // it failed here; successful ones are updated by the webhook.
+                'delivery_status' => $error !== null ? 'failed' : null,
+                'payload' => $error !== null
+                    ? array_filter(['error' => $error, 'error_code' => $errorCode, 'template' => $this->templateName])
+                    : null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Could not record outbound template message', ['message' => $e->getMessage()]);
+        }
     }
 }

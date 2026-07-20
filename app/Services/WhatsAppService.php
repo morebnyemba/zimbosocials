@@ -146,9 +146,10 @@ class WhatsAppService
             }
 
             $err = $response->json('error.message', $response->body());
-            Log::error("WhatsApp [Template]: Failed '{$templateName}' to {$to}", ['error' => $err]);
+            $code = $response->json('error.code');
+            Log::error("WhatsApp [Template]: Failed '{$templateName}' to {$to}", ['error' => $err, 'code' => $code]);
 
-            return ['ok' => false, 'message_id' => null, 'error' => $err];
+            return ['ok' => false, 'message_id' => null, 'error' => $err, 'error_code' => $code];
         } catch (\Throwable $e) {
             Log::error("WhatsApp [Template]: Exception — {$e->getMessage()}");
 
