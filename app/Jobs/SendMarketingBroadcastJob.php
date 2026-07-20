@@ -70,8 +70,20 @@ class SendMarketingBroadcastJob implements ShouldQueue
             // 24h window MUST use a Meta-approved template — an admin can point
             // the campaign at an already-approved one instead of marketing_broadcast.
             $waTemplate = $filters['whatsapp_template'] ?? 'marketing_broadcast';
-            $waParamLabels = config("whatsapp-templates.templates.{$waTemplate}.params")
-                ?? ['user_name', 'subject', 'body'];
+            $waTemplateDef = config("whatsapp-templates.templates.{$waTemplate}");
+
+            // Pre-flight: a campaign MUST go out as an approved template so it
+            // reaches contacts outside the 24-hour window. If the template isn't
+            // even available, abort the whole run rather than quietly blasting
+            // free-form messages that most recipients can never receive.
+            if ($whatsappOn && ! is_array($waTemplateDef)) {
+                throw new \RuntimeException(
+                    "WhatsApp template '{$waTemplate}' is not available (missing or deactivated in Admin → WhatsApp → Templates). "
+                    .'Campaign aborted — without it, messages could not reach contacts outside the 24-hour window.'
+                );
+            }
+
+            $waParamLabels = $waTemplateDef['params'] ?? ['user_name', 'subject', 'body'];
 
             $sentEmail = 0;
             $sentWhatsApp = 0;
@@ -127,6 +139,7 @@ class SendMarketingBroadcastJob implements ShouldQueue
                         (string) $body,
                         $this->templateParams($waParamLabels, (string) $user->name, (string) $subject, (string) $body),
                         $locale,
+                        requireTemplate: true,
                     )->onQueue('notifications');
                     $sentWhatsApp++;
                     $sentPhones[$this->phoneKey((string) $user->whatsapp_number)] = true;
@@ -183,6 +196,7 @@ class SendMarketingBroadcastJob implements ShouldQueue
                                 (string) $body,
                                 $this->templateParams($waParamLabels, (string) $name, (string) $subject, (string) $body),
                                 $locale,
+                                requireTemplate: true,
                             )->onQueue('notifications');
 
                             $sentPhones[$key] = true;

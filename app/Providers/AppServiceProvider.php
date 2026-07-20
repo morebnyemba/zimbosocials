@@ -124,6 +124,15 @@ class AppServiceProvider extends ServiceProvider
             });
 
             if (! empty($templates)) {
+                // The DB is authoritative once rows exist: a template deleted or
+                // deactivated in Admin → WhatsApp → Templates is genuinely gone,
+                // so the sync command won't resubmit it.
+                //
+                // NOTE: that also means it disappears from config, and a send
+                // would silently degrade to free-form (undeliverable outside the
+                // 24h window). Campaign sends therefore set requireTemplate and
+                // pre-flight the template, so a deactivated one fails LOUDLY
+                // instead of quietly reaching only recently-active contacts.
                 config(['whatsapp-templates.templates' => $templates]);
             }
         } catch (\Throwable $e) {

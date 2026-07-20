@@ -32,6 +32,13 @@ class SendWhatsAppNotification implements ShouldQueue
         public readonly string $body,
         public readonly array $templateParams = [],
         public readonly ?string $locale = null,
+        /**
+         * Marketing / out-of-window sends: deliver ONLY as an approved template.
+         * A free-form message cannot reach anyone outside the 24-hour service
+         * window, so falling back to one would just manufacture a fake success
+         * for most of a campaign. Fail loudly instead.
+         */
+        public readonly bool $requireTemplate = false,
     ) {}
 
     public function handle(WhatsAppService $whatsapp): void
@@ -70,6 +77,19 @@ class SendWhatsAppNotification implements ShouldQueue
                 'to' => $this->to,
                 'error' => $result['error'] ?? null,
             ]);
+        } elseif ($this->requireTemplate) {
+            Log::error('WhatsApp template is not available at all — nothing sent', [
+                'template' => $this->templateName,
+                'to' => $this->to,
+                'hint' => 'Template missing from config/whatsapp_templates, or deactivated.',
+            ]);
+        }
+
+        // Template-only send: do NOT fall back. Outside the 24-hour window a
+        // free-form message is undeliverable, so sending one would report
+        // success while the customer receives nothing.
+        if ($this->requireTemplate) {
+            return;
         }
 
         // Fallback: plain text message
