@@ -51,6 +51,22 @@ class CampaignTemplateOnlyTest extends TestCase
             fn (SendWhatsAppNotification $job) => $job->requireTemplate === true);
     }
 
+    public function test_a_campaign_can_never_be_sent_twice(): void
+    {
+        Queue::fake();
+        User::factory()->create(['whatsapp_number' => '263772222222', 'is_active' => true]);
+        $campaign = $this->campaign();
+
+        // First run sends; a second run (retry, double dispatch, double-clicked
+        // form) must find the campaign already claimed and send nothing.
+        (new SendMarketingBroadcastJob($campaign->id))->handle();
+        Queue::assertPushed(SendWhatsAppNotification::class, 1);
+
+        (new SendMarketingBroadcastJob($campaign->id))->handle();
+
+        Queue::assertPushed(SendWhatsAppNotification::class, 1);
+    }
+
     public function test_a_missing_template_aborts_the_campaign_instead_of_free_forming(): void
     {
         Queue::fake();

@@ -12,12 +12,16 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class SendMarketingBroadcastJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 2;
+    // NEVER auto-retry a mass send. A retry replays the WHOLE blast, so every
+    // contact already messaged gets a duplicate — worse than the partial send
+    // it was trying to repair. Failures are recorded on the campaign instead.
+    public int $tries = 1;
 
     public int $backoff = 30;
 
@@ -30,11 +34,29 @@ class SendMarketingBroadcastJob implements ShouldQueue
             return;
         }
 
-        $campaign->update([
-            'status' => 'running',
-            'started_at' => now(),
-            'error_message' => null,
-        ]);
+        // Claim the campaign atomically: only ONE runner may move it out of
+        // queued/draft. A double dispatch (double-clicked form, a requeue, a
+        // worker picking it up twice) then finds nothing to claim and exits
+        // instead of sending everyone a second copy.
+        $claimed = MarketingCampaign::query()
+            ->where('id', $this->campaignId)
+            ->whereIn('status', ['queued', 'draft'])
+            ->update([
+                'status' => 'running',
+                'started_at' => now(),
+                'error_message' => null,
+            ]);
+
+        if ($claimed === 0) {
+            Log::warning('Marketing broadcast skipped — campaign already claimed by another run', [
+                'campaign_id' => $this->campaignId,
+                'status' => $campaign->status,
+            ]);
+
+            return;
+        }
+
+        $campaign->refresh();
 
         try {
             $channels = $campaign->channels ?? [];
