@@ -48,6 +48,15 @@ class Service extends Model
     /** Price for a given quantity */
     public function calculateCharge(int $quantity): float
     {
+        // A promo bundle is a flat price for an exact quantity ("3,000 for
+        // $12"). Applying it here means the quote, the confirm card and the
+        // actual wallet debit can never disagree — every caller goes through
+        // this method.
+        $bundle = PromoBundle::priceFor((int) $this->id, $quantity);
+        if ($bundle !== null) {
+            return round($bundle, 4);
+        }
+
         return round(($quantity / 1000) * $this->rate, 4);
     }
 
@@ -67,5 +76,11 @@ class Service extends Model
     public function upstreams(): HasMany
     {
         return $this->hasMany(ServiceUpstream::class)->orderBy('priority')->where('is_active', true);
+    }
+
+    /** Flat-price promo bundles for this service, cheapest first. */
+    public function promoBundles(): HasMany
+    {
+        return $this->hasMany(PromoBundle::class)->where('is_active', true)->orderBy('quantity');
     }
 }

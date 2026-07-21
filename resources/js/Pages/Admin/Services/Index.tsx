@@ -20,7 +20,8 @@ const primaryCost = (upstreams?: ServiceUpstream[]): number | null => {
         .find(u => Number(u.external_rate) > 0);
     return primary ? Number(primary.external_rate) : null;
 };
-interface Service { id: number; name: string; name_sn?: string; category: string; type: string; rate: string; min_qty: number; max_qty: number; is_active: boolean; is_dripfeed: boolean; is_refill: boolean; refill_days?: number; avg_time_minutes?: number; display_order?: number; orders_count: number; description?: string; description_sn?: string; upstreams?: ServiceUpstream[]; }
+interface PromoBundle { id: number; quantity: number; price: string; label?: string | null; }
+interface Service { id: number; promo_bundles?: PromoBundle[]; name: string; name_sn?: string; category: string; type: string; rate: string; min_qty: number; max_qty: number; is_active: boolean; is_dripfeed: boolean; is_refill: boolean; refill_days?: number; avg_time_minutes?: number; display_order?: number; orders_count: number; description?: string; description_sn?: string; upstreams?: ServiceUpstream[]; }
 interface Props { services: { data: Service[]; links: any[]; total: number }; categories: string[]; categoryCounts: Record<string, number>; providers: UpstreamProvider[]; stats: { total: number; active: number; inactive: number }; filters: Record<string, string>; }
 
 const emptyForm = { name: '', name_sn: '', description: '', description_sn: '', category: '', type: 'default', rate: '', min_qty: '100', max_qty: '10000', is_active: true, is_dripfeed: false, is_refill: false, refill_days: '', avg_time_minutes: '', display_order: '0', upstreams: [] as ServiceUpstream[] };
@@ -30,6 +31,22 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [enhancingId, setEnhancingId] = useState<number | null>(null);
+    const [bundleFor, setBundleFor] = useState<number | null>(null);
+    const [bundleQty, setBundleQty] = useState('');
+    const [bundlePrice, setBundlePrice] = useState('');
+
+    const saveBundle = (serviceId: number) => {
+        if (!bundleQty || !bundlePrice) return;
+        router.post(route('admin.services.bundles.store'), {
+            service_id: serviceId, quantity: Number(bundleQty), price: Number(bundlePrice),
+        }, {
+            preserveScroll: true,
+            onSuccess: () => { setBundleQty(''); setBundlePrice(''); setBundleFor(null); },
+        });
+    };
+
+    const removeBundle = (id: number) =>
+        router.delete(route('admin.services.bundles.destroy', id), { preserveScroll: true });
 
     const enhanceNames = (id: number) => {
         setEnhancingId(id);
@@ -330,6 +347,29 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                                     </div>
                                                 ))}
                                                 {(!s.upstreams || s.upstreams.length === 0) && <span className="text-xs font-bold text-zinc-400 italic">Local / Manual</span>}
+
+                                                {/* Flat-price promo bundles — these override the per-1,000 rate at that exact quantity */}
+                                                {s.promo_bundles?.map(b => (
+                                                    <div key={b.id} className="text-[10px] font-bold px-2 py-1 rounded-md border bg-amber-50 text-amber-700 border-amber-200 flex items-center justify-between gap-1">
+                                                        <span>🔥 {Number(b.quantity).toLocaleString()} for ${Number(b.price).toFixed(2)}</span>
+                                                        <button onClick={() => removeBundle(b.id)} title="Remove promo" className="hover:text-red-600">✕</button>
+                                                    </div>
+                                                ))}
+
+                                                {bundleFor === s.id ? (
+                                                    <div className="flex gap-1 items-center">
+                                                        <input value={bundleQty} onChange={e => setBundleQty(e.target.value)} placeholder="qty"
+                                                            className="w-16 bg-zinc-50 border-none rounded-md px-2 py-1 text-[10px] font-bold focus:ring-1 focus:ring-amber-500" />
+                                                        <input value={bundlePrice} onChange={e => setBundlePrice(e.target.value)} placeholder="$"
+                                                            className="w-14 bg-zinc-50 border-none rounded-md px-2 py-1 text-[10px] font-bold focus:ring-1 focus:ring-amber-500" />
+                                                        <button onClick={() => saveBundle(s.id)} className="text-[10px] font-black text-amber-700 hover:underline">Save</button>
+                                                        <button onClick={() => setBundleFor(null)} className="text-[10px] text-zinc-400 hover:text-zinc-600">✕</button>
+                                                    </div>
+                                                ) : (
+                                                    <button onClick={() => setBundleFor(s.id)} className="text-[10px] font-bold text-amber-600 hover:underline text-left">
+                                                        + Promo bundle
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="py-4 px-6 text-center">

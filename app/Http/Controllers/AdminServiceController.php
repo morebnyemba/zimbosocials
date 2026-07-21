@@ -21,7 +21,7 @@ class AdminServiceController extends Controller
 {
     public function index(Request $request): Response
     {
-        $query = Service::withCount('orders')->with('upstreams.provider');
+        $query = Service::withCount('orders')->with(['upstreams.provider', 'promoBundles']);
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -231,6 +231,43 @@ class AdminServiceController extends Controller
         });
 
         return back()->with('success', "Service \"{$service->name}\" updated.");
+    }
+
+    /**
+     * Create or update a flat-price promo bundle ("3,000 followers for $12").
+     * Keyed on service + exact quantity, so re-saving the same pair edits it.
+     */
+    public function storeBundle(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'service_id' => ['required', 'exists:services,id'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'price' => ['required', 'numeric', 'min:0.01'],
+            'label' => ['nullable', 'string', 'max:60'],
+        ]);
+
+        $service = Service::findOrFail($data['service_id']);
+
+        // A "promo" that costs more than the normal rate is a pricing mistake.
+        $normal = round(((int) $data['quantity'] / 1000) * (float) $service->rate, 2);
+        if ((float) $data['price'] >= $normal && $normal > 0) {
+            return back()->with('error',
+                "That's not a discount — {$data['quantity']} normally costs {$normal}. Set a lower price.");
+        }
+
+        \App\Models\PromoBundle::updateOrCreate(
+            ['service_id' => $data['service_id'], 'quantity' => $data['quantity']],
+            ['price' => $data['price'], 'label' => $data['label'] ?? null, 'is_active' => true],
+        );
+
+        return back()->with('success', 'Promo bundle saved.');
+    }
+
+    public function destroyBundle(\App\Models\PromoBundle $bundle): RedirectResponse
+    {
+        $bundle->delete();
+
+        return back()->with('success', 'Promo bundle removed.');
     }
 
     /**

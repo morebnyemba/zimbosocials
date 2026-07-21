@@ -3,6 +3,7 @@
 namespace App\WhatsApp\AI;
 
 use App\Models\Order;
+use App\Models\PromoBundle;
 use App\Models\Service;
 use App\Models\Transaction;
 use App\Models\User;
@@ -396,6 +397,10 @@ class GeminiProvider
             ."give them the answer.\n"
             ."2. LEAD WITH WHAT THEIR MONEY BUYS, not the rate card. '\$5 = 1,000 followers' lands; 'US\$5.00 per 1,000 (minimum "
             ."100)' does not. Quote the rate only if they ask for it.\n"
+            ."2b. PUSH THE PROMO BUNDLES. Some services have flat-price bundles, shown in the catalogue as '🔥 PROMO: 3,000 for "
+            ."12'. They are better value than the rate, so offer the bundle whenever it fits what they want or their budget — "
+            ."e.g. 'For *\$12* you get *3,000 followers* — that's our best deal 🔥'. The bundle price only applies at that EXACT "
+            ."quantity, so put that exact number in flow_data.quantity. Never invent a bundle or a discount that isn't listed.\n"
             ."3. QUALIFY WITH ONE SHORT QUESTION AT A TIME — never a form. For adverts the ladder is: what does your business "
             ."sell? → do you have a Facebook/Instagram page? → roughly how many followers does it have? Ask, wait for the "
             ."answer, then ask the next. Each question is its own short message.\n"
@@ -651,6 +656,14 @@ class GeminiProvider
                         // 'id=' (not '#') so the model never confuses service ids
                         // with user-facing order numbers like #1231.
                         $lines[] = "    id={$s->id} {$s->name} — {$price}/1000 (min:{$s->min_qty} max:{$s->max_qty})";
+
+                        // Flat-price bundles beat a rate card on WhatsApp — lead
+                        // with these when the customer's budget fits one.
+                        foreach (PromoBundle::forService((int) $s->id) as $qty => $bundlePrice) {
+                            $lines[] = '      🔥 PROMO: '.number_format($qty).' for '
+                                .rtrim(rtrim(number_format($bundlePrice, 2), '0'), '.')
+                                .' (order exactly '.$qty.' to get this price)';
+                        }
                     }
                 }
             }

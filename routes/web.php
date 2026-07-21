@@ -186,6 +186,8 @@ Route::middleware('auth')->group(function () {
         Route::delete('/services/inactive', [AdminServiceController::class, 'bulkDeleteInactive'])->name('services.bulk-delete-inactive');
         Route::post('/services/merge-categories', [AdminServiceController::class, 'mergeCategories'])->name('services.merge-categories');
         Route::post('/services/enhance-names', [AdminServiceController::class, 'enhanceNames'])->middleware('throttle:ai-drafts')->name('services.enhance-names');
+        Route::post('/services/bundles', [AdminServiceController::class, 'storeBundle'])->name('services.bundles.store');
+        Route::delete('/services/bundles/{bundle}', [AdminServiceController::class, 'destroyBundle'])->name('services.bundles.destroy');
         Route::get('/services/export-list', [AdminServiceController::class, 'exportList'])->name('services.export-list');
         Route::post('/services/export-list/ai', [AdminServiceController::class, 'exportListAi'])->middleware('throttle:ai-drafts')->name('services.export-list-ai');
         Route::put('/services/{service}', [AdminServiceController::class, 'update'])->name('services.update');
