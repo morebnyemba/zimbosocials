@@ -113,6 +113,7 @@ class AdminServiceController extends Controller
             'upstreams' => ['nullable', 'array'],
             'upstreams.*.upstream_provider_id' => ['required', 'exists:upstream_providers,id'],
             'upstreams.*.external_service_id' => ['required', 'string', 'max:50'],
+            'upstreams.*.link_type' => ['nullable', 'in:url,username'],
             'upstreams.*.priority' => ['required', 'integer', 'min:1'],
         ]);
 
@@ -128,6 +129,7 @@ class AdminServiceController extends Controller
                     $service->upstreams()->create([
                         'upstream_provider_id' => $upstream['upstream_provider_id'],
                         'external_service_id' => $upstream['external_service_id'],
+                        'link_type' => $upstream['link_type'] ?? 'url',
                         'priority' => $upstream['priority'],
                         'is_active' => true,
                     ]);
@@ -164,6 +166,7 @@ class AdminServiceController extends Controller
             'upstreams' => ['nullable', 'array'],
             'upstreams.*.upstream_provider_id' => ['required', 'exists:upstream_providers,id'],
             'upstreams.*.external_service_id' => ['required', 'string', 'max:50'],
+            'upstreams.*.link_type' => ['nullable', 'in:url,username'],
             'upstreams.*.priority' => ['required', 'integer', 'min:1'],
         ]);
 
@@ -188,6 +191,7 @@ class AdminServiceController extends Controller
 
                     $values = [
                         'external_service_id' => $upstream['external_service_id'],
+                        'link_type' => $upstream['link_type'] ?? 'url',
                         'priority' => $upstream['priority'],
                         'is_active' => true,
                     ];

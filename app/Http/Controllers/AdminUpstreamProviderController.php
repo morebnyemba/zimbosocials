@@ -173,6 +173,12 @@ class AdminUpstreamProviderController extends Controller
                 'service_id' => $service->id,
                 'upstream_provider_id' => $upstreamProvider->id,
                 'external_service_id' => (string) $s['service'],
+                // Guess whether this provider wants a URL or a bare username
+                // from its own name/description; an admin can correct it later.
+                'link_type' => \App\Services\Upstream\LinkFormatter::infer(
+                    (string) ($s['name'] ?? ''),
+                    (string) ($s['desc'] ?? ''),
+                ),
                 'external_rate' => (float) $s['rate'],
                 'markup_type' => $markupType,
                 'markup_value' => $markupValue,

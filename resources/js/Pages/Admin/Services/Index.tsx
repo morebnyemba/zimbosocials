@@ -7,7 +7,7 @@ import { Plus, Trash2, Search, Filter, Edit2, X, AlertCircle, Merge, MessageCirc
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface UpstreamProvider { id: number; name: string; url: string; }
-interface ServiceUpstream { id?: number; upstream_provider_id: number; external_service_id: string; priority: number; external_rate?: string | number | null; provider?: UpstreamProvider; }
+interface ServiceUpstream { id?: number; upstream_provider_id: number; external_service_id: string; link_type?: string; priority: number; external_rate?: string | number | null; provider?: UpstreamProvider; }
 
 /**
  * Cost of the primary upstream route (lowest priority number wins, matching
@@ -121,7 +121,7 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
         if (providers.length === 0) return showToast('warn', 'No active providers available.');
         setForm({
             ...form,
-            upstreams: [...form.upstreams, { upstream_provider_id: providers[0].id, external_service_id: '', priority: form.upstreams.length + 1 }]
+            upstreams: [...form.upstreams, { upstream_provider_id: providers[0].id, external_service_id: '', link_type: 'url', priority: form.upstreams.length + 1 }]
         });
     };
 
@@ -559,6 +559,13 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                                             <div className="flex-1">
                                                                 <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Ext Service ID</label>
                                                                 <input type="text" value={upstream.external_service_id} onChange={e => updateUpstream(index, 'external_service_id', e.target.value)} className="w-full bg-zinc-50 border-none rounded-lg px-2 py-2 text-xs font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" />
+                                                            </div>
+                                                            <div className="w-24">
+                                                                <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1" title="What this provider expects — a full URL, or a bare username derived from it">Link</label>
+                                                                <select value={upstream.link_type ?? 'url'} onChange={e => updateUpstream(index, 'link_type', e.target.value)} className="w-full bg-zinc-50 border-none rounded-lg px-2 py-2 text-xs font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500">
+                                                                    <option value="url">Full URL</option>
+                                                                    <option value="username">Username</option>
+                                                                </select>
                                                             </div>
                                                             <button type="button" onClick={() => removeUpstream(index)} className="mt-5 p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
                                                                 <Trash2 size={14} />

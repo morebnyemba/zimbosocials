@@ -14,6 +14,7 @@ class ServiceUpstream extends Model
         'service_id',
         'upstream_provider_id',
         'external_service_id',
+        'link_type',
         'external_rate',
         'markup_type',
         'markup_value',

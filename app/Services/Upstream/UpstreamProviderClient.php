@@ -22,7 +22,7 @@ class UpstreamProviderClient
         return $this;
     }
 
-    public function placeOrder(Order $order, string $providerServiceId): array
+    public function placeOrder(Order $order, string $providerServiceId, ?string $linkType = 'url'): array
     {
         if (! $this->provider || ! $this->provider->is_active) {
             return [
@@ -52,7 +52,9 @@ class UpstreamProviderClient
                     'key' => $key,
                     'action' => 'add',
                     'service' => $providerServiceId,
-                    'link' => $order->link,
+                    // Convert the customer's URL into whatever THIS upstream
+                    // wants (some expect a bare username, not a link).
+                    'link' => LinkFormatter::forUpstream((string) $order->link, $linkType),
                     'quantity' => $order->quantity,
                 ]);
 

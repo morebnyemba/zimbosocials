@@ -66,7 +66,7 @@ class OrderDispatchService
             }
 
             $this->client->setProvider($provider);
-            $result = $this->client->placeOrder($order, $upstream->external_service_id);
+            $result = $this->client->placeOrder($order, $upstream->external_service_id, $upstream->link_type);
             $lastResult = $result;
 
             if ($result['ok']) {
