@@ -37,6 +37,7 @@ class AdvertiseFlowTest extends TestCase
     {
         $engine->advance($ctx, '2');                       // Standard
         $engine->advance($ctx, 'my salon in Chitungwiza'); // promoting
+        $engine->advance($ctx, 'Ruwa, Zimre Park, mums');  // audience
         $engine->advance($ctx, 'https://facebook.com/salon');
         $engine->advance($ctx, '2');                       // weeks
     }
@@ -60,6 +61,7 @@ class AdvertiseFlowTest extends TestCase
             'total' => 60.00,
             'status' => 'pending_setup',
             'promoting' => 'my salon in Chitungwiza',
+            'target_audience' => 'Ruwa, Zimre Park, mums',
         ]);
         $this->assertSame(40.0, (float) $user->fresh()->balance); // 100 - 60
         // The charge is on the ledger.
@@ -98,6 +100,7 @@ class AdvertiseFlowTest extends TestCase
         $ctx->set('_user_id', $user->id);
         $ctx->set('_prefill_package', 'max');
         $ctx->set('_prefill_promoting', 'a launch on Saturday');
+        $ctx->set('_prefill_audience', 'Harare CBD, young professionals');
         $ctx->set('_prefill_link', 'https://facebook.com/launch');
         $ctx->set('_prefill_weeks', 1);
 

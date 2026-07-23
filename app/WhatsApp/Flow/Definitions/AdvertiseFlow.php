@@ -55,6 +55,11 @@ class AdvertiseFlow extends AbstractFlow
             $ctx->set('ad_promoting', mb_substr($promoting, 0, 500));
         }
 
+        $audience = trim((string) $ctx->pullPrefill('audience'));
+        if ($audience !== '') {
+            $ctx->set('ad_audience', mb_substr($audience, 0, 500));
+        }
+
         $link = trim((string) $ctx->pullPrefill('link'));
         if ($link !== '') {
             $ctx->set('ad_link', mb_substr($link, 0, 500));
@@ -71,6 +76,9 @@ class AdvertiseFlow extends AbstractFlow
         if (! $ctx->has('ad_promoting')) {
             return $this->askPromotingPrompt();
         }
+        if (! $ctx->has('ad_audience')) {
+            return $this->askAudiencePrompt();
+        }
         if (! $ctx->has('ad_link')) {
             return $this->askLinkPrompt();
         }
@@ -85,6 +93,7 @@ class AdvertiseFlow extends AbstractFlow
     {
         return match ($state) {
             'ask_promoting' => $this->askPromoting($input, $ctx),
+            'ask_audience' => $this->askAudience($input, $ctx),
             'ask_link' => $this->askLink($input, $ctx),
             'ask_weeks' => $this->askWeeks($input, $ctx),
             'confirm' => $this->confirm($input, $ctx),
@@ -156,6 +165,26 @@ class AdvertiseFlow extends AbstractFlow
 
         $ctx->set('ad_promoting', mb_substr($text, 0, 500));
 
+        return $this->askAudiencePrompt();
+    }
+
+    private function askAudiencePrompt(): FlowResult
+    {
+        return FlowResult::step(
+            "🎯 Who should we put this in front of?\n\nTell me the *areas* (e.g. *Ruwa, Zimre Park, Damafalls*) and, if it helps, the kind of people — e.g. *\"parents of young kids\"*, *\"anyone in Harare\"*.",
+            'ask_audience'
+        );
+    }
+
+    private function askAudience(string $input, SessionContext $ctx): FlowResult
+    {
+        $text = trim($input);
+        if (mb_strlen($text) < 2) {
+            return FlowResult::retry('Just tell me the areas or people to target (e.g. *Ruwa, Eastview* or *parents in Harare*), or type *cancel*.', 'ask_audience');
+        }
+
+        $ctx->set('ad_audience', mb_substr($text, 0, 500));
+
         return $this->askLinkPrompt();
     }
 
@@ -213,10 +242,12 @@ class AdvertiseFlow extends AbstractFlow
         $balance = (float) ($user?->balance ?? 0);
 
         $link = (string) $ctx->get('ad_link', '');
+        $audience = (string) $ctx->get('ad_audience', '');
         $summary = "🧾 *Confirm your advert*\n\n"
             ."Package: *{$pkg['label']}* — ".$this->money($weekly, $cur)."/week\n"
             ."Runs for: *{$weeks} week".($weeks > 1 ? 's' : '')."*\n"
             .'Promoting: '.$ctx->get('ad_promoting')."\n"
+            .($audience !== '' ? "Target: {$audience}\n" : '')
             .($link !== '' ? "Link: {$link}\n" : "Link: _to be arranged with our team_\n")
             .'Total: *'.$this->money($total, $cur)."*\n"
             .'Balance: '.$this->money($balance, $cur)."\n\n";
@@ -291,6 +322,7 @@ class AdvertiseFlow extends AbstractFlow
                     'total' => $total,
                     'promoting' => (string) $ctx->get('ad_promoting'),
                     'target_link' => (string) $ctx->get('ad_link', '') ?: null,
+                    'target_audience' => (string) $ctx->get('ad_audience', '') ?: null,
                     'status' => 'pending_setup',
                 ]);
 
@@ -338,6 +370,7 @@ class AdvertiseFlow extends AbstractFlow
                 "New advert booking #{$booking->id}",
                 "{$customer} paid {$booking->total} for the {$booking->packageLabel()} advert package "
                 ."({$booking->weeks} week(s)). Promoting: {$booking->promoting}. "
+                .($booking->target_audience ? "Target: {$booking->target_audience}. " : 'No target specified. ')
                 .($booking->target_link ? "Link: {$booking->target_link}. " : 'No link supplied yet. ')
                 .'Set the campaign up and reply to them on WhatsApp.',
                 [

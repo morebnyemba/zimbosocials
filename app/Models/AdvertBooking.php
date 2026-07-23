@@ -14,7 +14,7 @@ class AdvertBooking extends Model
 {
     protected $fillable = [
         'user_id', 'wa_phone', 'package', 'weeks', 'weekly_price',
-        'total', 'promoting', 'target_link', 'status', 'notes',
+        'total', 'promoting', 'target_link', 'target_audience', 'status', 'notes',
     ];
 
     protected $casts = [

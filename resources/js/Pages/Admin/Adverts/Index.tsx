@@ -13,6 +13,7 @@ interface Booking {
     total: string;
     promoting: string;
     target_link: string | null;
+    target_audience: string | null;
     status: string;
     notes: string | null;
     created_at: string;
@@ -144,6 +145,9 @@ export default function AdvertsIndex({ bookings, filters, statuses, stats }: Pro
                                             </span>
                                         </div>
                                         <p className="mt-1 text-sm text-zinc-800 font-medium">{b.promoting}</p>
+                                        {b.target_audience && (
+                                            <p className="text-xs text-indigo-600 font-semibold">🎯 {b.target_audience}</p>
+                                        )}
                                         <p className="text-xs text-zinc-500">
                                             {b.user?.name ?? 'Unknown'} · <span className="font-mono">{b.wa_phone ?? '—'}</span>
                                             {b.target_link

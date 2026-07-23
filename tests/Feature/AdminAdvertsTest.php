@@ -31,7 +31,8 @@ class AdminAdvertsTest extends TestCase
         return AdvertBooking::create([
             'user_id' => $customer->id, 'wa_phone' => '263771234567',
             'package' => 'standard', 'weeks' => 2, 'weekly_price' => 30.00, 'total' => 60.00,
-            'promoting' => 'my salon', 'target_link' => 'https://facebook.com/salon', 'status' => $status,
+            'promoting' => 'my salon', 'target_link' => 'https://facebook.com/salon',
+            'target_audience' => 'Ruwa, Eastview', 'status' => $status,
         ]);
     }
 

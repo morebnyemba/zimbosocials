@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-21.1';
+    public const PROMPT_VERSION = '2026-07-23.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -240,11 +240,19 @@ class GeminiProvider
                         'email' => ['type' => 'STRING', 'nullable' => true],
                         'name' => ['type' => 'STRING', 'nullable' => true],
                         'subject' => ['type' => 'STRING', 'nullable' => true],
+                        // Sponsored-advert booking params — without these the AI's
+                        // advert consult (package, what they're promoting, the
+                        // areas/people to target) is dropped at the flow boundary.
+                        'package' => ['type' => 'STRING', 'nullable' => true],
+                        'weeks' => ['type' => 'INTEGER', 'nullable' => true],
+                        'promoting' => ['type' => 'STRING', 'nullable' => true],
+                        'audience' => ['type' => 'STRING', 'nullable' => true],
                     ],
                     'propertyOrdering' => [
                         'service_id', 'platform', 'service', 'link', 'quantity',
                         'amount', 'method', 'phone', 'order_id', 'ticket_id',
                         'email', 'name', 'subject',
+                        'package', 'weeks', 'promoting', 'audience',
                     ],
                 ],
             ],
@@ -579,7 +587,7 @@ class GeminiProvider
             ."{\"reply\":\"Yes — all done! ✅ Your order *#39* for *1,000 Facebook Followers* is placed and now *processing*. That's exactly why your balance is 0.00 — the 5.00 went straight into this order, nothing is lost. Type *track* anytime to watch it come in. 🚀\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
 
             ."RESPONSE FORMAT — return ONLY valid JSON, no markdown fences:\n"
-            ."{\"reply\":\"your message\",\"follow_up\":\"short nudge or null\",\"flow\":\"a flow id, 'handoff', or 'none'\",\"flow_data\":{\"service_id\":null,\"link\":null,\"quantity\":null,\"amount\":null,\"order_id\":null,\"ticket_id\":null,\"platform\":null,\"email\":null,\"name\":null,\"subject\":null}}";
+            ."{\"reply\":\"your message\",\"follow_up\":\"short nudge or null\",\"flow\":\"a flow id, 'handoff', or 'none'\",\"flow_data\":{\"service_id\":null,\"link\":null,\"quantity\":null,\"amount\":null,\"order_id\":null,\"ticket_id\":null,\"platform\":null,\"email\":null,\"name\":null,\"subject\":null,\"package\":null,\"weeks\":null,\"promoting\":null,\"audience\":null}}";
     }
 
     /**
