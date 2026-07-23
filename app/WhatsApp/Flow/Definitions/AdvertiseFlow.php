@@ -75,7 +75,7 @@ class AdvertiseFlow extends AbstractFlow
             return $this->askAudiencePrompt();
         }
         if (! $ctx->has('ad_link')) {
-            return $this->askLinkPrompt();
+            return $this->askLinkPrompt($ctx);
         }
 
         return $this->confirmPrompt($ctx);
@@ -100,10 +100,11 @@ class AdvertiseFlow extends AbstractFlow
         $i = 1;
         foreach (AdvertBooking::packages() as $pkg) {
             $price = '$'.number_format((float) $pkg['price'], 2);
+            $tag = ! empty($pkg['includes_video']) ? '🎬 ' : '';
             $rows[] = [
                 'id' => 'fs:'.$i,
                 'title' => $pkg['label'].' — '.$price,
-                'description' => ! empty($pkg['recommended']) ? '⭐ '.($pkg['blurb'] ?? '') : ($pkg['blurb'] ?? ''),
+                'description' => $tag.(! empty($pkg['recommended']) ? '⭐ ' : '').($pkg['blurb'] ?? ''),
             ];
             $i++;
         }
@@ -177,15 +178,19 @@ class AdvertiseFlow extends AbstractFlow
 
         $ctx->set('ad_audience', mb_substr($text, 0, 500));
 
-        return $this->askLinkPrompt();
+        return $this->askLinkPrompt($ctx);
     }
 
-    private function askLinkPrompt(): FlowResult
+    private function askLinkPrompt(SessionContext $ctx): FlowResult
     {
-        return FlowResult::step(
-            "👍 Now send the *link* to the page, post or product you want promoted.\n\nNo link yet? Reply *skip* and our team will build the advert with you.",
-            'ask_link'
-        )->withButtons([['id' => 'fs:skip', 'title' => 'Skip for now']]);
+        $pkg = AdvertBooking::package((string) $ctx->get('ad_package')) ?? [];
+
+        $body = ! empty($pkg['includes_video'])
+            // Video is made for them — we just need where to send the traffic.
+            ? "👍 Send your Facebook/Instagram *page link* so we point the advert there — we'll create the video for you. 🎬\n\nDon't have it handy? Reply *skip* and our team will sort it with you."
+            : "👍 Now send the *link* to the post or video you want boosted.\n\nNo link yet? Reply *skip* and our team will build the advert with you.";
+
+        return FlowResult::step($body, 'ask_link')->withButtons([['id' => 'fs:skip', 'title' => 'Skip for now']]);
     }
 
     private function askLink(string $input, SessionContext $ctx): FlowResult
@@ -206,8 +211,9 @@ class AdvertiseFlow extends AbstractFlow
 
         $link = (string) $ctx->get('ad_link', '');
         $audience = (string) $ctx->get('ad_audience', '');
+        $video = ! empty($pkg['includes_video']);
         $summary = "🧾 *Confirm your advert*\n\n"
-            ."Package: *{$pkg['label']}*\n"
+            ."Package: *{$pkg['label']}*".($video ? ' 🎬 _(includes a custom video advert)_' : '')."\n"
             .'Promoting: '.$ctx->get('ad_promoting')."\n"
             .($audience !== '' ? "Target: {$audience}\n" : '')
             .($link !== '' ? "Link: {$link}\n" : "Link: _to be arranged with our team_\n")
@@ -310,13 +316,16 @@ class AdvertiseFlow extends AbstractFlow
 
         $this->alertTeam($booking, $user->name ?? 'Customer');
 
+        $video = ! empty($pkg['includes_video']);
+
         return FlowResult::complete(
             "🎉 *Your advert is booked!*\n\n"
-            ."📣 *{$pkg['label']}* advert\n"
+            ."📣 *{$pkg['label']}* advert".($video ? ' 🎬 with a custom video' : '')."\n"
             .'Total paid: *'.$this->money($total, $cur)."*\n"
             .'Reference: *#'.$booking->id."*\n\n"
-            ."Our team will set up your campaign and get it live shortly — we'll message you right here when it's running. "
-            .'If we need anything else (like a photo or your page link), we\'ll ask. 🚀'
+            .($video
+                ? "Our team will *create your video advert* and get it live shortly — we'll message you right here when it's running, and ask if we need a photo, logo or details. 🚀"
+                : "Our team will set up your campaign and get it live shortly — we'll message you right here when it's running. If we need anything else, we'll ask. 🚀")
         );
     }
 
@@ -328,7 +337,8 @@ class AdvertiseFlow extends AbstractFlow
             NotificationService::notifyAdmins(
                 'admin_advert_booking',
                 "New advert booking #{$booking->id}",
-                "{$customer} paid {$booking->total} for a {$booking->durationLabel()} advert. "
+                "{$customer} paid {$booking->total} for a {$booking->durationLabel()} advert"
+                .($booking->includesVideo() ? ' 🎬 (MAKE A VIDEO for this one). ' : ' (boost-only). ')
                 ."Promoting: {$booking->promoting}. "
                 .($booking->target_audience ? "Target: {$booking->target_audience}. " : 'No target specified. ')
                 .($booking->target_link ? "Link: {$booking->target_link}. " : 'No link supplied yet. ')

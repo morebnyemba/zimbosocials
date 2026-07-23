@@ -53,7 +53,7 @@ class WhatsAppKnowledgeBaseSeeder extends Seeder
             [
                 'title' => 'Sponsored adverts',
                 'question' => 'Do you run sponsored adverts advertising facebook instagram ads promote my business get customers how much per week',
-                'answer' => "Yes! Alongside growing your page, we run *sponsored adverts* on Facebook & Instagram that put your business in front of new customers.\n\nPick the run that suits you:\n• *\$5* — 1 day (a quick test)\n• *\$10* — 3 days (most people start here)\n• *\$20* — 1 week\n• *\$35* — 2 weeks\n• *\$60* — 1 month (best value, biggest reach)\n\nTell me what you're promoting and which areas to target, and we'll set it up for you.",
+                'answer' => "Yes! Alongside growing your page, we run *sponsored adverts* on Facebook & Instagram that put your business in front of new customers.\n\nPick the run that suits you:\n• *\$5* — 1 day (a quick test, we boost a post you have)\n• *\$10* — 3 days (boost-only, most people start here)\n• *\$20* — 1 week 🎬 *includes a custom video advert we make for you*\n• *\$35* — 2 weeks 🎬 *includes a custom video advert*\n• *\$60* — 1 month 🎬 *custom video + maximum reach*\n\nTell me what you're promoting and which areas to target, and we'll set it up for you.",
                 'keywords' => 'sponsored advert adverts advertising ads facebook ads instagram ads promote promotion boost campaign marketing customers sales business day 3 days week month package 5 10 20 35 60 price cost target area',
                 'category' => 'advertising',
             ],

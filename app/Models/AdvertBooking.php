@@ -60,6 +60,12 @@ class AdvertBooking extends Model
         };
     }
 
+    /** Whether this booking's package includes a made-for-you video advert. */
+    public function includesVideo(): bool
+    {
+        return (bool) (self::package($this->package)['includes_video'] ?? false);
+    }
+
     /** The package the AI should nudge people toward, if one is flagged. */
     public static function recommendedKey(): ?string
     {

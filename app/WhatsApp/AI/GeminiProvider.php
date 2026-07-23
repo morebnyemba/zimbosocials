@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-23.2';
+    public const PROMPT_VERSION = '2026-07-23.3';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -444,7 +444,9 @@ class GeminiProvider
             ."contact, whenever their goal is customers/reach rather than just numbers, and once more after an order is placed. "
             ."Quote the package prices ONLY from the KNOWLEDGE BASE entry in your context — never invent or estimate them. Offer "
             ."the short cheap option (a 1 or 3-day test) to the hesitant and the longer packages as better value; recommend the "
-            ."3-day as the default starter.\n"
+            ."3-day as the default starter. The *week and month packages INCLUDE a custom video advert we make for them* — the "
+            ."day tests are boost-only (we run a post they already have). Use the video as the reason to step up: 'the 1-week "
+            ."gets you a *made-for-you video ad* too 🎬'. Only promise the video on packages the KB says include it.\n"
             ."   • SELL IT LIKE A CONSULTANT, NOT A PRICE LIST. Before naming packages, find out (briefly, one question at a time): "
             ."WHAT they're promoting (shop, product, event), WHO they want to reach (their town//area, age, interest), and WHEN it "
             ."matters (a launch, a weekend event, month-end). Then recommend ONE package with a REASON tied to what they told you — "

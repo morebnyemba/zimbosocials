@@ -109,6 +109,22 @@ class AdvertiseFlowTest extends TestCase
         $this->assertStringContainsString('60.00', (string) $res->reply); // 1 month = $60 flat
     }
 
+    public function test_video_packages_are_flagged_and_boost_only_ones_are_not(): void
+    {
+        // week1 ($20) includes a video; day3 ($10) is boost-only.
+        $videoBooking = \App\Models\AdvertBooking::create([
+            'user_id' => User::factory()->create()->id, 'wa_phone' => self::PHONE,
+            'package' => 'week1', 'days' => 7, 'total' => 20.0, 'promoting' => 'x', 'status' => 'pending_setup',
+        ]);
+        $boostBooking = \App\Models\AdvertBooking::create([
+            'user_id' => User::factory()->create()->id, 'wa_phone' => self::PHONE,
+            'package' => 'day3', 'days' => 3, 'total' => 10.0, 'promoting' => 'x', 'status' => 'pending_setup',
+        ]);
+
+        $this->assertTrue($videoBooking->includesVideo());
+        $this->assertFalse($boostBooking->includesVideo());
+    }
+
     public function test_both_short_day_runs_and_longer_packages_are_offered(): void
     {
         [$engine, $ctx] = $this->start(balance: 0);
