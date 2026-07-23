@@ -30,7 +30,7 @@ class AdminAdvertsTest extends TestCase
     {
         return AdvertBooking::create([
             'user_id' => $customer->id, 'wa_phone' => '263771234567',
-            'package' => 'standard', 'weeks' => 2, 'weekly_price' => 30.00, 'total' => 60.00,
+            'package' => 'week2', 'days' => 14, 'total' => 35.00,
             'promoting' => 'my salon', 'target_link' => 'https://facebook.com/salon',
             'target_audience' => 'Ruwa, Eastview', 'status' => $status,
         ]);
@@ -46,7 +46,7 @@ class AdminAdvertsTest extends TestCase
                 ->component('Admin/Adverts/Index')
                 ->has('bookings.data', 1)
                 ->where('stats.pending_setup', 1)
-                ->where('stats.revenue', fn ($v) => (float) $v === 60.0)
+                ->where('stats.revenue', fn ($v) => (float) $v === 35.0)
             );
     }
 
@@ -71,8 +71,8 @@ class AdminAdvertsTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame('cancelled', $booking->fresh()->status);
-        $this->assertSame(60.0, (float) $customer->fresh()->balance);
-        $this->assertDatabaseHas('transactions', ['user_id' => $customer->id, 'type' => 'refund', 'amount' => 60.0]);
+        $this->assertSame(35.0, (float) $customer->fresh()->balance);
+        $this->assertDatabaseHas('transactions', ['user_id' => $customer->id, 'type' => 'refund', 'amount' => 35.0]);
     }
 
     public function test_a_booking_is_not_refunded_twice(): void

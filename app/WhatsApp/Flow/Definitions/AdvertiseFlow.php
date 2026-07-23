@@ -65,11 +65,6 @@ class AdvertiseFlow extends AbstractFlow
             $ctx->set('ad_link', mb_substr($link, 0, 500));
         }
 
-        $weeks = (int) preg_replace('/\D+/', '', (string) $ctx->pullPrefill('weeks'));
-        if ($weeks >= $this->minWeeks() && $weeks <= $this->maxWeeks()) {
-            $ctx->set('ad_weeks', $weeks);
-        }
-
         if (! $ctx->has('ad_package')) {
             return $this->packageMenu();
         }
@@ -82,9 +77,6 @@ class AdvertiseFlow extends AbstractFlow
         if (! $ctx->has('ad_link')) {
             return $this->askLinkPrompt();
         }
-        if (! $ctx->has('ad_weeks')) {
-            return $this->askWeeksPrompt($ctx);
-        }
 
         return $this->confirmPrompt($ctx);
     }
@@ -95,7 +87,6 @@ class AdvertiseFlow extends AbstractFlow
             'ask_promoting' => $this->askPromoting($input, $ctx),
             'ask_audience' => $this->askAudience($input, $ctx),
             'ask_link' => $this->askLink($input, $ctx),
-            'ask_weeks' => $this->askWeeks($input, $ctx),
             'confirm' => $this->confirm($input, $ctx),
             default => $this->pickPackage($input, $ctx),
         };
@@ -108,18 +99,19 @@ class AdvertiseFlow extends AbstractFlow
         $rows = [];
         $i = 1;
         foreach (AdvertBooking::packages() as $pkg) {
+            $price = '$'.number_format((float) $pkg['price'], 2);
             $rows[] = [
                 'id' => 'fs:'.$i,
-                'title' => $pkg['label'],
-                'description' => '$'.number_format((float) $pkg['weekly_price'], 2).'/week',
+                'title' => $pkg['label'].' — '.$price,
+                'description' => ! empty($pkg['recommended']) ? '⭐ '.($pkg['blurb'] ?? '') : ($pkg['blurb'] ?? ''),
             ];
             $i++;
         }
 
         return FlowResult::step(
-            "📣 *Sponsored adverts*\n\nWe run the campaign for you on Facebook & Instagram to put you in front of new customers.\n\nPick a weekly package:",
+            "📣 *Sponsored adverts*\n\nWe run the campaign for you on Facebook & Instagram to put you in front of new customers.\n\nPick a package — from a quick 1-day test to a full month:",
             'pick_package'
-        )->withList('Choose package', [['title' => 'Weekly packages', 'rows' => $rows]], 'Advertise', 'You can stop or change it any week');
+        )->withList('Choose package', [['title' => 'Packages', 'rows' => $rows]], 'Advertise', 'Flat price — no hidden extras');
     }
 
     private function pickPackage(string $input, SessionContext $ctx): FlowResult
@@ -201,33 +193,6 @@ class AdvertiseFlow extends AbstractFlow
         $t = mb_strtolower(trim($input));
         $ctx->set('ad_link', in_array($t, ['skip', 'none', 'no', 'later'], true) ? '' : mb_substr(trim($input), 0, 500));
 
-        return $this->askWeeksPrompt($ctx);
-    }
-
-    private function askWeeksPrompt(SessionContext $ctx): FlowResult
-    {
-        $pkg = AdvertBooking::package((string) $ctx->get('ad_package')) ?? [];
-        $price = $this->money((float) ($pkg['weekly_price'] ?? 0), $this->currency($ctx));
-
-        return FlowResult::step(
-            "📅 For how many *weeks* should it run? ({$price} per week, minimum {$this->minWeeks()})\n\nMost businesses start with *2 weeks* to see real results.",
-            'ask_weeks'
-        );
-    }
-
-    private function askWeeks(string $input, SessionContext $ctx): FlowResult
-    {
-        $weeks = (int) preg_replace('/\D+/', '', $input);
-
-        if ($weeks < $this->minWeeks() || $weeks > $this->maxWeeks()) {
-            return FlowResult::retry(
-                "Please enter a number of weeks between *{$this->minWeeks()}* and *{$this->maxWeeks()}*, or type *cancel*.",
-                'ask_weeks'
-            );
-        }
-
-        $ctx->set('ad_weeks', $weeks);
-
         return $this->confirmPrompt($ctx);
     }
 
@@ -236,16 +201,13 @@ class AdvertiseFlow extends AbstractFlow
         $user = $this->user($ctx);
         $cur = $this->currency($ctx);
         $pkg = AdvertBooking::package((string) $ctx->get('ad_package')) ?? [];
-        $weeks = (int) $ctx->get('ad_weeks');
-        $weekly = (float) ($pkg['weekly_price'] ?? 0);
-        $total = round($weekly * $weeks, 2);
+        $total = round((float) ($pkg['price'] ?? 0), 2);
         $balance = (float) ($user?->balance ?? 0);
 
         $link = (string) $ctx->get('ad_link', '');
         $audience = (string) $ctx->get('ad_audience', '');
         $summary = "🧾 *Confirm your advert*\n\n"
-            ."Package: *{$pkg['label']}* — ".$this->money($weekly, $cur)."/week\n"
-            ."Runs for: *{$weeks} week".($weeks > 1 ? 's' : '')."*\n"
+            ."Package: *{$pkg['label']}*\n"
             .'Promoting: '.$ctx->get('ad_promoting')."\n"
             .($audience !== '' ? "Target: {$audience}\n" : '')
             .($link !== '' ? "Link: {$link}\n" : "Link: _to be arranged with our team_\n")
@@ -297,17 +259,16 @@ class AdvertiseFlow extends AbstractFlow
 
         $key = (string) $ctx->get('ad_package');
         $pkg = AdvertBooking::package($key);
-        $weeks = (int) $ctx->get('ad_weeks');
-        if (! $pkg || $weeks < $this->minWeeks()) {
+        if (! $pkg) {
             return FlowResult::fail('Something went wrong setting that up. Type *advertise* to start again.');
         }
 
-        $weekly = (float) $pkg['weekly_price'];
-        $total = round($weekly * $weeks, 2);
+        $days = (int) ($pkg['days'] ?? 0);
+        $total = round((float) $pkg['price'], 2);
         $cur = $this->currency($ctx);
 
         try {
-            $booking = DB::transaction(function () use ($user, $ctx, $key, $pkg, $weeks, $weekly, $total): ?AdvertBooking {
+            $booking = DB::transaction(function () use ($user, $ctx, $key, $pkg, $days, $total): ?AdvertBooking {
                 $locked = \App\Models\User::lockForUpdate()->find($user->id);
                 if (! $locked || (float) $locked->balance < $total) {
                     return null; // funds moved between confirm and tap
@@ -317,8 +278,7 @@ class AdvertiseFlow extends AbstractFlow
                     'user_id' => $locked->id,
                     'wa_phone' => $ctx->phone,
                     'package' => $key,
-                    'weeks' => $weeks,
-                    'weekly_price' => $weekly,
+                    'days' => $days,
                     'total' => $total,
                     'promoting' => (string) $ctx->get('ad_promoting'),
                     'target_link' => (string) $ctx->get('ad_link', '') ?: null,
@@ -329,7 +289,7 @@ class AdvertiseFlow extends AbstractFlow
                 $charged = $locked->deductBalance(
                     $total,
                     null, // not a catalogue order — referenced in the note instead
-                    "Advert booking #{$booking->id} — {$pkg['label']}, {$weeks} week(s)"
+                    "Advert booking #{$booking->id} — {$pkg['label']}"
                 );
 
                 if (! $charged) {
@@ -352,7 +312,7 @@ class AdvertiseFlow extends AbstractFlow
 
         return FlowResult::complete(
             "🎉 *Your advert is booked!*\n\n"
-            ."📣 *{$pkg['label']}* — ".$this->money($weekly, $cur)."/week for *{$weeks} week".($weeks > 1 ? 's' : '')."\n"
+            ."📣 *{$pkg['label']}* advert\n"
             .'Total paid: *'.$this->money($total, $cur)."*\n"
             .'Reference: *#'.$booking->id."*\n\n"
             ."Our team will set up your campaign and get it live shortly — we'll message you right here when it's running. "
@@ -368,8 +328,8 @@ class AdvertiseFlow extends AbstractFlow
             NotificationService::notifyAdmins(
                 'admin_advert_booking',
                 "New advert booking #{$booking->id}",
-                "{$customer} paid {$booking->total} for the {$booking->packageLabel()} advert package "
-                ."({$booking->weeks} week(s)). Promoting: {$booking->promoting}. "
+                "{$customer} paid {$booking->total} for a {$booking->durationLabel()} advert. "
+                ."Promoting: {$booking->promoting}. "
                 .($booking->target_audience ? "Target: {$booking->target_audience}. " : 'No target specified. ')
                 .($booking->target_link ? "Link: {$booking->target_link}. " : 'No link supplied yet. ')
                 .'Set the campaign up and reply to them on WhatsApp.',
@@ -388,15 +348,5 @@ class AdvertiseFlow extends AbstractFlow
     private function currency(SessionContext $ctx): string
     {
         return $this->user($ctx)?->currency ?? 'USD';
-    }
-
-    private function minWeeks(): int
-    {
-        return max(1, (int) config('adverts.min_weeks', 1));
-    }
-
-    private function maxWeeks(): int
-    {
-        return max($this->minWeeks(), (int) config('adverts.max_weeks', 12));
     }
 }

@@ -6,31 +6,45 @@ return [
     | Sponsored advert packages
     |--------------------------------------------------------------------------
     | Weekly managed ad campaigns run by the team on Facebook / Instagram.
-    | Unlike catalogue services these are priced FLAT PER WEEK (not per 1,000)
-    | and fulfilled by a human, so they live here rather than in `services`.
+    | Each package is a FLAT price for a FIXED duration (in days) — so the menu
+    | spans a cheap one-day test right up to a full month, and there's no
+    | "how many weeks?" maths for the customer.
     |
     | Keep the "Sponsored adverts" knowledge-base entry in step with these
     | prices — the assistant quotes the KB when it explains the packages.
+    | 'recommended' marks the default the AI should nudge people toward.
     */
     'packages' => [
-        'starter' => [
-            'label' => 'Starter',
-            'weekly_price' => 15.00,
-            'blurb' => 'A steady local push — great for testing what your audience responds to.',
+        'day1' => [
+            'label' => '1 day',
+            'days' => 1,
+            'price' => 5.00,
+            'blurb' => 'A quick test run to gauge the response.',
         ],
-        'standard' => [
-            'label' => 'Standard',
-            'weekly_price' => 30.00,
-            'blurb' => 'Our most popular — noticeably wider reach and more enquiries.',
+        'day3' => [
+            'label' => '3 days',
+            'days' => 3,
+            'price' => 10.00,
+            'blurb' => 'Long enough to see real enquiries — most people start here.',
+            'recommended' => true,
         ],
-        'max' => [
-            'label' => 'Maximum reach',
-            'weekly_price' => 50.00,
-            'blurb' => 'Widest reach — best for launches, events and busy trading periods.',
+        'week1' => [
+            'label' => '1 week',
+            'days' => 7,
+            'price' => 20.00,
+            'blurb' => 'A full week of steady reach.',
+        ],
+        'week2' => [
+            'label' => '2 weeks',
+            'days' => 14,
+            'price' => 35.00,
+            'blurb' => 'Sustained presence — better value per day.',
+        ],
+        'month1' => [
+            'label' => '1 month',
+            'days' => 30,
+            'price' => 60.00,
+            'blurb' => 'Maximum reach — best for launches and busy seasons.',
         ],
     ],
-
-    // Guard rails for how long a single booking can run.
-    'min_weeks' => 1,
-    'max_weeks' => 12,
 ];

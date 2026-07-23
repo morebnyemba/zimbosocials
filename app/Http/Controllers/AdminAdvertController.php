@@ -74,8 +74,8 @@ class AdminAdvertController extends Controller
 
         // Tell the customer when their campaign actually goes live / wraps up.
         $message = match ($data['status']) {
-            'active' => "🚀 Your *{$advert->packageLabel()}* advert is now LIVE! It runs for {$advert->weeks} week"
-                .($advert->weeks > 1 ? 's' : '').". We'll keep an eye on it — reply here any time with questions.",
+            'active' => "🚀 Your *{$advert->packageLabel()}* advert is now LIVE! It runs for {$advert->durationLabel()}. "
+                ."We'll keep an eye on it — reply here any time with questions.",
             'completed' => "✅ Your *{$advert->packageLabel()}* advert campaign has finished. Thanks for advertising with us! "
                 .'Reply *advertise* to run another one.',
             default => null,

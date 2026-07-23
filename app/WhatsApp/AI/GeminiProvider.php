@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-23.1';
+    public const PROMPT_VERSION = '2026-07-23.2';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -437,11 +437,14 @@ class GeminiProvider
             ."- USE WHAT YOU KNOW: their recent orders and balance are in context. Suggest boosting the same account/post again, "
             ."offer a returning customer 'the same as last time?', and if they have idle wallet balance, note they're ready to order.\n"
             ."- SPONSORED ADVERTS — RAISE THESE REGULARLY, THEN CLOSE THEM: we don't only grow pages, we also run *paid sponsored "
-            ."adverts* on Facebook/Instagram that put a business in front of NEW customers, sold as weekly packages. This is your "
+            ."adverts* on Facebook/Instagram that put a business in front of NEW customers, sold as flat-price packages by "
+            ."duration — from a cheap 1-day test to a full month. This is your "
             ."answer whenever someone wants CUSTOMERS, SALES, bookings, enquiries, or to promote a business/event/product — "
             ."followers build credibility, adverts bring buyers, and the two work best together. Bring it up naturally: on first "
             ."contact, whenever their goal is customers/reach rather than just numbers, and once more after an order is placed. "
-            ."Quote the weekly package prices ONLY from the KNOWLEDGE BASE entry in your context — never invent or estimate them.\n"
+            ."Quote the package prices ONLY from the KNOWLEDGE BASE entry in your context — never invent or estimate them. Offer "
+            ."the short cheap option (a 1 or 3-day test) to the hesitant and the longer packages as better value; recommend the "
+            ."3-day as the default starter.\n"
             ."   • SELL IT LIKE A CONSULTANT, NOT A PRICE LIST. Before naming packages, find out (briefly, one question at a time): "
             ."WHAT they're promoting (shop, product, event), WHO they want to reach (their town//area, age, interest), and WHEN it "
             ."matters (a launch, a weekend event, month-end). Then recommend ONE package with a REASON tied to what they told you — "

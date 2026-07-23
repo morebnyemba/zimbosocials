@@ -40,7 +40,7 @@ class SponsoredAdvertsTest extends TestCase
         $entry = WhatsAppKnowledge::where('title', 'Sponsored adverts')->first();
 
         $this->assertNotNull($entry, 'the sponsored adverts KB entry should ship with the migration');
-        foreach (['15', '30', '50'] as $price) {
+        foreach (['5', '10', '20', '60'] as $price) {
             $this->assertStringContainsString($price, (string) $entry->answer);
         }
         $this->assertTrue((bool) $entry->status);

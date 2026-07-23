@@ -8,8 +8,9 @@ interface Booking {
     user: { id: number; name: string; email: string } | null;
     wa_phone: string | null;
     package: string;
-    weeks: number;
-    weekly_price: string;
+    days: number | null;
+    weeks: number | null;
+    weekly_price: string | null;
     total: string;
     promoting: string;
     target_link: string | null;
@@ -139,9 +140,11 @@ export default function AdvertsIndex({ bookings, filters, statuses, stats }: Pro
                                             <span className={`px-2 py-0.5 rounded-md border text-[10px] font-black uppercase ${STATUS_STYLE[b.status] ?? ''}`}>
                                                 {label(b.status)}
                                             </span>
-                                            <span className="text-xs font-bold text-zinc-500 capitalize">{b.package}</span>
+                                            <span className="text-xs font-bold text-zinc-500">
+                                                {b.days ? (b.days % 30 === 0 ? `${b.days / 30} month${b.days > 30 ? 's' : ''}` : b.days % 7 === 0 ? `${b.days / 7} week${b.days > 7 ? 's' : ''}` : `${b.days} day${b.days > 1 ? 's' : ''}`) : b.package}
+                                            </span>
                                             <span className="text-xs text-zinc-400">
-                                                ${Number(b.weekly_price).toFixed(2)}/wk × {b.weeks} = <strong className="text-zinc-700">${Number(b.total).toFixed(2)}</strong>
+                                                <strong className="text-zinc-700">${Number(b.total).toFixed(2)}</strong>
                                             </span>
                                         </div>
                                         <p className="mt-1 text-sm text-zinc-800 font-medium">{b.promoting}</p>
