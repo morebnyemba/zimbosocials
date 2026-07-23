@@ -23,7 +23,7 @@ class FlowCatalog
             'my_orders' => ['desc' => 'List the user\'s recent orders', 'params' => []],
             'track' => ['desc' => 'Track a specific order by number', 'params' => ['order_id']],
             'browse' => ['desc' => 'Browse available services', 'params' => ['platform']],
-            'advertise' => ['desc' => 'Book and PAY for a sponsored advert campaign we run on Facebook/Instagram. Flat-price packages by duration (package: day1|day3|week1|week2|month1 — a 1-day test up to a month); promoting: what the advert is for; audience: the areas/people to target e.g. "Ruwa, Zimre Park" or "parents in Harare"', 'params' => ['package', 'promoting', 'audience', 'link']],
+            'advertise' => ['desc' => 'Book and PAY for a sponsored advert campaign we run on Facebook/Instagram. Flat-price packages by duration (package: day1|day3|week1|week2|month1 — a 1-day test up to a month; week1+ include an AI video advert). The flow only takes payment; the team collects the advert details (what to promote, page, target areas) afterwards.', 'params' => ['package']],
             'ticket' => ['desc' => 'Open a support ticket', 'params' => ['subject', 'message']],
             'tickets' => ['desc' => 'View support tickets, read the team\'s responses, and reply to a ticket', 'params' => ['ticket_id']],
             'profile' => ['desc' => 'Show account/profile details', 'params' => []],

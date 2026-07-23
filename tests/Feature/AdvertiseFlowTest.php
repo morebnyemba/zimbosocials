@@ -32,13 +32,10 @@ class AdvertiseFlowTest extends TestCase
         return [$engine, $ctx, $user];
     }
 
-    /** Drive to the confirm step: option 3 = the flat "1 week" package ($20). */
+    /** Pick option 3 = the flat "1 week" package ($20) — payment is the only step. */
     private function toConfirm(FlowEngine $engine, SessionContext $ctx): void
     {
-        $engine->advance($ctx, '3');                       // 1 week — $20
-        $engine->advance($ctx, 'my salon in Chitungwiza'); // promoting
-        $engine->advance($ctx, 'Ruwa, Zimre Park, mums');  // audience
-        $engine->advance($ctx, 'https://facebook.com/salon'); // link → confirm
+        $engine->advance($ctx, '3'); // 1 week — $20 → straight to confirm
     }
 
     public function test_a_confirmed_advert_charges_the_wallet_and_books_it(): void
@@ -59,11 +56,10 @@ class AdvertiseFlowTest extends TestCase
             'days' => 7,
             'total' => 20.00,
             'status' => 'pending_setup',
-            'promoting' => 'my salon in Chitungwiza',
-            'target_audience' => 'Ruwa, Zimre Park, mums',
         ]);
+        // Details are collected by the team afterwards — not at booking.
+        $this->assertNull(\App\Models\AdvertBooking::first()->promoting);
         $this->assertSame(80.0, (float) $user->fresh()->balance); // 100 - 20
-        // The charge is on the ledger.
         $this->assertDatabaseHas('transactions', ['user_id' => $user->id, 'type' => 'order_charge', 'amount' => -20.0]);
     }
 
@@ -98,9 +94,6 @@ class AdvertiseFlowTest extends TestCase
         $ctx = new SessionContext(self::PHONE);
         $ctx->set('_user_id', $user->id);
         $ctx->set('_prefill_package', 'month1');
-        $ctx->set('_prefill_promoting', 'a launch on Saturday');
-        $ctx->set('_prefill_audience', 'Harare CBD, young professionals');
-        $ctx->set('_prefill_link', 'https://facebook.com/launch');
 
         $res = app(FlowEngine::class)->start($ctx, 'advertise');
 
