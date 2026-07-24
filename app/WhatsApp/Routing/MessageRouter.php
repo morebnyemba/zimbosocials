@@ -170,18 +170,20 @@ class MessageRouter
                 $name = $friendly !== null ? " {$friendly}" : '';
                 $site = \App\WhatsApp\AI\GeminiProvider::siteName();
                 $intro = $fromAd
-                    ? "👋 Hi{$name}, thanks for reaching out! You've found *{$site}* — we grow social media accounts: followers, likes, views and more, plus *sponsored adverts* that put your business in front of new customers. Delivered fast and paid with EcoCash and other local methods, all right here on WhatsApp."
-                    : "👋 Hi{$name}! Welcome to *{$site}* — followers, likes, views, and *sponsored adverts* to reach new customers, right here on WhatsApp.";
+                    ? "👋 Hi{$name}, thanks for reaching out — you've found *{$site}*! 🎉"
+                    : "👋 *Welcome to {$site}{$name}!* 🎉";
 
-                // Lower the barrier up front: asking costs nothing, and they can
-                // do it in whichever of our languages they're most comfortable in.
-                $openDoor = "\n\n💬 Ask me anything — chatting and advice are *free*, and I'm happy to help in *English*, *Shona* or *Ndebele*.";
-
-                // No signup hurdle: the account is created silently the moment
-                // they take an action — so go straight to business.
+                // Lead with the outcome, then lower the barrier (free advice, any
+                // of our languages), then a short scannable menu of what to do.
                 $this->responder->send(
                     $phone,
-                    $intro.$openDoor."\n\nSo — what would you like to do today? Grow your page (e.g. *\"1000 Instagram followers\"*), run a *sponsored advert* to find customers, or type *menu* to browse. 🚀",
+                    $intro."\n\n"
+                    ."More *followers, likes and views* to grow your page — plus *sponsored adverts* that bring new customers to your business. Fast, and paid with EcoCash & other local methods, right here on WhatsApp.\n\n"
+                    ."💬 Ask me anything — advice is *free*, in *English*, *Shona* or *Ndebele*.\n\n"
+                    ."So — what would you like to do today?\n"
+                    ."• *Grow your page* — e.g. *\"1000 Instagram followers\"*\n"
+                    ."• *Advertise* to find new customers\n"
+                    ."• Type *menu* to browse 🚀",
                     ['handled_by' => 'system', 'intent' => $fromAd ? 'first_contact_ad' : 'first_contact']
                 );
 
@@ -372,6 +374,9 @@ class MessageRouter
             // with a one-line introduction of itself and the platform.
             'first_contact' => $account->wasRecentlyCreated && ! $authenticated,
             'ad_headline' => $ctx->get('_ad_headline'),
+            // A known contact returning after a day+ away — open with a warm,
+            // personalised welcome-back rather than a cold greeting.
+            'returning_after_gap' => $account->returningAfterGap(24),
         ], $media);
 
         if (empty($r['handled'])) {

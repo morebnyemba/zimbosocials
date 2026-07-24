@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-23.4';
+    public const PROMPT_VERSION = '2026-07-23.5';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -73,6 +73,7 @@ class GeminiProvider
         // message form the user turn.
         $prompt = '=== CONTEXT ==='."\n".$this->buildContext($text, $context['user'] ?? null)
             .$this->firstContactBlock($context)
+            .$this->returningBlock($context)
             .$this->referralBlock($context)
             .$this->activeFlowBlock($context)
             .$this->historyBlock($context['history'] ?? [])
@@ -812,6 +813,26 @@ class GeminiProvider
             ."ordered right here on WhatsApp. Then add ONE short line lowering the barrier: asking questions and advice are "
             ."*free* (they only ever pay for a service they choose to order), and you're happy to help in *English*, *Shona* "
             ."or *Ndebele*. THEN address their message. Keep the whole reply short and inviting.";
+    }
+
+    /**
+     * A known customer coming back after a day+ away. Open with a warm,
+     * personalised welcome-back — not a cold "how can I help". First contact
+     * takes priority (a brand-new number is never "returning").
+     */
+    private function returningBlock(array $context): string
+    {
+        if (! empty($context['first_contact']) || empty($context['returning_after_gap'])) {
+            return '';
+        }
+
+        return "\n\n=== WELCOME BACK ===\n"
+            ."This is a returning customer — we haven't heard from them in a while. Open with ONE warm, personal welcome-back line "
+            ."(use their name if the context shows it), THEN address their message. Make it feel like you remember them, using the "
+            ."LIVE CONTEXT above where it fits naturally — e.g. if they have wallet balance, note they're ready to order (\"you've "
+            ."still got X in your wallet 💰\"); if they have a recent order, you can reference it. Do NOT invent a balance, an order "
+            ."or history that isn't in the context. If they open with just a greeting, welcome them back and invite them to pick up "
+            ."where they left off or start something new. Keep it short and genuine, not a sales blast.";
     }
 
     /**

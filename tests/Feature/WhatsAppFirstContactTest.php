@@ -156,7 +156,7 @@ class WhatsAppFirstContactTest extends TestCase
         // Intro names the platform and explains what it does...
         $intro = \App\Models\WhatsAppMessage::where('direction', 'out')->first();
         $this->assertStringContainsString(config('app.name'), $intro->body);
-        $this->assertStringContainsString('followers, likes, views', $intro->body);
+        $this->assertStringContainsString('followers, likes and views', $intro->body);
 
         // ...and invites them straight to business (no signup flow).
         $ctx = app(SessionManager::class)->load(self::PHONE);

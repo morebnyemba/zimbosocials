@@ -34,9 +34,28 @@ class WhatsAppAccount extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * When we last heard from this number BEFORE the current message — set by
+     * AccountStore at resolve time (not a DB column; last_seen_at is already
+     * overwritten by then). Null for a brand-new contact.
+     */
+    public ?\Illuminate\Support\Carbon $previousSeenAt = null;
+
     public function isLinked(): bool
     {
         return $this->link_status === 'linked' && $this->user_id !== null;
+    }
+
+    /**
+     * A known contact coming back after a quiet spell — worth a warm
+     * welcome-back. False for brand-new numbers (no prior visit) and for anyone
+     * active within the window.
+     */
+    public function returningAfterGap(int $hours = 24): bool
+    {
+        return ! $this->wasRecentlyCreated
+            && $this->previousSeenAt !== null
+            && $this->previousSeenAt->lt(now()->subHours($hours));
     }
 
     /**

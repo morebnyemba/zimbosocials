@@ -33,8 +33,14 @@ class AccountStore
             }
         }
 
+        // Remember when we last heard from them BEFORE overwriting it — the
+        // router uses the gap to give a returning customer a welcome-back.
+        $previousSeen = $account->exists ? $account->last_seen_at : null;
+
         $account->last_seen_at = now();
         $account->save();
+
+        $account->previousSeenAt = $previousSeen;
 
         return $account;
     }
