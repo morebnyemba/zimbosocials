@@ -19,13 +19,20 @@ FROM php:8.3-fpm-alpine
 # intl/gd/zip cover image handling (payment proofs) and exports; pdo_mysql is
 # the production driver; pcntl lets queue workers handle signals for graceful
 # restarts.
+# The -dev packages are build headers only, and deleting them also takes the
+# runtime .so files with them (nothing else depends on them), which leaves the
+# compiled extensions unable to load: "libpng16.so.16: No such file". So the
+# runtime libraries are installed separately and kept, and only the build group
+# is removed.
 RUN apk add --no-cache \
         git curl bash mysql-client \
+        icu-libs libzip libpng libjpeg-turbo freetype oniguruma \
+    && apk add --no-cache --virtual .build-deps \
         icu-dev libzip-dev libpng-dev libjpeg-turbo-dev freetype-dev oniguruma-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" \
         pdo_mysql mbstring bcmath gd zip intl exif pcntl opcache \
-    && apk del icu-dev libzip-dev libpng-dev libjpeg-turbo-dev freetype-dev oniguruma-dev \
+    && apk del --no-network .build-deps \
     && rm -rf /var/cache/apk/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
