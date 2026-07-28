@@ -18,6 +18,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind the host's nginx, which terminates TLS and forwards over HTTP.
+        // Without trusting it, X-Forwarded-Proto is ignored, every generated URL
+        // comes out as http://, and the browser then blocks the stylesheets and
+        // scripts on an https page as mixed content — the page renders unstyled
+        // while images (passive content) still load.
+        //
+        // The proxy is another container on a private Docker network and the
+        // port is not published publicly, so the client address cannot be
+        // spoofed from outside.
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [
             CaptureReferral::class,
             SetLocale::class,
