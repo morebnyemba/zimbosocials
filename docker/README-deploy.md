@@ -32,12 +32,27 @@ On the **VPS**:
 cd /opt/zimbosocials
 git clone https://github.com/morebnyemba/zimbosocials.git .
 
-# Set at minimum DB_PASSWORD and DB_ROOT_PASSWORD; APP_PORT defaults to 8081.
-cp .env.example .env && nano .env
+cp .env.example .env
+```
 
+Set the compose database block — **both** passwords are required or
+`docker compose up` refuses to start. Generate them rather than inventing them:
+
+```bash
+printf '\nDB_CONNECTION=mysql\nDB_HOST=db\nDB_PORT=3306\nDB_DATABASE=zimbosocials\nDB_USERNAME=zimbosocials\nDB_PASSWORD=%s\nDB_ROOT_PASSWORD=%s\nQUEUE_CONNECTION=database\nAPP_PORT=8081\n' \
+    "$(openssl rand -hex 24)" "$(openssl rand -hex 24)" >> .env
+```
+
+Then bring the stack up and restore in one step — the script extracts the
+archive itself, and **keeps the database settings you just set** rather than the
+old server's (which point at a machine that no longer exists):
+
+```bash
 docker compose up -d --build
 DOCKER=1 ./scripts/migrate-restore.sh zimbosocials-migration-*.tar.gz
 ```
+
+Add `FORCE=1` to skip the confirmation prompt.
 
 `.env` must point the app at the compose database:
 
