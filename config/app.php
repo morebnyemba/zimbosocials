@@ -65,11 +65,12 @@ return [
     |
     */
 
-    // Africa/Harare (UTC+2). The business, its customers and its staff are all
-    // in one timezone, so times are stored and shown in it directly rather than
-    // kept in UTC and converted at every display point. Scheduled tasks are
-    // local too — dailyAt('18:00') means 6pm in Harare.
-    'timezone' => env('APP_TIMEZONE', 'Africa/Harare'),
+    // UTC. Moving the stack to Africa/Harare needs all three clocks changed
+    // together — app, PHP containers and MariaDB (several columns are stamped
+    // by the database via DEFAULT CURRENT_TIMESTAMP). Changing them piecemeal
+    // put the app two hours behind the database and made fresh messages display
+    // with the wrong time, so this stays UTC until it can be done in one go.
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
 
     /*
     |--------------------------------------------------------------------------
