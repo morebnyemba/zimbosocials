@@ -2,7 +2,11 @@
  * Hand-rolled for Laravel + Inertia on cPanel so it lives at the site root (scope "/").
  * Bump CACHE_VERSION whenever this file or the precached shell changes.
  */
-const CACHE_VERSION = 'v1';
+// v2: moved from cPanel to the VPS. Static assets are cached first, so without
+// a new version every returning visitor keeps serving the old shell and the old
+// hashed Vite assets from Cache Storage and never asks the network — the site
+// renders unstyled against a perfectly healthy server.
+const CACHE_VERSION = 'v2';
 const STATIC_CACHE = `zs-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `zs-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = '/offline.html';
