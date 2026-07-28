@@ -66,12 +66,18 @@ class ProofIntake
             return ['ok' => false, 'reason' => 'no_media_id', 'transaction' => $transaction];
         }
 
-        $dl = $this->gateway->downloadMedia($mediaId);
-        if (empty($dl['ok'])) {
-            return ['ok' => false, 'reason' => 'download_failed', 'transaction' => $transaction];
+        // MediaArchive already downloaded this on the way in; only fetch again
+        // when we're called outside that path.
+        if (isset($media['contents']) && $media['contents'] !== '') {
+            $contents = (string) $media['contents'];
+        } else {
+            $dl = $this->gateway->downloadMedia($mediaId);
+            if (empty($dl['ok'])) {
+                return ['ok' => false, 'reason' => 'download_failed', 'transaction' => $transaction];
+            }
+            $contents = (string) $dl['contents'];
         }
 
-        $contents = (string) $dl['contents'];
         if (strlen($contents) > self::MAX_BYTES) {
             return ['ok' => false, 'reason' => 'too_large', 'transaction' => $transaction];
         }
@@ -115,11 +121,15 @@ class ProofIntake
             NotificationService::notifyAdmins(
                 'admin_deposit_proof',
                 'Deposit proof submitted (WhatsApp)',
-                "{$user->name} submitted proof for a {$amount} {$cur} {$method} deposit (#{$transaction->getKey()}) via WhatsApp — verify and credit it in Transactions.",
+                // The "reply RECEIVED" ask is deliberate: these alerts ride the
+                // 24-hour service window, and an admin's reply reopens it so the
+                // next one is still deliverable.
+                "{$user->name} submitted proof for a {$amount} {$cur} {$method} deposit (#{$transaction->getKey()}) via WhatsApp — verify and credit it in Transactions.\n\nReply *RECEIVED* to confirm you've got this.",
                 [
                     'transaction_id' => (int) $transaction->getKey(),
                     'user_name' => $user->name,
                     'amount' => $amount,
+                    'amount_display' => "{$amount} {$cur} {$method}",
                     'method' => $transaction->method,
                     'source' => 'whatsapp',
                 ],

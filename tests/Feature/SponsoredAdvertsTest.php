@@ -99,17 +99,24 @@ class SponsoredAdvertsTest extends TestCase
         }
     }
 
-    public function test_first_contact_says_help_is_free_and_names_the_languages(): void
+    /**
+     * The welcome is deliberately SHORT now. The free-advice line and the list
+     * of languages used to live here, but a company paragraph on message one is
+     * what makes people stop replying — that detail is saved for when they ask.
+     */
+    public function test_first_contact_stays_brief(): void
     {
         app(MessageRouter::class)->handle($this->msg('hi'), 'Tarisai');
 
         $body = (string) WhatsAppMessage::where('wa_phone', self::PHONE)
             ->where('direction', 'out')->latest('id')->first()?->body;
 
-        $this->assertStringContainsStringIgnoringCase('free', $body);
-        foreach (['English', 'Shona', 'Ndebele'] as $language) {
-            $this->assertStringContainsString($language, $body, "first contact should offer {$language}");
-        }
+        $this->assertStringNotContainsString('Ndebele', $body, 'the languages blurb belongs in a later reply, not the welcome');
+        $this->assertLessThan(400, mb_strlen($body), 'the welcome should stay short');
+
+        // Still says who answered and invites them straight into business.
+        $this->assertStringContainsString(config('app.name'), $body);
+        $this->assertStringContainsString('Grow your page', $body);
     }
 
     public function test_first_contact_still_invites_growth_orders_too(): void

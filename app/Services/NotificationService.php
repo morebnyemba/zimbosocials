@@ -30,8 +30,27 @@ class NotificationService
         'role_changed',
         'order_status_changed',
         'contract_application',
-        'admin_new_registration',
-        'admin_new_order',
+        // admin_new_registration / admin_new_order are deliberately NOT here.
+        // Auto-registration fires on essentially every new contact, so a
+        // per-event WhatsApp alert meant our own number pushed 20+ near-identical
+        // UTILITY messages a day to the admins — a high-volume, low-engagement
+        // pattern WhatsApp flags as spam. They still surface in-app; a single
+        // once-daily whatsapp:admin-digest rolls them up instead.
+        'admin_deposit_proof',   // money waiting on an admin — worth a real ping
+        'admin_daily_digest',    // one rolled-up summary a day
+    ];
+
+    /**
+     * Internal/admin ops alerts. These ride the 24-hour customer service window
+     * as ORDINARY TEXT — no Meta template, so nothing to get approved and no
+     * marketing cap. The trade-off is that they only reach an admin who has
+     * messaged us in the last 24 hours; each alert asks for a short reply,
+     * which reopens the window for the next one. The in-app notification is
+     * always created regardless, so nothing is ever lost.
+     */
+    private const ADMIN_FREE_FORM_TYPES = [
+        'admin_deposit_proof',
+        'admin_daily_digest',
     ];
 
     /**
@@ -90,6 +109,8 @@ class NotificationService
                 $body,
                 $templateParams,
                 $user->locale,
+                // Admin ops alerts: plain text inside the 24h service window.
+                freeForm: in_array($type, self::ADMIN_FREE_FORM_TYPES, true),
             )->onQueue('notifications');
         }
 
@@ -234,6 +255,8 @@ class NotificationService
                 $data['service_name'] ?? '—',
                 $data['amount'] ?? '—',
             ],
+            // Admin ops alerts carry their text in the body (free-form, no
+            // template) — see ADMIN_FREE_FORM_TYPES.
             default => [$user->name],
         };
     }

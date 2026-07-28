@@ -64,6 +64,37 @@ class Responder
         $this->messages->recordOutbound($phone, $body, array_merge(['msg_type' => 'interactive'], $meta), $res['message_id'] ?? null);
     }
 
+    /**
+     * Send an image / video / audio / document / sticker, and record it in the
+     * transcript so the conversation view shows what the customer received.
+     *
+     * $source is a public https URL or a media id from WhatsAppGateway::
+     * uploadMedia(). This is a free-form message, so it only reaches someone
+     * inside the 24-hour service window — check before sending anything
+     * proactive (WhatsAppAccount::serviceWindowOpen).
+     *
+     * Returns false when the send failed, so callers can fall back to text
+     * rather than leave the customer with nothing.
+     */
+    public function sendMedia(string $phone, string $kind, string $source, ?string $caption = null, array $meta = [], ?string $filename = null): bool
+    {
+        $res = $this->gateway->sendMedia($phone, $kind, $source, $caption, $filename);
+
+        if (empty($res['ok'])) {
+            return false;
+        }
+
+        $this->messages->recordOutbound(
+            $phone,
+            // Captions carry the meaning; without one, label the attachment.
+            $caption !== null && trim($caption) !== '' ? $caption : "[{$kind}]",
+            array_merge(['msg_type' => $kind], $meta),
+            $res['message_id'] ?? null,
+        );
+
+        return true;
+    }
+
     public function markRead(?string $waMessageId): void
     {
         $this->gateway->markRead($waMessageId);

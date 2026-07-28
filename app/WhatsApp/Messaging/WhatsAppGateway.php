@@ -117,6 +117,106 @@ class WhatsAppGateway
         ]);
     }
 
+    /**
+     * Media kinds WhatsApp accepts on an outbound message, with Meta's size cap
+     * for each (bytes). We validate against these before uploading so an
+     * oversized file fails here with a clear reason instead of at the API.
+     */
+    public const MEDIA_KINDS = [
+        'image' => 5 * 1024 * 1024,      // jpeg, png
+        'video' => 16 * 1024 * 1024,     // mp4, 3gp (H.264 + AAC)
+        'audio' => 16 * 1024 * 1024,     // aac, amr, mp3, m4a, ogg (opus only)
+        'document' => 100 * 1024 * 1024, // any type
+        'sticker' => 500 * 1024,         // webp
+    ];
+
+    /** Kinds WhatsApp refuses a caption on — it would be silently dropped. */
+    private const NO_CAPTION = ['audio', 'sticker'];
+
+    /**
+     * Send an image / video / audio / document / sticker.
+     *
+     * $source is either a public **https** URL (Meta fetches it itself) or a
+     * media id previously returned by uploadMedia(). Note this is a FREE-FORM
+     * message: like any non-template message it only reaches someone inside the
+     * 24-hour customer service window. Outside it, media must ride a template
+     * with a media header.
+     *
+     * @param  string  $kind  image|video|audio|document|sticker
+     */
+    public function sendMedia(string $to, string $kind, string $source, ?string $caption = null, ?string $filename = null): array
+    {
+        $kind = strtolower(trim($kind));
+        if (! array_key_exists($kind, self::MEDIA_KINDS)) {
+            return ['ok' => false, 'error' => "unsupported media kind: {$kind}"];
+        }
+        if (trim($source) === '') {
+            return ['ok' => false, 'error' => 'no media source'];
+        }
+
+        // Meta only fetches https links; anything else is an uploaded media id.
+        $node = preg_match('#^https://#i', $source)
+            ? ['link' => $source]
+            : ['id' => $source];
+
+        if ($caption !== null && trim($caption) !== '' && ! in_array($kind, self::NO_CAPTION, true)) {
+            $node['caption'] = $this->clamp($caption, 1024);
+        }
+        if ($kind === 'document' && $filename !== null && trim($filename) !== '') {
+            $node['filename'] = $filename;
+        }
+
+        return $this->postMessage($to, ['type' => $kind, $kind => $node]);
+    }
+
+    /**
+     * Upload bytes to Meta and get a reusable media id. Needed for anything not
+     * publicly reachable over https (Meta fetches a `link` itself, so it can't
+     * see local or private storage). Ids are reusable and last ~30 days.
+     *
+     * @return array{ok:bool, media_id?:string, reason?:string, error?:string}
+     */
+    public function uploadMedia(string $contents, string $mime, string $filename = 'file', ?string $kind = null): array
+    {
+        if (! $this->configured()) {
+            return ['ok' => false, 'reason' => 'not_configured'];
+        }
+
+        if ($contents === '') {
+            return ['ok' => false, 'reason' => 'empty', 'error' => 'the file is empty'];
+        }
+
+        // Fail fast on Meta's per-kind size cap rather than after a long upload.
+        $cap = $kind !== null ? (self::MEDIA_KINDS[$kind] ?? null) : null;
+        if ($cap !== null && strlen($contents) > $cap) {
+            return ['ok' => false, 'reason' => 'too_large', 'error' => "{$kind} exceeds ".round($cap / 1048576, 1).'MB'];
+        }
+
+        try {
+            // Multipart upload: once a file is attached every other field has to
+            // ride as its own part too, not as a JSON body.
+            $res = Http::withToken($this->token)
+                ->timeout(60)
+                ->attach('file', $contents, $filename, ['Content-Type' => $mime])
+                ->attach('messaging_product', 'whatsapp')
+                ->attach('type', $mime)
+                ->post("https://graph.facebook.com/{$this->graph}/{$this->phoneNumberId}/media");
+
+            if (! $res->successful()) {
+                $error = (string) $res->json('error.message', $res->body());
+                Log::warning('WhatsAppGateway: media upload failed', ['error' => $error, 'mime' => $mime]);
+
+                return ['ok' => false, 'reason' => 'upload_failed', 'error' => $error];
+            }
+
+            return ['ok' => true, 'media_id' => (string) $res->json('id')];
+        } catch (\Throwable $e) {
+            Log::warning('WhatsAppGateway: media upload exception', ['message' => $e->getMessage()]);
+
+            return ['ok' => false, 'reason' => 'exception', 'error' => $e->getMessage()];
+        }
+    }
+
     private function postMessage(string $to, array $body): array
     {
         return $this->post(array_merge([

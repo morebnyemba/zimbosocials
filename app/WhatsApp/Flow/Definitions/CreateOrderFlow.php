@@ -60,8 +60,25 @@ class CreateOrderFlow extends AbstractFlow
         if ($service) {
             $ctx->set('order_service_id', $service->id);
 
-            if ($link && ($normalized = $this->normalizeLink((string) $link))) {
-                $ctx->set('order_link', $normalized);
+            // The AI may hand us a bare handle it read off a screenshot or that
+            // the customer simply typed — turn it into a url for this platform.
+            $normalized = $link ? $this->normalizeLink((string) $link) : null;
+            if ($link && $normalized === null) {
+                $normalized = \App\Services\Upstream\LinkTarget::fromHandle((string) $link, (string) $service->category);
+            }
+
+            if ($normalized !== null) {
+                // Same recovery as the typed path: a post link the AI accepted
+                // still becomes the page it belongs to, rather than riding
+                // through to the confirmation pointed at the wrong thing.
+                if (\App\Services\Upstream\LinkTarget::mismatch($normalized, (string) $service->name, (string) $service->type, (string) $service->category)) {
+                    $normalized = \App\Services\Upstream\LinkTarget::wantedFor((string) $service->name, (string) $service->type) === 'profile'
+                        ? \App\Services\Upstream\LinkTarget::toProfile($normalized)
+                        : null;
+                }
+                if ($normalized !== null) {
+                    $ctx->set('order_link', $normalized);
+                }
             }
             $qty = (int) preg_replace('/\D+/', '', (string) $quantity);
             if ($qty >= $service->min_qty && $qty <= $service->max_qty) {
@@ -69,7 +86,7 @@ class CreateOrderFlow extends AbstractFlow
             }
 
             if (! $ctx->has('order_link')) {
-                return FlowResult::step("🔗 Send the *link* for your *{$service->name}* order.", 'enter_link');
+                return FlowResult::step($this->askForLink($service), 'enter_link');
             }
             if (! $ctx->has('order_quantity')) {
                 return FlowResult::step("🔢 How many? (min *{$service->min_qty}*, max *{$service->max_qty}*)", 'enter_quantity');
@@ -182,21 +199,73 @@ class CreateOrderFlow extends AbstractFlow
 
         $ctx->set('order_service_id', $service->id);
 
-        return FlowResult::step(
-            "🔗 Send the *link* for your order (the profile/post URL for *{$service->name}*).",
-            'enter_link'
+        return FlowResult::step($this->askForLink($service), 'enter_link');
+    }
+
+    /**
+     * Ask for the link, ALWAYS with a concrete example of the right shape for
+     * this service. "Send the link" alone is where people get stuck — they know
+     * their page, not how to copy its url.
+     */
+    private function askForLink(Service $service): string
+    {
+        $example = \App\Services\Upstream\LinkTarget::exampleFor(
+            (string) $service->category, (string) $service->name, (string) $service->type
         );
+        $wantsPost = \App\Services\Upstream\LinkTarget::wantedFor((string) $service->name, (string) $service->type) === 'post';
+        $what = $wantsPost ? 'the *post/video*' : 'your *page/profile*';
+
+        return "🔗 Send the link to {$what} for *{$service->name}*.\n\n"
+            ."Example: _{$example}_\n"
+            .'You can also just send your *username*, or a *screenshot* of the page. 👍';
     }
 
     private function enterLink(string $input, SessionContext $ctx): FlowResult
     {
+        $service = Service::find($ctx->get('order_service_id'));
         $link = $this->normalizeLink($input);
+
+        // Not a url — they may have simply typed their handle ("marvadesigns").
+        // We know the platform from the service, so build the url for them.
+        if ($link === null && $service) {
+            $link = \App\Services\Upstream\LinkTarget::fromHandle($input, (string) $service->category);
+        }
+
         if ($link === null) {
-            return FlowResult::retry("That doesn't look like a valid link. Send the profile/post URL (e.g. tiktok.com/@yourname), or type *cancel*.", 'enter_link');
+            $help = $service
+                ? $this->askForLink($service)
+                : "🔗 Send the link to your *page/profile*.\n\nExample: _tiktok.com/@yourname_\nYou can also just send your *username*, or a *screenshot* of the page. 👍";
+
+            return FlowResult::retry("That doesn't look like a link I can use.\n\n{$help}\n\nOr type *cancel* to stop.", 'enter_link');
+        }
+
+        // A followers order pointed at a post delivers nothing. Getting a page
+        // link out of the Facebook app is genuinely hard, though, so try to
+        // RECOVER the page from what they sent before asking them to go back
+        // and find it — the post url usually names the page already.
+        if ($service && \App\Services\Upstream\LinkTarget::mismatch($link, (string) $service->name, (string) $service->type, (string) $service->category)) {
+            $derived = \App\Services\Upstream\LinkTarget::wantedFor((string) $service->name, (string) $service->type) === 'profile'
+                ? \App\Services\Upstream\LinkTarget::toProfile($link)
+                : null;
+
+            if ($derived === null) {
+                return FlowResult::retry(
+                    '⚠️ '.\App\Services\Upstream\LinkTarget::mismatch($link, (string) $service->name, (string) $service->type, (string) $service->category),
+                    'enter_link'
+                );
+            }
+
+            // Recovered it — say which page we'll use so they can correct us.
+            $ctx->set('order_link', $derived);
+
+            return FlowResult::step(
+                "👍 That was a link to a post, so I've taken the page from it:\n{$derived}\n\n"
+                ."🔢 How many? (min *{$service->min_qty}*, max *{$service->max_qty}*)",
+                'enter_quantity'
+            );
         }
 
         $ctx->set('order_link', $link);
-        $service = Service::find($ctx->get('order_service_id'));
 
         return FlowResult::step(
             "🔢 How many? (min *{$service->min_qty}*, max *{$service->max_qty}*)",

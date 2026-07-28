@@ -53,7 +53,10 @@ class WhatsAppAiEval extends Command
                 'authenticated' => (bool) ($case['authenticated'] ?? true),
                 'current_flow' => $case['current_flow'] ?? null,
                 'current_state' => $case['current_state'] ?? null,
-                'history' => [],
+                // Prior turns, so a case can replay a follow-up in context
+                // (e.g. "I listed 3 services, they replied '2'"). Each entry is
+                // {user, model}, matching the runtime's short-term memory.
+                'history' => (array) ($case['history'] ?? []),
             ]);
 
             $gotFlow = $res['flow'] ?? null;

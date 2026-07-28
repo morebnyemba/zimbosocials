@@ -162,6 +162,7 @@ class SendMarketingBroadcastJob implements ShouldQueue
                         $this->templateParams($waParamLabels, (string) $user->name, (string) $subject, (string) $body),
                         $locale,
                         requireTemplate: true,
+                        marketing: true,
                     )->onQueue('notifications');
                     $sentWhatsApp++;
                     $sentPhones[$this->phoneKey((string) $user->whatsapp_number)] = true;
@@ -219,6 +220,7 @@ class SendMarketingBroadcastJob implements ShouldQueue
                                 $this->templateParams($waParamLabels, (string) $name, (string) $subject, (string) $body),
                                 $locale,
                                 requireTemplate: true,
+                                marketing: true,
                             )->onQueue('notifications');
 
                             $sentPhones[$key] = true;

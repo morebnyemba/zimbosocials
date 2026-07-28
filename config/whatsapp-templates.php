@@ -104,6 +104,11 @@ return [
             'buttons' => [],
         ],
 
+        // NOTE: admin ops alerts (deposit proof, daily digest) deliberately have
+        // NO template. They go out as ordinary text inside the 24-hour customer
+        // service window — see NotificationService::ADMIN_FREE_FORM_TYPES — so
+        // there is nothing to submit to Meta for approval.
+
         // ─── Balance ─────────────────────────────────────────────────────────
         'balance_adjusted' => [
             'category' => 'UTILITY',

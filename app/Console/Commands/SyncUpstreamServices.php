@@ -120,6 +120,17 @@ class SyncUpstreamServices extends Command
             }
         }
 
+        // Catalogue pages cache their aggregates — drop them so a sync shows up
+        // straight away rather than whenever the TTL happens to lapse.
+        foreach ([
+            'marketing:services:v1',
+            'admin:services:categories',
+            'admin:services:category_counts',
+            'admin:services:active_counts',
+        ] as $key) {
+            \Illuminate\Support\Facades\Cache::forget($key);
+        }
+
         $this->info("Successfully synced services. Updated: {$updatedCount}");
 
         return self::SUCCESS;

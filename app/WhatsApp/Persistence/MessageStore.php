@@ -40,7 +40,7 @@ class MessageStore
             'wa_message_id' => $waMessageId,
             'msg_type' => $meta['msg_type'] ?? 'text',
             'body' => $body,
-        ], array_intersect_key($meta, array_flip(['flow', 'handled_by', 'intent', 'confidence', 'ai_used', 'payload']))));
+        ], array_intersect_key($meta, array_flip(['flow', 'handled_by', 'intent', 'confidence', 'ai_used', 'payload', 'media_url', 'media_mime']))));
     }
 
     public function tagInbound(int $id, array $meta): void

@@ -1,7 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Megaphone, Search, Loader2, Send, RotateCcw, CheckCircle2, PlayCircle } from 'lucide-react';
+import { Megaphone, Search, Loader2, Send, RotateCcw, CheckCircle2, PlayCircle, Paperclip } from 'lucide-react';
 
 interface Booking {
     id: number;
@@ -66,6 +66,16 @@ export default function AdvertsIndex({ bookings, filters, statuses, stats }: Pro
         if (!draft.trim()) return;
         setBusy(b.id);
         router.post(route('admin.adverts.message', b.id), { message: draft }, {
+            preserveScroll: true,
+            onFinish: () => { setBusy(null); setMessaging(null); setDraft(''); },
+        });
+    };
+
+    // Upload goes as multipart; any text in the composer becomes the caption.
+    const sendMedia = (b: Booking, file: File) => {
+        setBusy(b.id);
+        router.post(route('admin.adverts.media', b.id), { file, caption: draft }, {
+            forceFormData: true,
             preserveScroll: true,
             onFinish: () => { setBusy(null); setMessaging(null); setDraft(''); },
         });
@@ -198,6 +208,21 @@ export default function AdvertsIndex({ bookings, filters, statuses, stats }: Pro
                                             className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-40">
                                             Send
                                         </button>
+                                        {/* Deliver the finished advert video (or a picture) into the
+                                            same chat; any text above rides along as the caption. */}
+                                        <label className={`px-4 py-2.5 rounded-xl bg-zinc-100 text-zinc-600 text-sm font-bold hover:bg-zinc-200 cursor-pointer ${busy === b.id ? 'opacity-40 pointer-events-none' : ''}`}>
+                                            <Paperclip size={14} className="inline" /> Video / photo
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/jpeg,image/png,video/mp4,video/3gpp"
+                                                onChange={e => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) sendMedia(b, file);
+                                                    e.target.value = '';
+                                                }}
+                                            />
+                                        </label>
                                     </div>
                                 )}
 

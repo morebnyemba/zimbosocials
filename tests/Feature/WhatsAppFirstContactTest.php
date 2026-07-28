@@ -54,6 +54,47 @@ class WhatsAppFirstContactTest extends TestCase
         $this->assertStringContainsString('Grow your page', $intro->body);
     }
 
+    public function test_the_ai_speaks_the_first_contact_welcome_when_available(): void
+    {
+        config(['services.gemini.api_key' => 'k']);
+
+        $prompt = null;
+        $client = Mockery::mock(\App\Services\AI\GeminiClient::class);
+        $client->shouldReceive('isConfigured')->andReturn(true);
+        $client->shouldReceive('generateJson')->andReturnUsing(function (string $p) use (&$prompt) {
+            $prompt = $p;
+
+            return ['reply' => 'Mhoro Tendai! 👋 Tiri ZimboSocials — tinowedzera followers uye tinomhanyisa maadverts.', 'follow_up' => null, 'flow' => 'none', 'flow_data' => []];
+        });
+        $this->app->instance(\App\Services\AI\GeminiClient::class, $client);
+
+        app(MessageRouter::class)->handle($this->msg('hi'), 'Tendai');
+
+        // The model was briefed that this is a first contact...
+        $this->assertStringContainsString('FIRST CONTACT', (string) $prompt);
+        // ...and ITS words went out — not the canned intro.
+        $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringContainsString('Mhoro Tendai', (string) $out->body);
+        $this->assertStringNotContainsString('Type *menu* to browse', (string) $out->body);
+    }
+
+    public function test_a_brand_new_contact_still_gets_a_welcome_when_the_ai_is_down(): void
+    {
+        config(['services.gemini.api_key' => 'k']);
+
+        // AI configured but failing (timeout / over budget) — must never go silent.
+        $client = Mockery::mock(\App\Services\AI\GeminiClient::class);
+        $client->shouldReceive('isConfigured')->andReturn(true);
+        $client->shouldReceive('generateJson')->andReturn(null);
+        $this->app->instance(\App\Services\AI\GeminiClient::class, $client);
+
+        app(MessageRouter::class)->handle($this->msg('hi'), 'Tendai');
+
+        $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertNotNull($out, 'a first contact must never be met with silence');
+        $this->assertStringContainsString('Grow your page', (string) $out->body);
+    }
+
     public function test_taking_an_action_auto_registers_silently_and_proceeds(): void
     {
         \App\Models\Service::create([

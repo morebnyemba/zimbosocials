@@ -45,6 +45,7 @@ class MessageRouter
         private readonly IntentEngine $intent,
         private readonly \App\WhatsApp\Deposit\ProofIntake $proof,
         private readonly \App\WhatsApp\Messaging\WhatsAppGateway $gateway,
+        private readonly \App\WhatsApp\Messaging\MediaArchive $archive,
     ) {}
 
     public function handle(array $msg, ?string $displayName = null): void
@@ -127,6 +128,11 @@ class MessageRouter
             try {
                 $media = $msg['media'] ?? null;
                 if (is_array($media) && ! empty($media['id'])) {
+                    // Keep a local copy first — Meta's media id expires, so this
+                    // is our only chance to make it viewable later. It also
+                    // hands the bytes to the proof/AI paths so they don't each
+                    // re-download the same file.
+                    $media = $this->archive->capture($media, $phone, $inboundId);
                     // Any caption rides on the message, not the media node.
                     $tag = $this->handleMedia($account, $ctx, $media + ['caption' => $text]);
                 } else {
@@ -164,6 +170,15 @@ class MessageRouter
             $fromAd = $ad !== null || $this->looksLikeAdCta($text);
 
             if (in_array(mb_strtolower($text), $greetings, true) || ($fromAd && ! $this->mentionsAProduct($text))) {
+                // Let the AI speak first — it greets in THEIR language, can react
+                // to the ad they clicked, and opens the sale in its own words
+                // (the FIRST CONTACT block briefs it). One voice from message one.
+                if ($this->consultAi($ctx, $account, $text, inFlow: false)) {
+                    return ['handled_by' => 'ai', 'intent' => 'first_contact_intro'];
+                }
+
+                // Fallback ONLY when the AI is unavailable/over budget: a brand-new
+                // contact must never be met with silence.
                 // Profile names are free text and are often an email or a phone
                 // number — greet by name only when it actually looks like one.
                 $friendly = $account->firstName();
@@ -177,13 +192,10 @@ class MessageRouter
                 // of our languages), then a short scannable menu of what to do.
                 $this->responder->send(
                     $phone,
-                    $intro."\n\n"
-                    ."More *followers, likes and views* to grow your page — plus *sponsored adverts* that bring new customers to your business. Fast, and paid with EcoCash & other local methods, right here on WhatsApp.\n\n"
-                    ."💬 Ask me anything — advice is *free*, in *English*, *Shona* or *Ndebele*.\n\n"
+                    $intro." We grow pages with *followers, likes and views*, and run *sponsored adverts* that bring you new customers.\n\n"
                     ."So — what would you like to do today?\n"
                     ."• *Grow your page* — e.g. *\"1000 Instagram followers\"*\n"
-                    ."• *Advertise* to find new customers\n"
-                    ."• Type *menu* to browse 🚀",
+                    ."• *Advertise* to find new customers",
                     ['handled_by' => 'system', 'intent' => $fromAd ? 'first_contact_ad' : 'first_contact']
                 );
 
@@ -339,6 +351,120 @@ class MessageRouter
         return false;
     }
 
+    /**
+     * Has the assistant just said essentially the same thing again?
+     *
+     * Compared on a fingerprint (letters/digits only, first 80 chars) so cosmetic
+     * differences — a changed emoji, the service name spelled out, "Sharp!"
+     * prepended — still count as a repeat.
+     */
+    private function isRepeating(SessionContext $ctx, string $reply): bool
+    {
+        $words = $this->significantWords($reply);
+        $previous = (array) $ctx->get('_last_reply_words', []);
+
+        // Compared on MEANING, not wording. The model rarely repeats itself
+        // verbatim — it rewords the same question ("which sounds better?" →
+        // "which are you leaning towards?"), which reads to the customer as the
+        // same question asked again. Overlapping vocabulary catches that.
+        // 0.55 sits in a wide gap: measured against real transcripts, reworded
+        // repeats score 0.64-0.82 while genuinely different replies score
+        // 0.00-0.14. False positives are costly (a good conversation handed to
+        // a human), so the threshold stays well clear of normal talk.
+        $repeats = $this->overlap($words, $previous) >= 0.55
+            ? (int) $ctx->get('_reply_repeats', 0) + 1
+            : 0;
+
+        $ctx->set('_last_reply_words', $words);
+        $ctx->set('_reply_repeats', $repeats);
+
+        // Said once is normal, twice can be a genuine re-ask — three times is a
+        // loop, and by then the customer has already answered twice.
+        return $repeats >= 2;
+    }
+
+    /** Content words only — the filler is identical in every message. */
+    private function significantWords(string $reply): array
+    {
+        $stop = ['the', 'and', 'for', 'you', 'your', 'with', 'that', 'this', 'are', 'our', 'can', 'would', 'like',
+            'what', 'which', 'want', 'weve', 'well', 'lets', 'let', 'know', 'one', 'first', 'start', 'shaa',
+            'sharp', 'great', 'okay', 'here', 'there', 'have', 'help', 'more', 'they', 'them', 'its', 'from'];
+
+        $normalized = mb_strtolower((string) preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $reply));
+        $words = array_filter(
+            preg_split('/\s+/', $normalized) ?: [],
+            fn ($w) => mb_strlen($w) > 2 && ! in_array($w, $stop, true)
+        );
+
+        return array_values(array_unique($words));
+    }
+
+    /**
+     * Overlap coefficient — shared words over the SMALLER set. Deliberately not
+     * Jaccard: a long pitch followed by a short restatement of the same question
+     * scores low on Jaccard (the union balloons) even though the short one adds
+     * nothing new, which is exactly the case we need to catch.
+     */
+    private function overlap(array $a, array $b): float
+    {
+        if ($a === [] || $b === []) {
+            return 0.0;
+        }
+
+        return count(array_intersect($a, $b)) / max(1, min(count($a), count($b)));
+    }
+
+    /**
+     * Escape a loop: hand the conversation to the deterministic order flow when
+     * we know what they're buying, otherwise get a human in. Returns false when
+     * neither is possible, so the caller just sends the reply as usual.
+     */
+    private function breakLoop(SessionContext $ctx, WhatsAppAccount $account, array $flowData): bool
+    {
+        $ctx->set('_reply_repeats', 0);
+
+        // The flow is a confirmation step, never an interviewer — so we only
+        // hand over when everything is already gathered and it can open
+        // straight at the price. Anything less would put the customer through
+        // the step-by-step questioning we're trying to spare them.
+        $serviceId = $flowData['service_id'] ?? $ctx->get('order_service_id');
+        $link = $flowData['link'] ?? $ctx->get('order_link');
+        $quantity = $flowData['quantity'] ?? $ctx->get('order_quantity');
+
+        if ($serviceId && $link && $quantity && ! $ctx->inFlow()) {
+            Log::info('WhatsApp AI loop broken — jumping straight to confirmation', [
+                'phone' => $ctx->phone, 'service_id' => $serviceId,
+            ]);
+            $ctx->set('_prefill_service_id', $serviceId);
+            $ctx->set('_prefill_link', $link);
+            $ctx->set('_prefill_quantity', $quantity);
+            $this->startFlow('order', $ctx, $account);
+
+            return true;
+        }
+
+        // Nothing concrete to fall back on — a person can untangle this faster
+        // than another identical question can.
+        Log::warning('WhatsApp AI loop broken — escalating to a human', ['phone' => $ctx->phone]);
+        if ($ctx->inFlow()) {
+            $this->engine->cancel($ctx);
+        }
+        $this->accounts->startAgentHandoff($ctx->phone);
+        $this->responder->send(
+            $ctx->phone,
+            "Sorry — I'm going in circles here. 🙏 Let me get a real person to help you; they'll reply right here shortly.",
+            ['handled_by' => 'system', 'intent' => 'loop_handoff']
+        );
+        \App\Services\NotificationService::notifyAdmins(
+            'admin_whatsapp_handoff',
+            'WhatsApp chat stuck in a loop',
+            "The assistant repeated itself to +{$ctx->phone} and handed over. Reply from Admin → WA Assistant → Conversations.",
+            ['wa_phone' => $ctx->phone]
+        );
+
+        return true;
+    }
+
     /** Whether the text already names a platform/product — a real ask, not a canned CTA. */
     private function mentionsAProduct(string $text): bool
     {
@@ -404,6 +530,18 @@ class MessageRouter
             // Keep short-term memory (last 6 exchanges) for follow-ups.
             $history[] = ['user' => $text, 'model' => $reply];
             $ctx->set('_ai_history', array_slice($history, -6));
+        }
+
+        // STUCK-LOOP BREAKER. Asking the same thing over and over is how a sale
+        // dies: a customer who has answered twice and is asked a third time
+        // concludes the bot is broken and leaves. When the model repeats itself,
+        // stop trusting it to get out on its own and switch to the deterministic
+        // flow (which asks once, with an example, and validates the answer).
+        if (! $willStartFlow && $reply !== '' && $this->isRepeating($ctx, $reply)) {
+            $rescued = $this->breakLoop($ctx, $account, $flowData);
+            if ($rescued) {
+                return true;
+            }
         }
 
         // Standalone reply ONLY when no flow will speak — one voice, never two.
@@ -592,7 +730,11 @@ class MessageRouter
             return false;
         }
 
-        $dl = $this->gateway->downloadMedia((string) $media['id']);
+        // The archive already fetched these bytes on the way in — reuse them
+        // rather than paying for a second round-trip inside the webhook.
+        $dl = isset($media['contents'])
+            ? ['ok' => true, 'contents' => $media['contents'], 'mime' => $mime]
+            : $this->gateway->downloadMedia((string) $media['id']);
         if (empty($dl['ok']) || ($dl['contents'] ?? '') === '') {
             return false;
         }
