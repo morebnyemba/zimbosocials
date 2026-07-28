@@ -46,6 +46,21 @@ RUN apk add --no-cache \
     && apk del --no-network .build-deps \
     && rm -rf /var/cache/apk/*
 
+# The stock pool allows five workers. The WhatsApp webhook calls Gemini inline,
+# so each inbound message holds a worker for seconds at a time — two or three
+# concurrent conversations consume the pool, and then every other request queues
+# behind them until nginx gives up and returns 504 (which is what a login
+# timing out during a busy period actually is).
+RUN { \
+        echo '[www]'; \
+        echo 'pm = dynamic'; \
+        echo 'pm.max_children = 24'; \
+        echo 'pm.start_servers = 6'; \
+        echo 'pm.min_spare_servers = 4'; \
+        echo 'pm.max_spare_servers = 12'; \
+        echo 'pm.max_requests = 500'; \
+    } > /usr/local/etc/php-fpm.d/zz-pool.conf
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
