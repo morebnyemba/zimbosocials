@@ -14,7 +14,7 @@ COPY public ./public
 RUN npm run build
 
 # ── Stage 2: PHP runtime ──────────────────────────────────────────────────────
-FROM php:8.3-fpm-alpine
+FROM php:8.3-fpm-alpine AS app
 
 # intl/gd/zip cover image handling (payment proofs) and exports; pdo_mysql is
 # the production driver; pcntl lets queue workers handle signals for graceful
@@ -53,3 +53,17 @@ RUN composer dump-autoload --optimize --no-dev \
 # php-fpm listens here; the nginx service proxies to it.
 EXPOSE 9000
 CMD ["php-fpm"]
+
+# ── Stage 3: web server ───────────────────────────────────────────────────────
+#
+# nginx needs the SAME public/ directory php-fpm is serving from: it resolves
+# try_files against real paths and serves the built assets itself. Running a
+# bare nginx image here means /var/www/html/public is empty, so every request —
+# including index.php — 404s before php-fpm is ever reached.
+#
+# The files are copied from the app stage rather than shared through a named
+# volume, because Docker only seeds a volume when it is empty: a volume would
+# quietly keep serving the previous release's assets after every rebuild.
+FROM nginx:alpine AS web
+COPY --from=app /var/www/html/public /var/www/html/public
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
