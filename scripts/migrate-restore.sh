@@ -56,11 +56,38 @@ read_env() {  # read_env <file> <key>
 }
 
 # ── 1. .env ───────────────────────────────────────────────────────────────────
+#
+# The archive's .env carries the app's identity — API keys, APP_KEY, mail — and
+# that is what we want. But it also carries the OLD server's DATABASE settings,
+# and those describe a machine we are migrating away from. Restoring them
+# wholesale onto a fresh compose stack points the app (and this script's own
+# import) at a database that does not exist here.
+#
+# So: infrastructure keys already configured on THIS server win; everything else
+# comes from the archive.
+PRESERVE_KEYS=(DB_CONNECTION DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD
+    DB_ROOT_PASSWORD QUEUE_CONNECTION CACHE_STORE SESSION_DRIVER APP_PORT)
+declare -A PRESERVED=()
+
 if [[ -f .env ]]; then
     cp .env ".env.before-restore.$(date +%Y%m%d-%H%M%S)"
     echo "  ↩ existing .env saved as .env.before-restore.*"
+    for key in "${PRESERVE_KEYS[@]}"; do
+        value="$(read_env .env "$key")"
+        [[ -n "$value" ]] && PRESERVED["$key"]="$value"
+    done
 fi
+
 cp "$SRC/env" .env
+
+if (( ${#PRESERVED[@]} )); then
+    for key in "${!PRESERVED[@]}"; do
+        grep -v "^${key}=" .env > "$WORK/.env.tmp" && mv "$WORK/.env.tmp" .env
+        printf '%s=%s\n' "$key" "${PRESERVED[$key]}" >> .env
+    done
+    echo "  ✓ kept this server's own settings: ${!PRESERVED[*]}"
+fi
+
 chmod 600 .env
 echo "  ✓ .env restored"
 
