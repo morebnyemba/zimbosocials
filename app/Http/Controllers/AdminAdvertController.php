@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\AdvertBooking;
 use App\Models\AuditLog;
 use App\Models\User;
-use App\Services\NotificationService;
-use App\WhatsApp\Messaging\WhatsAppGateway;
+use App\Models\WhatsAppAccount;
 use App\Models\WhatsAppMessage;
+use App\Services\NotificationService;
+use App\WhatsApp\Messaging\MediaArchive;
+use App\WhatsApp\Messaging\Responder;
+use App\WhatsApp\Messaging\WhatsAppGateway;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -135,6 +138,67 @@ class AdminAdvertController extends Controller
         return $this->messageCustomer($advert, $data['message'])
             ? back()->with('success', 'Message sent.')
             : back()->with('error', 'Could not send the message — check the WhatsApp connection.');
+    }
+
+    /**
+     * Send the customer a picture or their finished advert video.
+     *
+     * The file goes to Meta first (an uploaded media id, rather than a public
+     * link) so this works regardless of whether storage is reachable from the
+     * internet. Media is a FREE-FORM message, so it only lands inside the
+     * 24-hour service window — we check up front rather than report a success
+     * the customer never sees.
+     */
+    public function media(Request $request, AdvertBooking $advert): RedirectResponse
+    {
+        $data = $request->validate([
+            // Meta caps video at 16 MB and images at 5 MB; max: is in kilobytes.
+            'file' => ['required', 'file', 'mimetypes:image/jpeg,image/png,video/mp4,video/3gpp', 'max:16384'],
+            'caption' => ['nullable', 'string', 'max:1024'],
+        ]);
+
+        $phone = (string) $advert->wa_phone;
+        if ($phone === '') {
+            return back()->with('error', 'This booking has no WhatsApp number.');
+        }
+
+        if (! WhatsAppAccount::serviceWindowOpen($phone)) {
+            return back()->with('error', 'The 24-hour reply window has closed — ask the customer to send a message first, then resend.');
+        }
+
+        $file = $request->file('file');
+        $mime = (string) $file->getMimeType();
+        $kind = str_starts_with($mime, 'video/') ? 'video' : 'image';
+        $contents = (string) file_get_contents($file->getRealPath());
+
+        // Keep our own copy so the conversation view can replay what we sent.
+        $localUrl = app(MediaArchive::class)->keepOutbound($contents, $mime, $phone);
+
+        $upload = app(WhatsAppGateway::class)->uploadMedia(
+            $contents,
+            $mime,
+            $file->getClientOriginalName() ?: 'advert',
+            $kind,
+        );
+        if (empty($upload['ok'])) {
+            return back()->with('error', 'WhatsApp upload failed: '.($upload['error'] ?? $upload['reason'] ?? 'unknown'));
+        }
+
+        $sent = app(Responder::class)->sendMedia(
+            $phone,
+            $kind,
+            (string) $upload['media_id'],
+            $data['caption'] ?? null,
+            ['handled_by' => 'agent', 'intent' => 'advert_media', 'media_url' => $localUrl, 'media_mime' => $mime],
+        );
+
+        if (! $sent) {
+            return back()->with('error', 'Could not send the '.$kind.' — check the WhatsApp connection.');
+        }
+
+        AuditLog::log('advert.media_sent', Auth::id(), AdvertBooking::class, $advert->id, [], ['kind' => $kind]);
+
+        return back()->with('success', ucfirst($kind).' sent to the customer.');
     }
 
     private function messageCustomer(AdvertBooking $advert, string $body): bool

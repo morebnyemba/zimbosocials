@@ -28,6 +28,35 @@
         "expect_flow": null
     },
     {
+        "message": "2",
+        "authenticated": true,
+        "history": [
+            {
+                "user": "Ndikudawo ma followers e TikTok",
+                "model": "Sharp! Tine aya: 1. *TikTok Followers* 30D Refill — $10.00 per 1,000 (min 10)  2. *TikTok Followers* LOW DROP 7D Refill — $7.00 per 1,000 (min 10)  3. *TikTok Followers* HQ 30D Refill — $12.74 per 1,000 (min 10). Ndeipi yaunoda?"
+            }
+        ],
+        "expect_flow": "order",
+        "expect_entities": {
+            "platform": "tiktok"
+        }
+    },
+    {
+        "message": "1000",
+        "authenticated": true,
+        "history": [
+            {
+                "user": "Ndikudawo ma followers e TikTok, low drop, link ndeye tiktok.com/@reallensotsofficial",
+                "model": "Sharp! *TikTok Followers* LOW DROP 7D Refill it is. Unoda vangani?"
+            }
+        ],
+        "expect_flow": "order",
+        "expect_entities": {
+            "platform": "tiktok",
+            "quantity": 1000
+        }
+    },
+    {
         "message": "add $20 to my wallet",
         "authenticated": true,
         "expect_flow": "deposit",

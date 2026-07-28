@@ -61,6 +61,11 @@ Schedule::command('orders:flag-stuck')->dailyAt('08:00')->withoutOverlapping();
 Schedule::command('whatsapp:nudge-stalled')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('whatsapp:remind-saved-orders')->hourly()->withoutOverlapping();
 
+// One rolled-up admin summary a day, in place of a per-event WhatsApp ping for
+// every sign-up and order (that volume of near-identical utility messages to
+// our own number reads as spam to WhatsApp).
+Schedule::command('whatsapp:admin-digest')->dailyAt('18:00')->withoutOverlapping();
+
 // Nightly database dump to storage/app/backups (keeps the last 14)
 Schedule::command('db:backup')->dailyAt('03:30')->withoutOverlapping();
 

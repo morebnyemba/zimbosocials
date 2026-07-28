@@ -47,6 +47,39 @@ class WhatsAppAccount extends Model
     }
 
     /**
+     * Is the 24-hour customer service window open for this number?
+     *
+     * WhatsApp only allows free-form (non-template) messages for 24 hours after
+     * the person last messaged US — a business message never opens the window.
+     * last_seen_at is stamped on every inbound message (AccountStore::resolve),
+     * so it is exactly that clock. Outside the window Meta rejects a free-form
+     * send (error 131047), so callers must check before sending.
+     */
+    public static function serviceWindowOpen(string $phone, int $hours = 24): bool
+    {
+        $key = self::phoneKey($phone);
+        if ($key === '') {
+            return false;
+        }
+
+        return self::query()
+            ->where('wa_phone', 'like', '%'.$key)
+            ->where('last_seen_at', '>=', now()->subHours($hours))
+            ->exists();
+    }
+
+    /**
+     * The last 9 digits of a number — tolerant of the ways the same phone gets
+     * stored ("0771234567", "+263 77 123 4567", "263771234567").
+     */
+    public static function phoneKey(string $phone): string
+    {
+        $digits = (string) preg_replace('/\D+/', '', $phone);
+
+        return strlen($digits) > 9 ? substr($digits, -9) : $digits;
+    }
+
+    /**
      * A known contact coming back after a quiet spell — worth a warm
      * welcome-back. False for brand-new numbers (no prior visit) and for anyone
      * active within the window.

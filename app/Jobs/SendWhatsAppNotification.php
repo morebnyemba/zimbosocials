@@ -39,10 +39,31 @@ class SendWhatsAppNotification implements ShouldQueue
          * for most of a campaign. Fail loudly instead.
          */
         public readonly bool $requireTemplate = false,
+        /**
+         * Route through the marketing (MM Lite) path when enabled. This is a
+         * separate axis from requireTemplate: a UTILITY admin alert is
+         * template-only but is NOT marketing, so it must stay on the standard
+         * Cloud API path even when MM Lite is on. Campaign sends set both.
+         */
+        public readonly bool $marketing = false,
+        /**
+         * Send as ordinary text inside the 24-hour customer service window,
+         * with no template at all. Used for internal/admin ops alerts: no Meta
+         * approval to wait on and no marketing cap — but it ONLY reaches
+         * someone who messaged us in the last 24 hours, so we check first
+         * rather than fire a send Meta will reject.
+         */
+        public readonly bool $freeForm = false,
     ) {}
 
     public function handle(WhatsAppService $whatsapp): void
     {
+        if ($this->freeForm) {
+            $this->sendInWindow($whatsapp);
+
+            return;
+        }
+
         $templates = config('whatsapp-templates.templates', []);
 
         // MUST match the language the template was REGISTERED under, not the
@@ -61,7 +82,7 @@ class SendWhatsAppNotification implements ShouldQueue
                 $this->templateParams,
                 // Route campaign sends through MM Lite when it's enabled — it's
                 // the marketing-optimised path (and Meta's future-only one).
-                marketing: $this->requireTemplate,
+                marketing: $this->marketing,
             );
 
             // If template send succeeded, we're done
@@ -110,19 +131,52 @@ class SendWhatsAppNotification implements ShouldQueue
     }
 
     /**
+     * Free-form ops alert: plain text, no template, delivered only inside the
+     * 24-hour customer service window. The window opens when THEY message us,
+     * so an alert asking for a reply keeps the next one deliverable.
+     */
+    private function sendInWindow(WhatsAppService $whatsapp): void
+    {
+        $message = "🔔 *{$this->title}*\n\n{$this->body}";
+
+        // Outside the window Meta rejects this (131047). Record it as failed so
+        // it is visible in the console rather than looking like a silent
+        // success — the in-app notification still carries the information.
+        if (! \App\Models\WhatsAppAccount::serviceWindowOpen($this->to)) {
+            Log::warning('WhatsApp ops alert not sent — 24h service window closed', [
+                'to' => $this->to,
+                'type' => $this->templateName,
+                'hint' => 'The recipient must send us a WhatsApp message to reopen the window.',
+            ]);
+            $this->recordOutbound(null, 'outside the 24h service window — recipient must message us to reopen it', 131047, $message, 'text');
+
+            return;
+        }
+
+        $res = $whatsapp->sendMessage($this->to, $message);
+        $this->recordOutbound(
+            $res['message_id'] ?? null,
+            empty($res['ok']) ? ($res['error'] ?? 'send failed') : null,
+            null,
+            $message,
+            'text',
+        );
+    }
+
+    /**
      * Put every template send in the transcript. Without this a campaign is
      * invisible: no admin can see who was messaged, and with no wa_message_id
      * Meta's delivery receipts (sent/delivered/read/failed) can never be matched
      * back — which is exactly how a broadcast looks like "nothing happened".
      */
-    private function recordOutbound(?string $messageId, ?string $error, ?int $errorCode, ?string $body = null): void
+    private function recordOutbound(?string $messageId, ?string $error, ?int $errorCode, ?string $body = null, string $msgType = 'template'): void
     {
         try {
             \App\Models\WhatsAppMessage::create([
                 'wa_phone' => $this->to,
                 'direction' => 'out',
                 'wa_message_id' => $messageId,
-                'msg_type' => 'template',
+                'msg_type' => $msgType,
                 'body' => $body ?? "*{$this->title}*\n\n{$this->body}",
                 'handled_by' => 'system',
                 'intent' => $this->templateName,

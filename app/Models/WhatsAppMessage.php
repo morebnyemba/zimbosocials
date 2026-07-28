@@ -16,6 +16,7 @@ class WhatsAppMessage extends Model
 
     protected $fillable = [
         'wa_phone', 'direction', 'wa_message_id', 'msg_type', 'body',
+        'media_url', 'media_mime',
         'payload', 'flow', 'handled_by', 'intent', 'confidence',
         'ai_used', 'delivery_status',
     ];

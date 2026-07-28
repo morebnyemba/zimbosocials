@@ -12,6 +12,7 @@ use App\Services\AI\ServiceListFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -28,7 +29,10 @@ class AdminServiceController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('name_sn', 'like', "%{$search}%")
                     ->orWhere('category', 'like', "%{$search}%")
-                    ->orWhere('id', $search)
+                    // Only probe the numeric id with a numeric search — passing
+                    // text to an integer column forces a scan and errors under
+                    // strict MySQL.
+                    ->when(ctype_digit((string) $search), fn ($w) => $w->orWhere('id', (int) $search))
                     // Also match the upstream/provider service id an admin pastes
                     // from the provider panel (exact, plus a loose contains).
                     ->orWhereHas('upstreams', function ($u) use ($search) {
@@ -53,10 +57,13 @@ class AdminServiceController extends Controller
             ->paginate(30)
             ->withQueryString();
 
-        $categories = Service::select('category')
+        // These three aggregates scan the whole table and are identical for
+        // every admin on every page of every filter, so they are computed once
+        // and shared. Cleared by the sync command when the catalogue changes.
+        $categories = Cache::remember('admin:services:categories', now()->addMinutes(10), fn () => Service::select('category')
             ->distinct()
             ->orderBy('category')
-            ->pluck('category');
+            ->pluck('category'));
 
         // Category -> service count, for the "Merge Categories" tool — lets an
         // admin see at a glance which raw category strings likely represent
@@ -64,16 +71,16 @@ class AdminServiceController extends Controller
         // unify them, independent of the automatic keyword-based normalizer
         // (which only recognizes a fixed list of platforms and can't handle
         // arbitrary/custom categories the admin wants merged).
-        $categoryCounts = Service::selectRaw('category, COUNT(*) as cnt')
+        $categoryCounts = Cache::remember('admin:services:category_counts', now()->addMinutes(10), fn () => Service::selectRaw('category, COUNT(*) as cnt')
             ->groupBy('category')
             ->orderBy('category')
             ->get()
-            ->mapWithKeys(fn ($row) => [$row->category => $row->cnt]);
+            ->mapWithKeys(fn ($row) => [$row->category => $row->cnt]));
 
         // Consolidated: 1 GROUP BY instead of 3 separate counts
-        $rawCounts = Service::selectRaw('is_active, COUNT(*) as cnt')
+        $rawCounts = Cache::remember('admin:services:active_counts', now()->addMinutes(10), fn () => Service::selectRaw('is_active, COUNT(*) as cnt')
             ->groupBy('is_active')
-            ->pluck('cnt', 'is_active');
+            ->pluck('cnt', 'is_active'));
 
         $stats = [
             'total' => $rawCounts->sum(),

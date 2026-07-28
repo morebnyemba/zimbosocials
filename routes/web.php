@@ -198,6 +198,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/adverts/{advert}/status', [\App\Http\Controllers\AdminAdvertController::class, 'updateStatus'])->name('adverts.status');
         Route::post('/adverts/{advert}/refund', [\App\Http\Controllers\AdminAdvertController::class, 'refund'])->name('adverts.refund');
         Route::post('/adverts/{advert}/message', [\App\Http\Controllers\AdminAdvertController::class, 'message'])->name('adverts.message');
+        // Deliver the finished advert video (or a picture) straight into the chat.
+        Route::post('/adverts/{advert}/media', [\App\Http\Controllers\AdminAdvertController::class, 'media'])->name('adverts.media');
 
         // Order management
         Route::get('/orders', [AdminOrderController::class, 'index'])->name('orders.index');
@@ -240,6 +242,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/whatsapp/conversations/{account}/reply', [AdminWhatsAppController::class, 'reply'])->name('whatsapp.conversation.reply');
         Route::post('/whatsapp/conversations/{account}/handoff', [AdminWhatsAppController::class, 'toggleHandoff'])->name('whatsapp.conversation.handoff');
         Route::post('/whatsapp/conversations/{account}/reset', [AdminWhatsAppController::class, 'resetSession'])->name('whatsapp.conversation.reset');
+        // Irreversible: erases the contact, transcript, session and archived media.
+        Route::delete('/whatsapp/conversations/{account}', [AdminWhatsAppController::class, 'destroyContact'])->name('whatsapp.conversation.destroy');
         Route::get('/whatsapp/knowledge-base', [AdminWhatsAppController::class, 'knowledgeBase'])->name('whatsapp.kb');
         Route::post('/whatsapp/knowledge-base', [AdminWhatsAppController::class, 'storeKb'])->name('whatsapp.kb.store');
         Route::put('/whatsapp/knowledge-base/{kb}', [AdminWhatsAppController::class, 'updateKb'])->name('whatsapp.kb.update');

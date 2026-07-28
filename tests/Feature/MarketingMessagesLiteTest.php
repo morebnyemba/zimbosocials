@@ -40,7 +40,8 @@ class MarketingMessagesLiteTest extends TestCase
             return $responder(count($paths));
         });
 
-        (new SendWhatsAppNotification(self::PHONE, 'marketing_broadcast', 'S', 'B', ['A', 'S', 'B'], 'en', requireTemplate: true))
+        // A real campaign dispatch: template-only AND marketing (MM Lite path).
+        (new SendWhatsAppNotification(self::PHONE, 'marketing_broadcast', 'S', 'B', ['A', 'S', 'B'], 'en', requireTemplate: true, marketing: true))
             ->handle(app(WhatsAppService::class));
 
         return $paths;

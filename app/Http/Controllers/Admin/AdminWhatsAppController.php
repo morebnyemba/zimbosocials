@@ -8,8 +8,10 @@ use App\Models\WhatsAppKnowledge;
 use App\Models\WhatsAppMessage;
 use App\Models\WhatsAppSession;
 use App\WhatsApp\Messaging\WhatsAppGateway;
+use App\WhatsApp\Persistence\ContactEraser;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -74,6 +76,10 @@ class AdminWhatsAppController extends Controller
                 'direction' => $m->direction,
                 'body' => $m->body,
                 'msg_type' => $m->msg_type,
+                // Locally archived copy so photos/voice notes stay viewable —
+                // Meta's own media links expire within minutes.
+                'media_url' => $m->media_url,
+                'media_mime' => $m->media_mime,
                 'handled_by' => $m->handled_by,
                 'intent' => $m->intent,
                 'ai_used' => $m->ai_used,
@@ -145,6 +151,44 @@ class AdminWhatsAppController extends Controller
         WhatsAppSession::where('wa_phone', $account->wa_phone)->delete();
 
         return back()->with('success', 'Conversation state reset.');
+    }
+
+    /**
+     * Erase a WhatsApp contact: the identity, the transcript, the flow state and
+     * their archived photos/voice notes.
+     *
+     * Destructive and irreversible, so it requires the number typed back as
+     * confirmation. `also_user` additionally removes the linked app account —
+     * refused when they have orders, transactions or a balance, since that is
+     * financial history rather than chat data.
+     */
+    public function destroyContact(Request $request, WhatsAppAccount $account, ContactEraser $eraser): RedirectResponse
+    {
+        $data = $request->validate([
+            'confirm_phone' => ['required', 'string'],
+            'also_user' => ['sometimes', 'boolean'],
+        ]);
+
+        // Compare on digits — an admin may type it with spaces or a +.
+        if (preg_replace('/\D+/', '', $data['confirm_phone']) !== preg_replace('/\D+/', '', (string) $account->wa_phone)) {
+            return back()->with('error', 'The number you typed does not match this contact — nothing was deleted.');
+        }
+
+        $res = $eraser->erase($account, (bool) ($data['also_user'] ?? false), Auth::id());
+
+        if (empty($res['ok'])) {
+            return back()->with('error', match ($res['reason'] ?? '') {
+                'has_financial_history' => 'This customer has orders or wallet history, so their account was kept. Re-run without "also delete the user" to erase only the chat.',
+                default => 'Could not delete this contact.',
+            });
+        }
+
+        $d = $res['deleted'];
+
+        return redirect()->route('admin.whatsapp.conversations')->with(
+            'success',
+            "Contact erased — {$d['messages']} messages and {$d['media_files']} media files removed."
+        );
     }
 
     // ─── Knowledge base ───────────────────────────────────────────────────────

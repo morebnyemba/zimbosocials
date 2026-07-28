@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\ManualPaymentDetail;
 use App\Models\Service;
 use App\Services\ReferralService;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -42,11 +43,29 @@ class MarketingController extends Controller
 
     public function services(): Response
     {
-        $services = Service::active()
-            ->orderBy('category')
-            ->orderBy('display_order')
-            ->get()
-            ->groupBy('category');
+        // Only the columns the page actually renders. Loading whole models here
+        // meant every visit pulled all 21 columns — including six name and
+        // description fields across three languages — for the ENTIRE active
+        // catalogue, then serialised them into the page props. Against a fully
+        // synced upstream catalogue that exhausts memory (a 500) or builds a
+        // payload too big to render, which is why it failed only sometimes:
+        // it depended on how much memory was free at that moment.
+        //
+        // Cached because the catalogue only changes when the nightly
+        // upstream:sync-services run updates it.
+        $services = Cache::remember('marketing:services:v1', now()->addHour(), function () {
+            return Service::active()
+                ->select(['id', 'name', 'category'])
+                ->orderBy('category')
+                ->orderBy('display_order')
+                ->get()
+                ->groupBy('category')
+                ->map(fn ($group) => $group->map(fn (Service $s) => [
+                    'id' => $s->id,
+                    'name' => $s->name,
+                ])->values())
+                ->toArray();
+        });
 
         return Inertia::render('Marketing/Services', [
             'services' => $services,
