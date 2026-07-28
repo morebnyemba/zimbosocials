@@ -11,7 +11,12 @@
 services:
   db:
     image: mariadb:11
+    # Some columns are stamped by the database itself (created_at uses
+    # DEFAULT CURRENT_TIMESTAMP), so its clock has to agree with the app's or
+    # those rows land two hours out.
+    command: --default-time-zone=+02:00
     environment:
+      TZ: ${APP_TIMEZONE:-Africa/Harare}
       MARIADB_DATABASE: ${DB_DATABASE:-zimbosocials}
       MARIADB_USER: ${DB_USERNAME:-zimbosocials}
       MARIADB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
@@ -34,6 +39,7 @@ services:
       target: app
     env_file: .env
     environment:
+      - TZ=${APP_TIMEZONE:-Africa/Harare}
       - DB_HOST=db
       - DB_PORT=3306
     volumes:
@@ -78,6 +84,7 @@ services:
       target: app
     env_file: .env
     environment:
+      - TZ=${APP_TIMEZONE:-Africa/Harare}
       - DB_HOST=db
       - DB_PORT=3306
     command: php artisan queue:work --queue=notifications,default --sleep=1 --tries=3 --max-time=3600
@@ -97,6 +104,7 @@ services:
       target: app
     env_file: .env
     environment:
+      - TZ=${APP_TIMEZONE:-Africa/Harare}
       - DB_HOST=db
       - DB_PORT=3306
     command: php artisan schedule:work

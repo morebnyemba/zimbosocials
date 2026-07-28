@@ -65,7 +65,11 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Africa/Harare (UTC+2). The business, its customers and its staff are all
+    // in one timezone, so times are stored and shown in it directly rather than
+    // kept in UTC and converted at every display point. Scheduled tasks are
+    // local too — dailyAt('18:00') means 6pm in Harare.
+    'timezone' => env('APP_TIMEZONE', 'Africa/Harare'),
 
     /*
     |--------------------------------------------------------------------------
