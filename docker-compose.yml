@@ -54,8 +54,18 @@ services:
     volumes:
       - storage_app:/var/www/html/storage/app:ro
     ports:
-      # Bound to localhost: the host's nginx terminates TLS and proxies here.
+      # Loopback only — for checking the app directly on the host
+      # (curl 127.0.0.1:8081). The public path does NOT use this: the Slyker
+      # nginx reaches this container by name over the shared network below,
+      # because a port published only on 127.0.0.1 is unreachable from inside
+      # another container.
       - "127.0.0.1:${APP_PORT:-8081}:80"
+    networks:
+      default: {}
+      slykertech:
+        # Stable name for the proxy to target, regardless of container naming.
+        aliases:
+          - zimbosocials-web
     depends_on:
       - app
     restart: unless-stopped
@@ -102,3 +112,11 @@ volumes:
   db_data:
   storage_app:
   storage_logs:
+
+networks:
+  # The Slyker Tech stack's default network. Its nginx owns 80/443 and the
+  # certs, and proxies this app — joining its network lets it reach us by name
+  # without publishing a port on any host interface.
+  slykertech:
+    external: true
+    name: ${PROXY_NETWORK:-slykertech_default}
