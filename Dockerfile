@@ -9,9 +9,20 @@ WORKDIR /build
 COPY package*.json ./
 RUN npm ci
 COPY resources ./resources
-COPY vite.config.js tsconfig.json ./
+# postcss.config.js is what actually runs Tailwind, and tailwind.config.js holds
+# the content globs. Without both, the @tailwind directives compile to nothing
+# and app.css ships as a couple hundred bytes of hand-written rules — the site
+# renders completely unstyled against a perfectly healthy server.
+COPY vite.config.js tsconfig.json postcss.config.js tailwind.config.js ./
 COPY public ./public
-RUN npm run build
+RUN npm run build \
+    # Fail the build loudly rather than shipping an empty stylesheet: a real
+    # Tailwind bundle is tens of kilobytes, so anything tiny means the config
+    # did not take effect.
+    && css=$(find public/build/assets -name '*.css' -print0 | xargs -0 cat | wc -c) \
+    && if [ "$css" -lt 10000 ]; then \
+        echo "✗ Built CSS is only ${css} bytes — Tailwind produced nothing."; exit 1; \
+    fi
 
 # ── Stage 2: PHP runtime ──────────────────────────────────────────────────────
 FROM php:8.3-fpm-alpine AS app
