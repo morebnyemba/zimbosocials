@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-27.1';
+    public const PROMPT_VERSION = '2026-07-29.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -756,6 +756,22 @@ class GeminiProvider
                     }
                 }
             }
+            $lines[] = '===';
+        }
+
+        // Sponsored-advert packages. These are priced in config, not in the
+        // service catalogue, so without this block the model had nothing to
+        // ground an advert price on and invented one — quoting figures that
+        // contradicted the menu the customer had just been shown.
+        $packages = (array) config('adverts.packages', []);
+        if ($packages !== []) {
+            $lines[] = '=== SPONSORED ADVERT PACKAGES (the ONLY advert prices that exist) ===';
+            foreach ($packages as $key => $package) {
+                $price = rtrim(rtrim(number_format((float) ($package['price'] ?? 0), 2), '0'), '.');
+                $video = ! empty($package['includes_video']) ? ' — includes an AI video advert' : ' — boost only, no video';
+                $lines[] = "key={$key} {$package['label']} ({$package['days']} days) — \${$price}{$video}";
+            }
+            $lines[] = 'Quote these EXACTLY. Never invent an advert price, package or duration.';
             $lines[] = '===';
         }
 
