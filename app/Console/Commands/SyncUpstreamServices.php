@@ -124,9 +124,9 @@ class SyncUpstreamServices extends Command
         // straight away rather than whenever the TTL happens to lapse.
         foreach ([
             'marketing:services:v1',
-            'admin:services:categories',
-            'admin:services:category_counts',
-            'admin:services:active_counts',
+            'admin:services:categories:v2',
+            'admin:services:category_counts:v2',
+            'admin:services:active_counts:v2',
         ] as $key) {
             \Illuminate\Support\Facades\Cache::forget($key);
         }
