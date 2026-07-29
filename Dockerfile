@@ -74,6 +74,12 @@ COPY --from=assets /build/public/build ./public/build
 
 RUN composer dump-autoload --optimize --no-dev \
     && mkdir -p storage/framework/{cache,sessions,views} storage/app/public storage/logs bootstrap/cache \
+    # public/storage must exist in the IMAGE, not just be created at runtime by
+    # `artisan storage:link`: the web stage copies public/ from here, so a
+    # symlink made later inside the app container never reaches nginx — and
+    # every payment proof and archived WhatsApp photo or voice note 404s while
+    # being perfectly present on disk.
+    && ln -sfn ../storage/app/public public/storage \
     && chown -R www-data:www-data storage bootstrap/cache
 
 # php-fpm listens here; the nginx service proxies to it.
