@@ -15,7 +15,7 @@ class WhatsAppAccount extends Model
     protected $fillable = [
         'wa_phone', 'user_id', 'link_status', 'display_name',
         'link_otp', 'link_otp_expires', 'link_attempts', 'opted_in',
-        'agent_handoff_until', 'last_seen_at',
+        'agent_handoff_until', 'last_seen_at', 'lead_flagged_at',
     ];
 
     protected function casts(): array
@@ -24,6 +24,7 @@ class WhatsAppAccount extends Model
             'link_otp_expires' => 'datetime',
             'agent_handoff_until' => 'datetime',
             'last_seen_at' => 'datetime',
+            'lead_flagged_at' => 'datetime',
             'opted_in' => 'boolean',
             'link_attempts' => 'integer',
         ];

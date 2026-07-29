@@ -115,6 +115,55 @@ class AdminNudgeTest extends TestCase
         $this->assertStringContainsString('wa.me/263771234567', $alert->body);
     }
 
+    public function test_a_lead_is_reported_once_and_never_again(): void
+    {
+        $account = WhatsAppAccount::create(['wa_phone' => self::PHONE, 'link_status' => 'guest', 'opted_in' => true]);
+        $account->forceFill(['last_seen_at' => now()->subMinutes(30)])->save();
+        WhatsAppMessage::create(['wa_phone' => self::PHONE, 'direction' => 'in', 'msg_type' => 'text', 'body' => 'hi']);
+
+        $this->artisan('whatsapp:flag-idle-leads')->assertSuccessful();
+        $this->assertSame(1, Notification::where('type', 'admin_whatsapp_nudge')->count());
+
+        // The scheduler runs this every ten minutes. Re-reporting the same lead
+        // each time is what made the alerts unreadable.
+        Cache::flush();            // as a deploy's optimize:clear would
+        $this->travel(3)->hours(); // and well past any cooldown
+        $this->artisan('whatsapp:flag-idle-leads')->assertSuccessful();
+
+        $this->assertSame(1, Notification::where('type', 'admin_whatsapp_nudge')->count());
+    }
+
+    public function test_a_contact_we_decide_not_to_alert_on_is_not_reconsidered(): void
+    {
+        // Long conversation — deliberately not a "dropped lead".
+        $account = WhatsAppAccount::create(['wa_phone' => self::PHONE, 'link_status' => 'guest', 'opted_in' => true]);
+        $account->forceFill(['last_seen_at' => now()->subMinutes(30)])->save();
+        foreach (range(1, 6) as $i) {
+            WhatsAppMessage::create(['wa_phone' => self::PHONE, 'direction' => 'in', 'msg_type' => 'text', 'body' => "m{$i}"]);
+        }
+
+        $this->artisan('whatsapp:flag-idle-leads')->assertSuccessful();
+
+        // Settled, so it is not re-examined on every run for the next day.
+        $this->assertNotNull($account->fresh()->lead_flagged_at);
+        $this->assertNull($this->lastAlert());
+    }
+
+    public function test_a_backlog_cannot_flood_the_team_in_one_run(): void
+    {
+        foreach (range(1, 12) as $i) {
+            $phone = '26377000'.str_pad((string) $i, 4, '0', STR_PAD_LEFT);
+            $account = WhatsAppAccount::create(['wa_phone' => $phone, 'link_status' => 'guest', 'opted_in' => true]);
+            $account->forceFill(['last_seen_at' => now()->subMinutes(30 + $i)])->save();
+            WhatsAppMessage::create(['wa_phone' => $phone, 'direction' => 'in', 'msg_type' => 'text', 'body' => 'hi']);
+        }
+
+        $this->artisan('whatsapp:flag-idle-leads')->assertSuccessful();
+
+        // Capped — past a handful, alerts stop being read at all.
+        $this->assertLessThanOrEqual(5, Notification::where('type', 'admin_whatsapp_nudge')->count());
+    }
+
     public function test_someone_still_talking_is_not_flagged(): void
     {
         $account = WhatsAppAccount::create(['wa_phone' => self::PHONE, 'link_status' => 'guest', 'opted_in' => true]);

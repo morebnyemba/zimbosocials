@@ -28,6 +28,13 @@ class FlagIdleLeads extends Command
 
     protected $description = 'Alert the team about new WhatsApp leads who went quiet without ordering';
 
+    /**
+     * Ceiling per run. A busy hour, or a first run against an existing table,
+     * should not put fifty alerts on someone's phone at once — past a handful
+     * they stop being read and the channel is worth nothing.
+     */
+    private const MAX_PER_RUN = 5;
+
     public function handle(): int
     {
         $quietFor = max(5, (int) $this->option('quiet-for'));
@@ -35,15 +42,29 @@ class FlagIdleLeads extends Command
 
         $candidates = WhatsAppAccount::query()
             ->where('created_at', '>=', now()->subHours($within))
+            // Each lead is raised ONCE, ever. This used to rely on a cache
+            // entry, so the same lead came back every hour until it aged out —
+            // and any deploy that cleared the cache re-reported all of them at
+            // once.
+            ->whereNull('lead_flagged_at')
             // Silent for a while, but not so long that following up is odd.
             ->whereNotNull('last_seen_at')
             ->where('last_seen_at', '<=', now()->subMinutes($quietFor))
             ->where('last_seen_at', '>=', now()->subHours($within))
+            // Oldest first, so a backlog is worked through in order rather than
+            // the newest few starving the rest.
+            ->orderBy('last_seen_at')
+            ->limit(self::MAX_PER_RUN)
             ->get();
 
         $flagged = 0;
 
         foreach ($candidates as $account) {
+            // Everything below settles this contact one way or the other, so
+            // stamp it either way: a contact we decide NOT to alert on must not
+            // be re-examined on every run for the next day.
+            $account->forceFill(['lead_flagged_at' => now()])->save();
+
             // Someone who bought isn't a dropped lead.
             if ($account->user_id && Order::where('user_id', $account->user_id)->exists()) {
                 continue;
@@ -70,13 +91,12 @@ class FlagIdleLeads extends Command
             $reason = "new lead — {$who}sent {$inbound} message"
                 .($inbound === 1 ? '' : 's').' then went quiet, no order yet';
 
-            // AdminNudge dedupes, so re-running this never re-alerts.
             if (AdminNudge::raise((string) $account->wa_phone, $reason, 'idle-lead')) {
                 $flagged++;
             }
         }
 
-        $this->info("Checked {$candidates->count()} recent contact(s); flagged {$flagged}.");
+        $this->info("Checked {$candidates->count()} contact(s); flagged {$flagged}.");
 
         return self::SUCCESS;
     }
