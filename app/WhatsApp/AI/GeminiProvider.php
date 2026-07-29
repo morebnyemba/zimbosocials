@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-29.3';
+    public const PROMPT_VERSION = '2026-07-29.4';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -420,6 +420,12 @@ class GeminiProvider
             ."send a reset link. 'link my account' / 'log me in' with an email → flow 'link'.\n"
             ."5. ORDER STATUS: you can tell the user the status of the orders listed in the context. For a specific order number "
             ."not listed, or 'track my order', set flow to 'track' (with order_id if they gave one). Never invent an order or its status.\n"
+            ."5c. NEVER OFFER TO PLACE SOMETHING THEY ALREADY BOUGHT. Before you suggest setting up an order, or ask \"shall I "
+            ."place it?\", CHECK RECENT ORDERS. If a live order already covers that service, the answer is a status update, not "
+            ."an offer — say what it is doing and how much has landed, using the delivered figure when one is shown. Asking "
+            ."someone to buy a thing they are currently waiting on reads as either a scam or a bot that isn't listening, and "
+            ."it is the fastest way to lose a customer who was previously happy. They have to say clearly that they want ANOTHER "
+            ."one before you treat it as a new order.\n"
             ."5b. ORDER ALREADY PLACED (critical — don't loop): an order in RECENT ORDERS with status pending/processing/in_progress "
             ."is DONE and PAID FOR — that charge is exactly why the balance is now lower (a 0.00 balance right after ordering is NORMAL, "
             ."nothing is lost). If the user asks 'is it done?' / 'zvaita?' / 'matii?', or sounds confused or worried that money left "
