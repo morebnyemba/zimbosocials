@@ -34,6 +34,13 @@ services:
       target: app
     env_file: .env
     environment:
+      # Log to the container's stderr, not a shared file. php-fpm runs as
+      # www-data while the queue and scheduler run as root, and all three share
+      # the storage_logs volume — whichever wrote first owned laravel.log, and
+      # the others then got Permission denied. A failed log write throws, so an
+      # admin reply would send the WhatsApp message and THEN 500 while trying to
+      # record that it had. Read these with: docker compose logs -f app
+      - LOG_CHANNEL=stderr
       - DB_HOST=db
       - DB_PORT=3306
     volumes:
@@ -78,6 +85,8 @@ services:
       target: app
     env_file: .env
     environment:
+      # stderr, for the same reason as the app service above.
+      - LOG_CHANNEL=stderr
       - DB_HOST=db
       - DB_PORT=3306
     command: php artisan queue:work --queue=notifications,default --sleep=1 --tries=3 --max-time=3600
@@ -97,6 +106,8 @@ services:
       target: app
     env_file: .env
     environment:
+      # stderr, for the same reason as the app service above.
+      - LOG_CHANNEL=stderr
       - DB_HOST=db
       - DB_PORT=3306
     command: php artisan schedule:work
