@@ -240,6 +240,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/whatsapp/conversations', [AdminWhatsAppController::class, 'conversations'])->name('whatsapp.conversations');
         Route::get('/whatsapp/conversations/{account}', [AdminWhatsAppController::class, 'conversation'])->name('whatsapp.conversation');
         Route::post('/whatsapp/conversations/{account}/reply', [AdminWhatsAppController::class, 'reply'])->name('whatsapp.conversation.reply');
+        // Send a photo/video/PDF to the customer (e.g. proof of a refill).
+        Route::post('/whatsapp/conversations/{account}/media', [AdminWhatsAppController::class, 'replyMedia'])->name('whatsapp.conversation.media');
         Route::post('/whatsapp/conversations/{account}/handoff', [AdminWhatsAppController::class, 'toggleHandoff'])->name('whatsapp.conversation.handoff');
         Route::post('/whatsapp/conversations/{account}/reset', [AdminWhatsAppController::class, 'resetSession'])->name('whatsapp.conversation.reset');
         // Irreversible: erases the contact, transcript, session and archived media.

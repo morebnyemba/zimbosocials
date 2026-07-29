@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-29.4';
+    public const PROMPT_VERSION = '2026-07-29.5';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -180,7 +180,7 @@ class GeminiProvider
         // for a quantity, and the fusion dropped the question entirely: the
         // customer got a dead end with nothing to reply to and a human had to
         // rescue the sale. When that happens, send the scripted step instead.
-        if ($this->asksSomething($scripted) && ! $this->asksSomething($voiced)) {
+        if (self::asksSomething($scripted) && ! self::asksSomething($voiced)) {
             Log::warning('Voice pass dropped the step question — falling back to the scripted prompt', [
                 'scripted' => mb_substr($scripted, 0, 120),
                 'voiced' => mb_substr($voiced, 0, 120),
@@ -197,7 +197,7 @@ class GeminiProvider
      * mark, or an imperative the flows use to request input ("send the link",
      * "enter the amount", "reply with…", "tap …").
      */
-    private function asksSomething(string $text): bool
+    public static function asksSomething(string $text): bool
     {
         if (str_contains($text, '?')) {
             return true;
@@ -451,10 +451,22 @@ class GeminiProvider
             ."never invent a \"send the money then reply PAID\" procedure. To take money you set flow 'deposit' — that flow shows "
             ."the REAL, current payment details and records the deposit against their account. Reciting payment details yourself "
             ."risks sending a customer's money to the wrong place and leaves no record that they ever paid.\n"
+            ."6c. READ THE ROOM ON MONEY. If someone says they can't afford it, haven't got it yet, or will pay later, do NOT "
+            ."follow up with a bonus, a promo or a bigger package — pitching a deposit bonus at someone who just said they have "
+            ."no money reads as not listening. Work with what they DO have: name the smallest amount that buys something real "
+            ."(\"the minimum is 10 followers for \$0.10\"), and let them come back when they're ready. The bonus is for someone "
+            ."already deciding HOW to pay, never for someone deciding WHETHER they can.\n"
             ."7c. WHEN THE AMOUNT DOESN'T MATCH WHAT THEY AGREED, ASK — never assume. If they agreed to a \$5 advert and then "
             ."say they sent \$10, do NOT silently upgrade them to a bigger package (or pocket the difference): tell them what "
             ."you see and ask which they want — the bigger package, or the original plus the rest kept on their balance. "
             ."Quietly deciding for them is how a happy customer turns into a dispute.\n"
+            ."7d. REFILLS ARE PER-SERVICE — CHECK BEFORE YOU PROMISE ONE. Every catalogue line ends with REFILL:no, REFILL:yes "
+            ."or REFILL:30d (the days it is covered for). Only services marked with a refill are covered; promising one on a "
+            ."REFILL:no service means we either lose money honouring it or break our word to a customer who has our message in "
+            ."writing. When someone reports a drop: if THEIR service has refill, reassure them it's covered and that refills are "
+            ."processed within 72 hours; if it does not, be honest — explain that this particular service has no refill window, "
+            ."say which similar ones do, and offer to top them up as a new order. Never say 'all our services are refill "
+            ."guaranteed'. When they're choosing, a refill window is a genuine selling point worth mentioning.\n"
             ."8. GROUNDING (critical): only recommend services, prices, quantity limits and delivery times that actually appear in "
             ."the CONTEXT (catalogue / knowledge base). NEVER invent or estimate a service, price, min/max or delivery time. If it's "
             ."not in the context, say you'll check with *support* rather than guess. Quote money in the user's currency (shown in context).\n"
@@ -749,7 +761,7 @@ class GeminiProvider
         if ($max > 0) {
             $catalog->limit($max);
         }
-        $services = $catalog->get(['id', 'name', 'category', 'type', 'rate', 'min_qty', 'max_qty']);
+        $services = $catalog->get(['id', 'name', 'category', 'type', 'rate', 'min_qty', 'max_qty', 'is_refill', 'refill_days']);
         if ($services->isNotEmpty()) {
             $lines[] = '=== SERVICE CATALOGUE (all active services — recommend/quote any; prices are per 1,000 in USD) ===';
             $lines[] = 'Grouped as [Platform] then <Type>. Mirror BOTH levels when you list services to a customer.';
@@ -764,7 +776,14 @@ class GeminiProvider
                         $price = rtrim(rtrim(number_format((float) $s->rate, 4), '0'), '.');
                         // 'id=' (not '#') so the model never confuses service ids
                         // with user-facing order numbers like #1231.
-                        $lines[] = "    id={$s->id} {$s->name} — {$price}/1000 (min:{$s->min_qty} max:{$s->max_qty})";
+                        // Refill is per-service, and the knowledge base promises
+                        // free top-ups — so the model has to know which
+                        // services that promise actually applies to, or it will
+                        // offer one on a service we cannot honour it for.
+                        $refill = $s->is_refill
+                            ? ' REFILL:'.((int) $s->refill_days > 0 ? (int) $s->refill_days.'d' : 'yes')
+                            : ' REFILL:no';
+                        $lines[] = "    id={$s->id} {$s->name} — {$price}/1000 (min:{$s->min_qty} max:{$s->max_qty}){$refill}";
 
                         // Flat-price bundles beat a rate card on WhatsApp — lead
                         // with these when the customer's budget fits one.
