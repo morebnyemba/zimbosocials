@@ -204,7 +204,9 @@ class MessageRouter
             }
         }
 
-        // 1. Resume / restart buttons.
+        // 1. Resume / restart buttons. Nothing offers these any more (see step
+        // 3), but a customer can still tap one sitting in their chat history —
+        // honouring it is friendlier than treating the tap as gibberish.
         if ($selection === 'wa_resume') {
             $res = $this->engine->resume($ctx);
             $this->emit($account, $ctx, $res);
@@ -238,16 +240,18 @@ class MessageRouter
             }
         }
 
-        // 3. Active flow that timed out → offer resume / restart.
+        // 3. Came back after the flow timed out → just answer them.
+        //
+        // This used to interrupt with "You have an unfinished action. Resume
+        // where you left off?" and two buttons. Someone who reopens the chat to
+        // ask a question does not want a menu about a half-finished step from
+        // hours ago — they want an answer, and being handed admin instead reads
+        // as the bot ignoring them. The stale flow is simply dropped, and the
+        // message goes down the normal ladder to the AI, which can see their
+        // orders and history and pick the thread back up naturally if that is
+        // what they meant.
         if ($ctx->wasExpired && $ctx->inFlow() && $selection === null && $text !== '') {
-            $this->responder->sendButtons(
-                $phone,
-                "⏱️ You have an unfinished action. Resume where you left off?",
-                [['id' => 'wa_resume', 'title' => 'Resume'], ['id' => 'wa_restart', 'title' => 'Main menu']],
-                ['handled_by' => 'system']
-            );
-
-            return ['handled_by' => 'system', 'intent' => 'resume_offer'];
+            $ctx->resetFlow();
         }
 
         // 4a. Flow-internal selection (fs:<value>) — a tapped list row / button
