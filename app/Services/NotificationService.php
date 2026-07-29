@@ -36,8 +36,13 @@ class NotificationService
         // UTILITY messages a day to the admins — a high-volume, low-engagement
         // pattern WhatsApp flags as spam. They still surface in-app; a single
         // once-daily whatsapp:admin-digest rolls them up instead.
-        'admin_deposit_proof',   // money waiting on an admin — worth a real ping
-        'admin_daily_digest',    // one rolled-up summary a day
+        'admin_deposit_proof',    // money waiting on an admin — worth a real ping
+        'admin_daily_digest',     // one rolled-up summary a day
+        // A live customer needs a person. These carry a wa.me link so replying
+        // is one tap from the phone the alert arrives on — which is the whole
+        // point of sending them over WhatsApp rather than leaving them in-app.
+        'admin_whatsapp_nudge',
+        'admin_whatsapp_handoff',
     ];
 
     /**
@@ -51,6 +56,8 @@ class NotificationService
     private const ADMIN_FREE_FORM_TYPES = [
         'admin_deposit_proof',
         'admin_daily_digest',
+        'admin_whatsapp_nudge',
+        'admin_whatsapp_handoff',
     ];
 
     /**

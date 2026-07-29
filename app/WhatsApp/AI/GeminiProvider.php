@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-29.1';
+    public const PROMPT_VERSION = '2026-07-29.2';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -248,12 +248,17 @@ class GeminiProvider
                         'weeks' => ['type' => 'INTEGER', 'nullable' => true],
                         'promoting' => ['type' => 'STRING', 'nullable' => true],
                         'audience' => ['type' => 'STRING', 'nullable' => true],
+                        // A short reason to pull a human in WITHOUT silencing the
+                        // bot: confusion, a complaint, or anything the model can
+                        // see going wrong. 'handoff' stops the conversation; this
+                        // just raises a flag while the assistant keeps helping.
+                        'notify_admin' => ['type' => 'STRING', 'nullable' => true],
                     ],
                     'propertyOrdering' => [
                         'service_id', 'platform', 'service', 'link', 'quantity',
                         'amount', 'method', 'phone', 'order_id', 'ticket_id',
                         'email', 'name', 'subject',
-                        'package', 'weeks', 'promoting', 'audience',
+                        'package', 'weeks', 'promoting', 'audience', 'notify_admin',
                     ],
                 ],
             ],
@@ -453,6 +458,15 @@ class GeminiProvider
             ."10. GUESTS: if the context says the user is a guest, treat them EXACTLY like a customer — set the flow they need; "
             ."the system creates their account automatically in the background. NEVER mention signing up, registering, or logging "
             ."in, and never send them to the website — there is no signup step, it just works.\n"
+            ."10b. QUIETLY FLAG A HUMAN — flow_data.notify_admin. Separate from handoff, and much cheaper: it messages the "
+            ."team WITHOUT silencing you, so keep talking to the customer exactly as you were. Set it to a short reason "
+            ."(under 12 words, e.g. \"confused about how followers are delivered\" or \"unhappy about delivery time\") when:\n"
+            ."   • they say they don't understand, ask the same thing again, or your answer clearly didn't land\n"
+            ."   • they complain, sound frustrated, doubt we're genuine, or mention a bad experience\n"
+            ."   • they're about to spend real money and something feels off or ambiguous\n"
+            ."   • anything you can see going wrong that a person would want to know about\n"
+            ."   Raise it AT MOST ONCE per conversation unless something new goes wrong — it is a nudge to a colleague, not "
+            ."an alarm. When you're genuinely stuck or they ask for a person, use 'handoff' instead.\n"
             ."11. HUMAN HANDOFF — LAST RESORT, NOT A REFLEX: only set flow 'handoff' when the user is genuinely upset, disputes money "
             ."(a missing deposit, a wrong charge, a refund complaint), or explicitly asks for a person/agent/human. Handing off makes "
             ."the bot go SILENT until a human appears — that itself loses the sale, so DEFAULT TO ANSWERING. In particular, these are "

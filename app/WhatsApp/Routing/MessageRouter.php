@@ -552,6 +552,13 @@ class MessageRouter
             ]);
         }
 
+        // The model spotted something a person should see — confusion, a
+        // complaint, a wobble before spending money. Unlike handoff this does
+        // NOT silence the bot: it keeps helping while the team gets a nudge.
+        if (! empty($flowData['notify_admin'])) {
+            \App\WhatsApp\AdminNudge::raise($ctx->phone, (string) $flowData['notify_admin'], 'ai');
+        }
+
         // The model escalated to a human: pause the bot for this chat (same
         // window as the admin takeover button) and alert the team.
         if ($flow === 'handoff') {
@@ -559,10 +566,12 @@ class MessageRouter
                 $this->engine->cancel($ctx);
             }
             $this->accounts->startAgentHandoff($ctx->phone);
+            $digits = preg_replace('/\D+/', '', $ctx->phone);
             \App\Services\NotificationService::notifyAdmins(
                 'admin_whatsapp_handoff',
                 'WhatsApp chat needs a human',
-                "The assistant escalated +{$ctx->phone} to a human agent. Reply from Admin → WA Assistant → Conversations.",
+                "The assistant handed +{$digits} over and has gone quiet — they are waiting on a person.\n\n"
+                ."💬 Reply to them directly: https://wa.me/{$digits}",
                 ['wa_phone' => $ctx->phone]
             );
 
