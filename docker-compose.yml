@@ -73,6 +73,14 @@ services:
         # Stable name for the proxy to target, regardless of container naming.
         aliases:
           - zimbosocials-web
+    healthcheck:
+      # Hits the app through nginx, so "healthy" means php-fpm answered too —
+      # a deploy that waits on this never swaps in a container that 502s.
+      test: ["CMD", "wget", "-qO-", "-T", "3", "http://127.0.0.1/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     depends_on:
       - app
     restart: unless-stopped
