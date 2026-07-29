@@ -61,6 +61,11 @@ Schedule::command('orders:flag-stuck')->dailyAt('08:00')->withoutOverlapping();
 Schedule::command('whatsapp:nudge-stalled')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('whatsapp:remind-saved-orders')->hourly()->withoutOverlapping();
 
+// A new contact who messaged once off an advert and went quiet is the most
+// expensive lead we have — the ad is already paid for. Tell the team while
+// following up is still natural.
+Schedule::command('whatsapp:flag-idle-leads')->everyTenMinutes()->withoutOverlapping();
+
 // One rolled-up admin summary a day, in place of a per-event WhatsApp ping for
 // every sign-up and order (that volume of near-identical utility messages to
 // our own number reads as spam to WhatsApp).
