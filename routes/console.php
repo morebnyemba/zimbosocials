@@ -56,9 +56,14 @@ Schedule::command('orders:recover-pending')->everyFiveMinutes()->withoutOverlapp
 // Flag active orders with no status movement for 5+ days
 Schedule::command('orders:flag-stuck')->dailyAt('08:00')->withoutOverlapping();
 
-// Drop-off recovery: nudge customers who stalled mid-flow (once, within the
-// 24h window), and remind those who saved an order but never topped up.
-Schedule::command('whatsapp:nudge-stalled')->everyFiveMinutes()->withoutOverlapping();
+// Drop-off recovery: remind people who saved an order but never topped up.
+//
+// The mid-flow "Still there?" nudge was removed. It fired off a stale
+// last_activity, so it interrupted customers who were mid-conversation — an
+// unprompted "we were setting something up" while someone is actively typing
+// reads as noise, not help. Anyone who genuinely goes quiet is picked up by
+// whatsapp:flag-idle-leads, which tells a HUMAN rather than messaging the
+// customer again.
 Schedule::command('whatsapp:remind-saved-orders')->hourly()->withoutOverlapping();
 
 // A new contact who messaged once off an advert and went quiet is the most

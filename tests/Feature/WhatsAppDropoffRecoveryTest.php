@@ -32,53 +32,9 @@ class WhatsAppDropoffRecoveryTest extends TestCase
         ]);
     }
 
-    private function stalledSession(string $phone, $lastActivity): WhatsAppSession
-    {
-        return WhatsAppSession::create([
-            'wa_phone' => $phone, 'current_flow' => 'order', 'current_state' => 'pick_service',
-            'status' => 'active', 'last_activity' => $lastActivity, 'expires_at' => now()->addMinutes(30),
-        ]);
-    }
-
     private function out(string $phone): ?WhatsAppMessage
     {
         return WhatsAppMessage::where('wa_phone', $phone)->where('direction', 'out')->latest('id')->first();
-    }
-
-    public function test_a_flow_stalled_past_the_threshold_is_nudged_once(): void
-    {
-        $this->account();
-        $session = $this->stalledSession('263771234567', now()->subMinutes(45));
-
-        $this->artisan('whatsapp:nudge-stalled')->assertSuccessful();
-
-        $this->assertStringContainsString('Still there', (string) $this->out('263771234567')?->body);
-        $this->assertNotNull($session->fresh()->nudged_at);
-
-        // A second run does not nudge again.
-        WhatsAppMessage::query()->delete();
-        $this->artisan('whatsapp:nudge-stalled')->assertSuccessful();
-        $this->assertNull($this->out('263771234567'));
-    }
-
-    public function test_a_freshly_active_flow_is_not_nudged(): void
-    {
-        $this->account();
-        $this->stalledSession('263771234567', now()->subMinutes(5)); // too recent
-
-        $this->artisan('whatsapp:nudge-stalled')->assertSuccessful();
-
-        $this->assertNull($this->out('263771234567'));
-    }
-
-    public function test_a_chat_in_agent_handoff_is_not_nudged(): void
-    {
-        $this->account(handoffUntil: now()->addHour());
-        $this->stalledSession('263771234567', now()->subMinutes(45));
-
-        $this->artisan('whatsapp:nudge-stalled')->assertSuccessful();
-
-        $this->assertNull($this->out('263771234567'));
     }
 
     public function test_a_saved_order_is_reminded_once_to_top_up(): void
