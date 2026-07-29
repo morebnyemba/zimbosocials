@@ -1,7 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import { FaWhatsapp, FaArrowLeft, FaPaperPlane, FaHeadset, FaRedo, FaRobot, FaTrash } from 'react-icons/fa';
+import { FaWhatsapp, FaArrowLeft, FaPaperPlane, FaHeadset, FaRedo, FaRobot, FaTrash, FaPaperclip } from 'react-icons/fa';
 
 interface Message {
     id: number;
@@ -93,6 +93,7 @@ const POLL_MS = 5000;
 export default function Conversation({ account, messages, session }: Props) {
     const { data, setData, post, processing, reset } = useForm({ message: '' });
     const [live, setLive] = useState(true);
+    const [sendingMedia, setSendingMedia] = useState(false);
     const liveRef = useRef(live);
     liveRef.current = live;
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -123,6 +124,17 @@ export default function Conversation({ account, messages, session }: Props) {
         post(route('admin.whatsapp.conversation.reply', account.id), {
             preserveScroll: true,
             onSuccess: () => reset('message'),
+        });
+    };
+
+    /** Send a photo/video/PDF; whatever is in the reply box becomes its caption. */
+    const sendMedia = (file: File) => {
+        setSendingMedia(true);
+        router.post(route('admin.whatsapp.conversation.media', account.id), { file, caption: data.message }, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => reset('message'),
+            onFinish: () => setSendingMedia(false),
         });
     };
 
@@ -242,6 +254,21 @@ export default function Conversation({ account, messages, session }: Props) {
                         rows={2}
                         className="flex-1 resize-none bg-zinc-50 border-2 border-zinc-100 rounded-xl px-4 py-3 text-sm font-medium text-zinc-900 focus:outline-none focus:border-emerald-500 transition"
                     />
+                    {/* Anything typed above rides along as the caption, so a
+                        refill screenshot can be sent with a note in one go. */}
+                    <label className={`inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-zinc-100 text-zinc-600 text-sm font-bold hover:bg-zinc-200 transition cursor-pointer ${sendingMedia ? 'opacity-40 pointer-events-none' : ''}`}>
+                        <FaPaperclip /> {sendingMedia ? 'Sending…' : 'Attach'}
+                        <input
+                            type="file"
+                            className="hidden"
+                            accept="image/jpeg,image/png,video/mp4,video/3gpp,application/pdf"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) sendMedia(file);
+                                e.target.value = '';
+                            }}
+                        />
+                    </label>
                     <button type="submit" disabled={processing || !data.message.trim()} className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-zinc-900 text-white text-sm font-bold hover:bg-zinc-800 disabled:opacity-40 transition">
                         <FaPaperPlane /> Send
                     </button>

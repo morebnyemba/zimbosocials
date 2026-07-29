@@ -592,7 +592,14 @@ class MessageRouter
 
         // Optional AI follow-up nudge — answer-only turns; a flow turn already
         // ends in the step's question, a nudge on top would be a second voice.
-        if (! $willStartFlow && ! empty($r['follow_up'])) {
+        // ...but never on top of a question. If the reply already asked them
+        // something, a second message talks over the answer we just invited —
+        // and because the model writes the nudge without knowing what the reply
+        // ended up saying, it lands as a non-sequitur: someone who has just
+        // said they cannot afford it gets "manual deposits earn a +5% bonus!".
+        if (! $willStartFlow && ! empty($r['follow_up'])
+            && ! \App\WhatsApp\AI\GeminiProvider::asksSomething($reply)
+        ) {
             $this->responder->send($ctx->phone, (string) $r['follow_up'], ['handled_by' => 'ai', 'ai_used' => true, 'intent' => 'follow_up']);
         }
 

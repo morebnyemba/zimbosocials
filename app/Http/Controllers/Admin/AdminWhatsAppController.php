@@ -7,6 +7,8 @@ use App\Models\WhatsAppAccount;
 use App\Models\WhatsAppKnowledge;
 use App\Models\WhatsAppMessage;
 use App\Models\WhatsAppSession;
+use App\WhatsApp\Messaging\MediaArchive;
+use App\WhatsApp\Messaging\Responder;
 use App\WhatsApp\Messaging\WhatsAppGateway;
 use App\WhatsApp\Persistence\ContactEraser;
 use Illuminate\Http\RedirectResponse;
@@ -104,6 +106,64 @@ class AdminWhatsAppController extends Controller
             'messages' => $messages,
             'session' => $session ? ['flow' => $session->current_flow, 'state' => $session->current_state, 'status' => $session->status] : null,
         ]);
+    }
+
+    /**
+     * Send a photo, video or document as a human agent.
+     *
+     * Uploaded to Meta rather than linked, so it works whether or not storage
+     * is reachable from the internet, and kept locally too so the transcript
+     * can replay what was sent. Media is free-form, so it only lands inside the
+     * 24-hour window — we check first rather than report a success the customer
+     * never sees.
+     */
+    public function replyMedia(Request $request, WhatsAppAccount $account, MediaArchive $archive): RedirectResponse
+    {
+        $data = $request->validate([
+            // Meta caps images at 5MB and video at 16MB; max: is in kilobytes.
+            'file' => ['required', 'file', 'mimetypes:image/jpeg,image/png,video/mp4,video/3gpp,application/pdf', 'max:16384'],
+            'caption' => ['nullable', 'string', 'max:1024'],
+        ]);
+
+        if (! WhatsAppAccount::serviceWindowOpen((string) $account->wa_phone)) {
+            return back()->with('error', 'The 24-hour reply window has closed — this customer needs to message first before we can send them a file.');
+        }
+
+        $file = $request->file('file');
+        $mime = (string) $file->getMimeType();
+        $kind = match (true) {
+            str_starts_with($mime, 'video/') => 'video',
+            str_starts_with($mime, 'image/') => 'image',
+            default => 'document',
+        };
+        $contents = (string) file_get_contents($file->getRealPath());
+
+        $localUrl = $archive->keepOutbound($contents, $mime, (string) $account->wa_phone);
+
+        $upload = app(WhatsAppGateway::class)->uploadMedia(
+            $contents, $mime, $file->getClientOriginalName() ?: 'file', $kind
+        );
+        if (empty($upload['ok'])) {
+            return back()->with('error', 'Upload to WhatsApp failed: '.($upload['error'] ?? $upload['reason'] ?? 'unknown'));
+        }
+
+        $sent = app(Responder::class)->sendMedia(
+            (string) $account->wa_phone,
+            $kind,
+            (string) $upload['media_id'],
+            $data['caption'] ?? null,
+            ['handled_by' => 'agent', 'intent' => 'agent_media', 'media_url' => $localUrl, 'media_mime' => $mime],
+            $file->getClientOriginalName(),
+        );
+
+        if (! $sent) {
+            return back()->with('error', "Could not send the {$kind} — check the WhatsApp connection.");
+        }
+
+        // Same as a text reply: the agent is engaged, so keep the bot quiet.
+        $account->update(['agent_handoff_until' => now()->addHours(self::HANDOFF_HOURS)]);
+
+        return back()->with('success', ucfirst($kind).' sent.');
     }
 
     /** Send a message as a human agent and pause the bot for a window. */
