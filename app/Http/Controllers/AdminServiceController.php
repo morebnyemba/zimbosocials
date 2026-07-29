@@ -60,10 +60,16 @@ class AdminServiceController extends Controller
         // These three aggregates scan the whole table and are identical for
         // every admin on every page of every filter, so they are computed once
         // and shared. Cleared by the sync command when the catalogue changes.
-        $categories = Cache::remember('admin:services:categories', now()->addMinutes(10), fn () => Service::select('category')
+        //
+        // Plain ARRAYS go into the cache, never Collections. The database store
+        // serialises whatever it is given, and a serialised framework object
+        // read back by a different build comes out as __PHP_Incomplete_Class —
+        // which takes the whole page down until the cache happens to expire.
+        $categories = Cache::remember('admin:services:categories:v2', now()->addMinutes(10), fn () => Service::select('category')
             ->distinct()
             ->orderBy('category')
-            ->pluck('category'));
+            ->pluck('category')
+            ->all());
 
         // Category -> service count, for the "Merge Categories" tool — lets an
         // admin see at a glance which raw category strings likely represent
@@ -71,19 +77,21 @@ class AdminServiceController extends Controller
         // unify them, independent of the automatic keyword-based normalizer
         // (which only recognizes a fixed list of platforms and can't handle
         // arbitrary/custom categories the admin wants merged).
-        $categoryCounts = Cache::remember('admin:services:category_counts', now()->addMinutes(10), fn () => Service::selectRaw('category, COUNT(*) as cnt')
+        $categoryCounts = Cache::remember('admin:services:category_counts:v2', now()->addMinutes(10), fn () => Service::selectRaw('category, COUNT(*) as cnt')
             ->groupBy('category')
             ->orderBy('category')
             ->get()
-            ->mapWithKeys(fn ($row) => [$row->category => $row->cnt]));
+            ->mapWithKeys(fn ($row) => [$row->category => $row->cnt])
+            ->all());
 
         // Consolidated: 1 GROUP BY instead of 3 separate counts
-        $rawCounts = Cache::remember('admin:services:active_counts', now()->addMinutes(10), fn () => Service::selectRaw('is_active, COUNT(*) as cnt')
+        $rawCounts = Cache::remember('admin:services:active_counts:v2', now()->addMinutes(10), fn () => Service::selectRaw('is_active, COUNT(*) as cnt')
             ->groupBy('is_active')
-            ->pluck('cnt', 'is_active'));
+            ->pluck('cnt', 'is_active')
+            ->all());
 
         $stats = [
-            'total' => $rawCounts->sum(),
+            'total' => array_sum($rawCounts),
             'active' => (int) ($rawCounts[1] ?? $rawCounts['1'] ?? 0),
             'inactive' => (int) ($rawCounts[0] ?? $rawCounts['0'] ?? 0),
         ];
