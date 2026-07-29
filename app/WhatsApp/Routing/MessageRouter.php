@@ -46,6 +46,7 @@ class MessageRouter
         private readonly \App\WhatsApp\Deposit\ProofIntake $proof,
         private readonly \App\WhatsApp\Messaging\WhatsAppGateway $gateway,
         private readonly \App\WhatsApp\Messaging\MediaArchive $archive,
+        private readonly \App\WhatsApp\Order\LiveOrderStatus $liveOrders,
     ) {}
 
     public function handle(array $msg, ?string $displayName = null): void
@@ -488,6 +489,13 @@ class MessageRouter
         $authenticated = $account->isLinked();
         $history = (array) $ctx->get('_ai_history', []);
         $nudgeAllowed = $authenticated && \App\WhatsApp\ReferralNudge::allowed($ctx->phone);
+
+        // Someone chasing an order gets an answer that is true NOW, not one
+        // built from whatever the five-minute sync last wrote. Bounded, cached
+        // and failure-tolerant — see LiveOrderStatus.
+        if ($authenticated && $account->user && $this->liveOrders->isStatusQuestion($text)) {
+            $this->liveOrders->refresh($account->user);
+        }
 
         $r = $this->intent->resolve($text, $ctx->phone, [
             'user' => $authenticated ? $account->user : null,

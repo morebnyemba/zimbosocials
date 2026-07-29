@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-29.2';
+    public const PROMPT_VERSION = '2026-07-29.3';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -814,9 +814,22 @@ class GeminiProvider
                     $active = in_array($o->status, ['pending', 'processing', 'in_progress'], true);
                     $justPlaced = $active && $o->created_at && $o->created_at->gt(now()->subMinutes(20));
                     $flag = $justPlaced ? '  ← JUST PLACED & PAID FOR, now processing' : '';
-                    $lines[] = "  #{$o->id} · ".($o->service?->name ?? 'service')." · {$o->quantity} · {$o->status} · {$when}{$flag}";
+                    // How much has actually landed. "remains" is what the
+                    // provider still owes, so quantity - remains is delivered —
+                    // far more use to a waiting customer than a status word,
+                    // and it stops the model guessing at progress.
+                    $progress = '';
+                    if ($active && $o->remains !== null && $o->quantity > 0) {
+                        $delivered = max(0, (int) $o->quantity - (int) $o->remains);
+                        $percent = (int) round($delivered / $o->quantity * 100);
+                        $progress = ' · delivered '.number_format($delivered).'/'.number_format($o->quantity)." ({$percent}%)";
+                    }
+                    $lines[] = "  #{$o->id} · ".($o->service?->name ?? 'service')." · {$o->quantity} · {$o->status}{$progress} · {$when}{$flag}";
                 }
                 $lines[] = 'An order above with status pending/processing/in_progress is ALREADY PLACED AND PAID — the charge is why the balance dropped. Never ask the user to pay for or re-place it.';
+                $lines[] = 'These statuses were refreshed from the provider just now, so answer from them directly and confidently. '
+                    .'Where a delivered figure is shown, give it — "1,400 of 2,000 so far" tells a waiting customer far more than "processing". '
+                    .'Never invent a percentage, a delivery time or an ETA that is not here.';
             }
 
             // Pending payments — so the AI can answer "it didn't work / nothing
