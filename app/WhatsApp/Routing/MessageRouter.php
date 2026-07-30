@@ -773,14 +773,26 @@ class MessageRouter
             return false;
         }
 
+        // Shrink photos before they become billable input. Gemini tiles images
+        // at 768px, so a full-resolution phone photo costs several times what
+        // the same picture costs at 1024px wide — and nothing we ask of an
+        // image needs the difference. The archived copy keeps full quality.
+        $contents = (string) $dl['contents'];
+        if ($imageOk) {
+            $contents = app(\App\WhatsApp\Messaging\MediaDownscaler::class)->shrink($contents, $mime);
+        }
+
         return $this->consultAi(
             $ctx,
             $account,
             trim((string) ($media['caption'] ?? '')),
             inFlow: $ctx->inFlow(),
             media: [[
-                'mime' => (string) ($dl['mime'] ?: $mime),
-                'data' => (string) $dl['contents'],
+                // A downscaled photo is always re-encoded as JPEG.
+                'mime' => $imageOk && $contents !== (string) $dl['contents']
+                    ? 'image/jpeg'
+                    : (string) ($dl['mime'] ?: $mime),
+                'data' => $contents,
                 'kind' => $kind === 'audio' && ! empty($media['voice']) ? 'voice note' : $kind,
             ]],
         );
