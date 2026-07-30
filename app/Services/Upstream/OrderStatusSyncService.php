@@ -33,6 +33,24 @@ class OrderStatusSyncService
      *
      * @return string|null Null means "no change" (unrecognized status, no remains signal).
      */
+    /**
+     * A numeric field as reported by the provider, or null when it isn't.
+     *
+     * Panels are inconsistent here: an order they haven't started yet commonly
+     * comes back with start_count or remains as an empty string, and some send
+     * "-" or "null". Those mean "not reported", and must not be read as zero —
+     * a zero `remains` is our signal that an order finished, so treating an
+     * empty string as 0 marks a barely-started order complete.
+     */
+    private function reportedNumber(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
     public function resolveLocalStatus(array $data): ?string
     {
         $upstreamStatus = strtolower($data['status'] ?? '');
@@ -47,9 +65,11 @@ class OrderStatusSyncService
             default => null,
         };
 
+        // Only a genuinely reported zero means "fully delivered". Before this
+        // checked array_key_exists + a cast, so a provider sending remains=""
+        // on an order it had not started yet was read as complete.
         if (
-            array_key_exists('remains', $data)
-            && (int) $data['remains'] === 0
+            $this->reportedNumber($data['remains'] ?? null) === 0
             && ! in_array($localStatus, ['partial', 'cancelled', 'refunded'], true)
         ) {
             $localStatus = 'completed';
@@ -68,8 +88,13 @@ class OrderStatusSyncService
             $oldStatus = $order->status;
             $user = User::find($order->user_id);
             $charge = (float) $order->charge;
-            $remains = (int) ($upstreamData['remains'] ?? 0);
-            $startCount = (int) ($upstreamData['start_count'] ?? $order->start_count);
+            // Unreported values keep what we already had, rather than becoming
+            // zero — a bogus remains=0 would compute a refund of nothing on a
+            // cancelled order the customer is owed money for.
+            $remains = $this->reportedNumber($upstreamData['remains'] ?? null)
+                ?? (int) ($order->remains ?? 0);
+            $startCount = $this->reportedNumber($upstreamData['start_count'] ?? null)
+                ?? $order->start_count;
 
             $refundAmount = 0;
 
@@ -195,9 +220,13 @@ class OrderStatusSyncService
 
         if (! $localStatus || $localStatus === $order->status) {
             // Still refresh remains/start_count even if the status itself hasn't changed.
+            // ?? alone was not enough: providers report these as "" rather than
+            // omitting them, and an empty string in an integer column is a
+            // hard SQL error under strict mode — which took the whole sync
+            // request down with a 500.
             $order->update([
-                'start_count' => $data['start_count'] ?? $order->start_count,
-                'remains' => $data['remains'] ?? $order->remains,
+                'start_count' => $this->reportedNumber($data['start_count'] ?? null) ?? $order->start_count,
+                'remains' => $this->reportedNumber($data['remains'] ?? null) ?? $order->remains,
             ]);
 
             return [
