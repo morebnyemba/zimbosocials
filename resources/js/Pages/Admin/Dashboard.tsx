@@ -1,7 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
-import { Users, ShoppingCart, Activity, DollarSign, Ticket, CreditCard, Box, PieChart, UserCheck, FileText, Sparkles, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
+import { Users, ShoppingCart, Activity, DollarSign, Ticket, CreditCard, Box, PieChart, UserCheck, FileText, Sparkles, Loader2, RefreshCw, ShieldAlert, Bot } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTranslation } from '@/lib/i18n';
 
@@ -10,6 +10,11 @@ interface Stats {
     services: number; orders: number; active_orders: number; open_tickets: number;
     revenue: number; today_revenue: number; month_revenue: number;
     pending_deposits: number; pending_withdrawals: number;
+    ai?: {
+        today_cost: number; month_cost: number;
+        today_requests: number; month_requests: number;
+        cache_hit_percent: number;
+    };
 }
 
 interface Order { id: number; user?: { id: number; name: string; email: string }; service?: { id: number; name: string; category: string }; status: string; charge: string; quantity: number; link: string; created_at: string; }
@@ -41,7 +46,7 @@ const statusColors: Record<string, string> = {
     refunded: 'bg-zinc-100 text-zinc-800 border-zinc-200',
 };
 
-function StatCard({ label, value, icon: Icon, href, colorClass = 'text-emerald-600 bg-emerald-50', badge }: { label: string; value: string | number; icon: any; href?: string; colorClass?: string; badge?: number }) {
+function StatCard({ label, value, icon: Icon, href, colorClass = 'text-emerald-600 bg-emerald-50', badge, subtitle }: { label: string; value: string | number; icon: any; href?: string; colorClass?: string; badge?: number; subtitle?: string }) {
     const inner = (
         <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-emerald-200 group">
             <div className="flex items-center justify-between mb-3">
@@ -54,6 +59,7 @@ function StatCard({ label, value, icon: Icon, href, colorClass = 'text-emerald-6
             </div>
             <p className="text-2xl font-extrabold text-zinc-900 tracking-tight">{value}</p>
             <p className="text-xs font-medium text-zinc-500 mt-1 uppercase tracking-wider">{label}</p>
+            {subtitle && <p className="text-[11px] font-medium text-zinc-400 mt-1.5">{subtitle}</p>}
         </div>
     );
     return href ? <Link href={href}>{inner}</Link> : inner;
@@ -254,6 +260,19 @@ export default function AdminDashboard({ stats, recent_orders, pending_proofs, d
                     <StatCard label={t('today_revenue')} value={`$${Number(stats.today_revenue).toFixed(2)}`} icon={DollarSign} colorClass="bg-brand-green/10 text-brand-green" />
                     <StatCard label={t('month_revenue')} value={`$${Number(stats.month_revenue).toFixed(2)}`} icon={DollarSign} colorClass="bg-brand-green/10 text-brand-green" />
                     <StatCard label={t('services')} value={stats.services} icon={Box} href={route('admin.services.index')} colorClass="bg-indigo-50 text-indigo-600" />
+                    {/* AI spend, so a jump is noticed on the day rather than on
+                        the bill. The subtitle shows how much of the prompt is
+                        being served from cache — near 0% means the system
+                        prompt is being re-billed in full on every message. */}
+                    {stats.ai && (
+                        <StatCard
+                            label="AI cost (month)"
+                            value={`$${Number(stats.ai.month_cost).toFixed(2)}`}
+                            subtitle={`$${Number(stats.ai.today_cost).toFixed(2)} today · ${stats.ai.month_requests} calls · ${stats.ai.cache_hit_percent}% cached`}
+                            icon={Bot}
+                            colorClass="bg-purple-50 text-purple-600"
+                        />
+                    )}
                     <StatCard label={t('pending_deposits')} value={stats.pending_deposits} icon={CreditCard} href={route('admin.transactions.index') + '?status=pending&type=deposit'} colorClass="bg-brand-orange/10 text-brand-orange" badge={stats.pending_deposits} />
                     <StatCard label={t('pending_withdrawals')} value={stats.pending_withdrawals} icon={CreditCard} href={route('admin.transactions.index') + '?status=pending&type=withdrawal'} colorClass="bg-red-50 text-red-600" badge={stats.pending_withdrawals} />
                     <StatCard label={t('pending_marketer_apps')} value={(stats as any).pending_marketers} icon={UserCheck} href={route('admin.marketers.index') + '?status=pending'} colorClass="bg-brand-green/10 text-brand-green" badge={(stats as any).pending_marketers} />

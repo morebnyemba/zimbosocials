@@ -114,7 +114,19 @@ class GeminiClient
             ]],
             'generationConfig' => $generationConfig,
         ];
-        if ($system !== null) {
+
+        // The system prompt is thousands of tokens and identical on every
+        // message. Where Google will cache it for us, reference the cache
+        // instead of resending it — cached input is billed at a fraction of
+        // fresh input. The two are mutually exclusive: the cache HOLDS the
+        // system instruction, so sending both is an error.
+        $cacheName = $system !== null
+            ? app(GeminiPromptCache::class)->nameFor($system, $model)
+            : null;
+
+        if ($cacheName !== null) {
+            $payload['cachedContent'] = $cacheName;
+        } elseif ($system !== null) {
             $payload['systemInstruction'] = ['parts' => [['text' => $system]]];
         }
 
@@ -127,6 +139,25 @@ class GeminiClient
             $this->lastStatus = $response->status();
 
             if ($response->failed()) {
+                // A cache that expired between our TTL and Google's leaves the
+                // name dangling. Drop it and retry once WITHOUT the cache, so a
+                // caching problem never costs the customer their reply.
+                if ($cacheName !== null && in_array($response->status(), [400, 403, 404], true)) {
+                    app(GeminiPromptCache::class)->forget((string) $system, $model);
+                    Log::info('Gemini prompt cache rejected — retrying inline', ['status' => $response->status()]);
+
+                    unset($payload['cachedContent']);
+                    $payload['systemInstruction'] = ['parts' => [['text' => $system]]];
+
+                    $response = Http::timeout($timeout ?? (int) config('services.gemini.timeout', 30))
+                        ->withHeaders(['x-goog-api-key' => config('services.gemini.api_key')])
+                        ->asJson()
+                        ->post($endpoint, $payload);
+                    $this->lastStatus = $response->status();
+                }
+            }
+
+            if ($response->failed()) {
                 Log::warning('Gemini request failed', [
                     'status' => $response->status(),
                     'body' => mb_substr($response->body(), 0, 500),
@@ -134,6 +165,8 @@ class GeminiClient
 
                 return null;
             }
+
+            $this->recordUsage($response->json(), $model);
 
             $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
 
@@ -149,5 +182,25 @@ class GeminiClient
 
             return null;
         }
+    }
+
+    /**
+     * Bank what this request cost. cachedContentTokenCount is the slice of the
+     * prompt served from cache — if it stays at zero, the caching is not doing
+     * anything and the dashboard will show that plainly.
+     */
+    private function recordUsage(mixed $body, string $model): void
+    {
+        $usage = data_get($body, 'usageMetadata');
+        if (! is_array($usage)) {
+            return;
+        }
+
+        \App\Models\AiUsage::record(
+            $model,
+            (int) ($usage['promptTokenCount'] ?? 0),
+            (int) ($usage['cachedContentTokenCount'] ?? 0),
+            (int) ($usage['candidatesTokenCount'] ?? 0),
+        );
     }
 }
