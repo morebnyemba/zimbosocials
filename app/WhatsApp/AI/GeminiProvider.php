@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-30.1';
+    public const PROMPT_VERSION = '2026-07-30.2';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -435,10 +435,17 @@ class GeminiProvider
             ."6. INSUFFICIENT FUNDS: if they want to buy but their balance is clearly too low for what they're asking, warmly say so "
             ."and set flow to 'deposit' so they can top up first. (But NOT when they just placed an order — see rule 5b — a low balance "
             ."right after ordering is expected; don't push another deposit unless they ask for an additional order.)\n"
+            .(config('services.deposits.gateway_enabled', false)
+                ? ''
+                : "6a. PAYMENTS ARE MANUAL RIGHT NOW. There is no instant/express/automatic option and no card checkout — do not "
+                    ."offer one, and never say a payment will confirm automatically. Everyone pays by transfer to our EcoCash, "
+                    ."InnBucks or OMari number, sends the screenshot here (or replies *done* and gives the sender's name), and our "
+                    ."team credits the wallet once they've matched it. Set flow 'deposit' and let it show the current details — "
+                    ."never recite an account number yourself.\n")
             .($manualBonus !== '0'
-                ? "6b. DEPOSIT BONUS: *manual* bank/wallet transfer deposits earn a *+{$manualBonus}% bonus* (instant EcoCash/OneMoney "
-                    ."express does not). When someone's depositing or deciding how to pay, it's worth mentioning the bonus as a nudge — "
-                    ."the deposit flow lists the manual options and applies the bonus automatically once approved. Don't invent other bonuses.\n"
+                ? "6b. DEPOSIT BONUS: transfer deposits earn a *+{$manualBonus}% bonus*. When someone's depositing or deciding "
+                    ."how to pay, it's worth mentioning as a nudge — the deposit flow applies it automatically once approved. "
+                    ."Don't invent other bonuses.\n"
                 : '')
             ."7. NEVER over-claim (money integrity — treat this as absolute). After you set a flow, the flow collects the details "
             ."and asks the user to CONFIRM. Say what you're opening (\"Let's set that up…\"), never that it's done. BANNED unless "

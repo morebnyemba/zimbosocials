@@ -22,6 +22,16 @@ class DepositInputParsingTest extends TestCase
 
     private function atAskAmount(): array
     {
+        // Deposits are manual-only, so a payment method has to exist for the
+        // flow to have anything to offer after an amount is accepted.
+        \App\Models\ManualPaymentDetail::firstOrCreate(
+            ['method_key' => 'manual_ecocash'],
+            [
+                'label' => 'EcoCash', 'account_name' => 'M NYEMBA', 'account_number' => '0787211325',
+                'instructions' => 'Use your name as reference', 'is_active' => true, 'sort_order' => 1,
+            ]
+        );
+
         $user = User::factory()->create(['balance' => 0]);
         $ctx = new SessionContext(self::PHONE);
         $ctx->set('_user_id', $user->id);
@@ -68,6 +78,10 @@ class DepositInputParsingTest extends TestCase
     #[\PHPUnit\Framework\Attributes\DataProvider('useMyNumberPhrases')]
     public function test_words_meaning_use_my_number_are_accepted(string $input): void
     {
+        // Gateway express is switched off for customers, but the code path is
+        // intact and this is what guards it for whenever it comes back.
+        config(['services.deposits.gateway_enabled' => true]);
+
         [$engine, $ctx] = $this->atAskAmount();
         $engine->advance($ctx, '5');            // → choose_method
         $engine->advance($ctx, '1');            // EcoCash → ask_phone
@@ -92,6 +106,8 @@ class DepositInputParsingTest extends TestCase
 
     public function test_a_typed_number_still_wins_over_an_affirmative(): void
     {
+        config(['services.deposits.gateway_enabled' => true]);
+
         [$engine, $ctx] = $this->atAskAmount();
         $engine->advance($ctx, '5');
         $engine->advance($ctx, '1');

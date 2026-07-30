@@ -28,6 +28,16 @@ class WhatsAppAiPrimaryTest extends TestCase
 
     private function seedUserAndAccount(float $balance = 100): User
     {
+        // Deposits are manual-only, so the flow needs a payment method to have
+        // anything to offer — without one it ends immediately.
+        \App\Models\ManualPaymentDetail::firstOrCreate(
+            ['method_key' => 'manual_ecocash'],
+            [
+                'label' => 'EcoCash', 'account_name' => 'M NYEMBA', 'account_number' => '0787211325',
+                'instructions' => 'Use your name as reference', 'is_active' => true, 'sort_order' => 1,
+            ]
+        );
+
         $user = User::factory()->create(['balance' => $balance]);
         WhatsAppAccount::create([
             'wa_phone' => self::PHONE,
