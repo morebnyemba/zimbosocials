@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AiUsage;
 use App\Models\BusinessContract;
 use App\Models\ContractProofSubmission;
 use App\Models\Order;
@@ -66,6 +67,26 @@ class AdminController extends Controller
                 'total_contracts' => BusinessContract::count(),
             ];
         });
+
+        // AI spend. Kept out of the cached block above so it stays live while
+        // you're watching it — the whole point is noticing a jump on the day it
+        // happens rather than on the bill.
+        $aiRows = AiUsage::whereDate('day', '>=', now()->startOfMonth())->get();
+        // Compared as dates, not strings: `day` is cast to a Carbon instance,
+        // so matching it against a 'Y-m-d' string quietly finds nothing.
+        $aiToday = $aiRows->filter(fn (AiUsage $r) => $r->day?->isToday());
+
+        $stats['ai'] = [
+            'today_cost' => round($aiToday->sum(fn (AiUsage $r) => $r->cost()), 2),
+            'month_cost' => round($aiRows->sum(fn (AiUsage $r) => $r->cost()), 2),
+            'today_requests' => (int) $aiToday->sum('requests'),
+            'month_requests' => (int) $aiRows->sum('requests'),
+            // What share of prompt tokens came from cache. A number near zero
+            // means the system prompt is being re-billed in full every message.
+            'cache_hit_percent' => $aiRows->sum('prompt_tokens') > 0
+                ? (int) round($aiRows->sum('cached_tokens') / $aiRows->sum('prompt_tokens') * 100)
+                : 0,
+        ];
 
         $recent_orders = Order::with(['user:id,name,email', 'service:id,name,name_sn,category'])
             ->latest()

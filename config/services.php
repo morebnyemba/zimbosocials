@@ -222,6 +222,22 @@ return [
         // Vision/audio turns are slower than text — give them more room, but
         // still bounded so a slow model can't hang the webhook.
         'media_timeout' => (int) env('GEMINI_MEDIA_TIMEOUT', 25),
+
+        // USD per MILLION tokens, for the spend figure on the admin dashboard.
+        // Overridable because published rates change, and a stale number here
+        // would quietly misrepresent cost on a screen someone is deciding from.
+        // Defaults are Gemini 2.5 Flash at the time of writing; cached input is
+        // billed at roughly a quarter of fresh input.
+        'rates' => [
+            'input' => (float) env('GEMINI_RATE_INPUT', 0.30),
+            'cached_input' => (float) env('GEMINI_RATE_CACHED_INPUT', 0.075),
+            'output' => (float) env('GEMINI_RATE_OUTPUT', 2.50),
+        ],
+
+        // Cache the system prompt with Gemini so it isn't re-billed as fresh
+        // input on every message. See GeminiPromptCache.
+        'cache_system_prompt' => (bool) env('GEMINI_CACHE_SYSTEM_PROMPT', true),
+        'cache_ttl_seconds' => (int) env('GEMINI_CACHE_TTL', 3600),
     ],
 
 ];
