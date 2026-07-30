@@ -213,15 +213,17 @@ return [
     // AI cleanup + Shona/Ndebele translation when importing upstream services.
     'deposits' => [
         /*
-         * Automatic (Paynow express / card) payment methods.
+         * Automatic (Paynow express) deposits IN THE WHATSAPP ASSISTANT ONLY.
          *
-         * Turned OFF: deposits are taken by manual transfer only, verified by an
-         * admin against the proof the customer sends. Set DEPOSITS_GATEWAY=true
-         * to bring the instant methods back — the Paynow code, the status poller
-         * and every in-flight transaction still work, they are simply not
-         * offered to new customers while this is false.
+         * Turned off: over WhatsApp, deposits are taken by manual transfer and
+         * verified by an admin against the proof the customer sends. The
+         * WEBSITE is unaffected — the wallet page still takes Paynow and card
+         * normally, and in-flight transactions still poll and confirm.
+         *
+         * Set WHATSAPP_EXPRESS_DEPOSITS=true to offer the instant methods in
+         * chat again; nothing was removed.
          */
-        'gateway_enabled' => (bool) env('DEPOSITS_GATEWAY', false),
+        'whatsapp_gateway_enabled' => (bool) env('WHATSAPP_EXPRESS_DEPOSITS', false),
     ],
 
     'gemini' => [

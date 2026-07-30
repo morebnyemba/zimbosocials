@@ -39,7 +39,7 @@ class ManualOnlyDepositsTest extends TestCase
 
     public function test_no_instant_or_card_option_is_offered(): void
     {
-        config(['services.deposits.gateway_enabled' => false]);
+        config(['services.deposits.whatsapp_gateway_enabled' => false]);
         $this->detail();
         $user = User::factory()->create(['balance' => 0]);
 
@@ -53,7 +53,7 @@ class ManualOnlyDepositsTest extends TestCase
 
     public function test_a_stale_instant_tap_cannot_start_a_gateway_payment(): void
     {
-        config(['services.deposits.gateway_enabled' => false]);
+        config(['services.deposits.whatsapp_gateway_enabled' => false]);
         $this->detail();
         $user = User::factory()->create(['balance' => 0]);
         $ctx = $this->context($user);
@@ -68,7 +68,7 @@ class ManualOnlyDepositsTest extends TestCase
 
     public function test_paying_without_a_screenshot_captures_the_sender_name(): void
     {
-        config(['services.deposits.gateway_enabled' => false]);
+        config(['services.deposits.whatsapp_gateway_enabled' => false]);
         $detail = $this->detail();
         $user = User::factory()->create(['balance' => 0]);
         $ctx = $this->context($user);
@@ -95,7 +95,7 @@ class ManualOnlyDepositsTest extends TestCase
 
     public function test_chatter_does_not_count_as_having_paid(): void
     {
-        config(['services.deposits.gateway_enabled' => false]);
+        config(['services.deposits.whatsapp_gateway_enabled' => false]);
         $this->detail();
         $user = User::factory()->create(['balance' => 0]);
         $ctx = $this->context($user);
@@ -108,7 +108,7 @@ class ManualOnlyDepositsTest extends TestCase
 
     public function test_a_meaningless_sender_name_is_refused(): void
     {
-        config(['services.deposits.gateway_enabled' => false]);
+        config(['services.deposits.whatsapp_gateway_enabled' => false]);
         $this->detail();
         $user = User::factory()->create(['balance' => 0]);
         $ctx = $this->context($user);
@@ -120,7 +120,7 @@ class ManualOnlyDepositsTest extends TestCase
 
     public function test_the_gateway_can_be_switched_back_on(): void
     {
-        config(['services.deposits.gateway_enabled' => true]);
+        config(['services.deposits.whatsapp_gateway_enabled' => true]);
         $this->detail();
         $user = User::factory()->create(['balance' => 0]);
 

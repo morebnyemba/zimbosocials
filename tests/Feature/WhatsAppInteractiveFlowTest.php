@@ -108,7 +108,7 @@ class WhatsAppInteractiveFlowTest extends TestCase
     {
         // Prefilling a gateway method is what this covers; express is switched
         // off for customers but the path is intact behind the flag.
-        config(['services.deposits.gateway_enabled' => true]);
+        config(['services.deposits.whatsapp_gateway_enabled' => true]);
 
         $user = User::factory()->create(['balance' => 0]);
         $engine = app(FlowEngine::class);

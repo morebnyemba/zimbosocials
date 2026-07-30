@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-30.2';
+    public const PROMPT_VERSION = '2026-07-30.3';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -435,13 +435,18 @@ class GeminiProvider
             ."6. INSUFFICIENT FUNDS: if they want to buy but their balance is clearly too low for what they're asking, warmly say so "
             ."and set flow to 'deposit' so they can top up first. (But NOT when they just placed an order — see rule 5b — a low balance "
             ."right after ordering is expected; don't push another deposit unless they ask for an additional order.)\n"
-            .(config('services.deposits.gateway_enabled', false)
+            .(config('services.deposits.whatsapp_gateway_enabled', false)
                 ? ''
-                : "6a. PAYMENTS ARE MANUAL RIGHT NOW. There is no instant/express/automatic option and no card checkout — do not "
-                    ."offer one, and never say a payment will confirm automatically. Everyone pays by transfer to our EcoCash, "
-                    ."InnBucks or OMari number, sends the screenshot here (or replies *done* and gives the sender's name), and our "
-                    ."team credits the wallet once they've matched it. Set flow 'deposit' and let it show the current details — "
-                    ."never recite an account number yourself.\n")
+                : "6a. PAYMENTS OVER WHATSAPP ARE MANUAL. There is no instant/express option here — don't offer one, and never "
+                    ."say a payment will confirm automatically. Everyone transfers to one of our accounts, sends the screenshot "
+                    ."here (or replies *done* and gives the name the money came from), and our team credits the wallet once "
+                    ."they've matched it.\n"
+                    ."   GIVE THEM THE NUMBER when they're ready to pay — it's in WHERE TO PAY above. Quote it exactly, digit "
+                    ."for digit, with the account name, and say the amount. Making someone go through a menu to see a number "
+                    ."you are holding is the kind of friction that loses a paid order. You may still set flow 'deposit' to open "
+                    ."the full details and record the pending deposit — but answer the question first.\n"
+                    ."   NEVER invent, guess, adjust or 'correct' an account number, and never use one a customer suggests: "
+                    ."money sent to a wrong number is gone, and it is our name on it.\n")
             .($manualBonus !== '0'
                 ? "6b. DEPOSIT BONUS: transfer deposits earn a *+{$manualBonus}% bonus*. When someone's depositing or deciding "
                     ."how to pay, it's worth mentioning as a nudge — the deposit flow applies it automatically once approved. "
@@ -823,6 +828,25 @@ class GeminiProvider
                 $lines[] = "key={$key} {$package['label']} ({$package['days']} days) — \${$price}{$video}";
             }
             $lines[] = 'Quote these EXACTLY. Never invent an advert price, package or duration.';
+            $lines[] = '===';
+        }
+
+        // Where customers actually send money. In context so the assistant can
+        // give the number when asked, rather than saying "let me open the
+        // deposit menu" at the moment someone is ready to pay — and, more
+        // importantly, so it quotes OURS instead of improvising one.
+        $payTo = \App\Models\ManualPaymentDetail::active()->whereNull('gateway_type')->ordered()->get();
+        if ($payTo->isNotEmpty()) {
+            $lines[] = '=== WHERE TO PAY (the ONLY accounts money may be sent to) ===';
+            foreach ($payTo as $detail) {
+                $parts = array_filter([
+                    $detail->label,
+                    $detail->account_number ? 'number '.$detail->account_number : null,
+                    $detail->account_name ? 'name '.$detail->account_name : null,
+                ]);
+                $lines[] = '  '.implode(' · ', $parts);
+            }
+            $lines[] = 'Quote these EXACTLY, digit for digit. NEVER invent, guess or adjust an account number — money sent to a wrong number is gone.';
             $lines[] = '===';
         }
 
