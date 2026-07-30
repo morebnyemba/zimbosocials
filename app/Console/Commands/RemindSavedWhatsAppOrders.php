@@ -66,7 +66,11 @@ class RemindSavedWhatsAppOrders extends Command
 
             $responder->send(
                 $order->wa_phone,
-                "{$hi} 👋 Your *{$qty} {$service->name}* order is saved and ready — top up just *{$amount} {$cur}* and I'll place it for you right away. Reply *deposit* to finish. 💰",
+                // If they have already paid and simply not told us, asking for
+                // the screenshot here is a far shorter path than sending them
+                // back through the deposit flow.
+                "{$hi} 👋 Your *{$qty} {$service->name}* order is saved and ready — top up just *{$amount} {$cur}* and I'll place it for you right away.\n\n"
+                ."Reply *deposit* to finish, or if you've already paid, just send the screenshot here. 💰",
                 ['handled_by' => 'system', 'intent' => 'saved_order_reminder']
             );
 

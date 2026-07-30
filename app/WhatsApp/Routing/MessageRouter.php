@@ -726,7 +726,7 @@ class MessageRouter
             'no_pending' => "Thanks for the file! 📎 I couldn't find a manual deposit waiting on proof. To top up, reply *deposit*, pick a *manual* method, pay, then send your screenshot here.",
             'bad_type' => "I can only read a *photo* or *PDF* of your payment. Please resend it as an image (JPG/PNG) or PDF. 📸",
             'too_large' => "That file's a bit large for me (max 5MB). Please send a smaller *photo* of your payment confirmation. 📸",
-            default => "Hmm, I couldn't open that file 🤔 Please resend a clear *photo* of your payment confirmation, or upload it at ".url('/wallet').".",
+            default => "Hmm, I couldn't open that file 🤔 Please resend a clear *photo* of your payment confirmation right here, or upload it at ".url('/wallet').".",
         };
 
         $this->responder->send($ctx->phone, $message, ['handled_by' => 'system', 'intent' => 'proof_'.($res['reason'] ?? 'error')]);
