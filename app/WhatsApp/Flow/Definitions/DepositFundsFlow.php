@@ -4,6 +4,7 @@ namespace App\WhatsApp\Flow\Definitions;
 
 use App\Models\ManualPaymentDetail;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Services\DepositService;
 use App\Services\Paynow\PaynowMobileService;
 use App\WhatsApp\Flow\AbstractFlow;
@@ -82,6 +83,8 @@ class DepositFundsFlow extends AbstractFlow
     {
         return match ($state) {
             'choose_method' => $this->chooseMethod($input, $ctx),
+            'awaiting_payment' => $this->awaitingPayment($input, $ctx),
+            'awaiting_sender_name' => $this->awaitingSenderName($input, $ctx),
             'ask_phone' => $this->askPhone($input, $ctx),
             'confirm' => $this->confirm($input, $ctx),
             'ask_otp' => $this->askOtp($input, $ctx),
@@ -127,16 +130,20 @@ class DepositFundsFlow extends AbstractFlow
         // manual account), so we route by position, not by label.
         $map = [];
         $i = 0;
+        $sections = [];
+        $gatewayOn = (bool) config('services.deposits.gateway_enabled', false);
 
-        // ⚡ Instant / express — auto-confirming Paynow methods.
-        $instantRows = [];
-        foreach (self::MENU as $key) {
-            $i++;
-            $instantRows[] = ['id' => 'fs:'.$i, 'title' => PaynowMobileService::PROVIDERS[$key]['label']];
-            $map[$i] = 'g:'.$key;
+        // ⚡ Instant / express — auto-confirming Paynow methods. Off by default:
+        // deposits are taken manually and verified by an admin (see the config).
+        if ($gatewayOn) {
+            $instantRows = [];
+            foreach (self::MENU as $key) {
+                $i++;
+                $instantRows[] = ['id' => 'fs:'.$i, 'title' => PaynowMobileService::PROVIDERS[$key]['label']];
+                $map[$i] = 'g:'.$key;
+            }
+            $sections[] = ['title' => '⚡ Instant', 'rows' => $instantRows];
         }
-
-        $sections = [['title' => '⚡ Instant', 'rows' => $instantRows]];
 
         // 🏦 Manual transfers — pay to our account, upload proof; these earn the
         // deposit bonus, so surface that right in the row.
@@ -155,12 +162,20 @@ class DepositFundsFlow extends AbstractFlow
             $sections[] = ['title' => '🏦 Manual (+'.$this->trimPercent($bonus).'% bonus)', 'rows' => $manualRows];
         }
 
-        // Card / anything else → the secure wallet page.
-        $i++;
-        $sections[] = ['title' => 'Other', 'rows' => [
-            ['id' => 'fs:'.$i, 'title' => 'Card / Other', 'description' => 'Pay on the website'],
-        ]];
-        $map[$i] = 'card';
+        // Card / anything else → the secure wallet page. Only when the gateway
+        // is on; that page is a card checkout, so offering it while payments
+        // are manual-only would send people somewhere that can't take money.
+        if ($gatewayOn) {
+            $i++;
+            $sections[] = ['title' => 'Other', 'rows' => [
+                ['id' => 'fs:'.$i, 'title' => 'Card / Other', 'description' => 'Pay on the website'],
+            ]];
+            $map[$i] = 'card';
+        }
+
+        if ($sections === []) {
+            return FlowResult::fail('No payment methods are set up right now — please contact *support* and we\'ll sort it out.');
+        }
 
         $ctx->set('deposit_method_map', $map);
 
@@ -196,7 +211,13 @@ class DepositFundsFlow extends AbstractFlow
             return $this->chooseManual((int) substr($token, 2), $ctx);
         }
 
-        // Gateway express → collect the phone to charge.
+        // Gateway express → collect the phone to charge. Re-checked here, not
+        // just when building the menu: a customer can tap a row from a list we
+        // sent before the gateway was switched off.
+        if (! config('services.deposits.gateway_enabled', false)) {
+            return $this->methodMenu((float) $ctx->get('deposit_amount', 0), $ctx);
+        }
+
         $provider = substr($token, 2);
         $ctx->set('deposit_provider', $provider);
 
@@ -231,7 +252,7 @@ class DepositFundsFlow extends AbstractFlow
         $amount = (float) $ctx->get('deposit_amount', 0);
         $cur = $user->currency ?? 'USD';
 
-        Transaction::create([
+        $transaction = Transaction::create([
             'user_id' => $user->id,
             'type' => 'deposit',
             'amount' => $amount,
@@ -269,11 +290,105 @@ class DepositFundsFlow extends AbstractFlow
         // website to log in and upload is friction at the one moment we cannot
         // afford any — the site link stays as a fallback, not the instruction.
         $lines[] = '';
-        $lines[] = '📸 *Once you\'ve paid, send the screenshot right here in this chat* — that\'s all we need, and our team credits you from it.';
-        $lines[] = '';
-        $lines[] = '_(You can also upload it at '.url('/wallet').' if you prefer.)_';
+        $lines[] = '📸 *Once you\'ve paid, send the screenshot right here in this chat.*';
+        $lines[] = 'No screenshot? Just reply *done* and I\'ll take the details instead.';
 
-        return FlowResult::complete(implode("\n", $lines));
+        // Stay in the flow rather than completing: if they come back with
+        // "done" instead of a screenshot we still want the sender's name, which
+        // is what an admin matches against the statement.
+        $ctx->set('deposit_transaction_id', $transaction->id);
+
+        return FlowResult::step(implode("\n", $lines), 'awaiting_payment');
+    }
+
+    /**
+     * They've paid but sent no screenshot. The sender's name is what an admin
+     * matches against the EcoCash/InnBucks statement, so it is worth one
+     * question — without it a payment can sit unmatched for hours.
+     */
+    private function awaitingPayment(string $input, SessionContext $ctx): FlowResult
+    {
+        $said = mb_strtolower(trim($input));
+
+        $paid = (bool) preg_match('/\b(done|paid|finished|sent|ndatuma|ndabhadhara|complete|ok)\b/i', $said);
+        if (! $paid) {
+            return FlowResult::retry(
+                "No rush 👍 Send the *screenshot* here when you've paid, or reply *done* and I'll take the details instead.",
+                'awaiting_payment'
+            );
+        }
+
+        return FlowResult::step(
+            "👍 Thanks! What *name* is on the transaction — the name the money was sent from?\n\n"
+            .'That\'s how our team matches your payment on the statement.',
+            'awaiting_sender_name'
+        );
+    }
+
+    /**
+     * Record who paid, and hand it to an admin. Deliberately does NOT credit
+     * anything: a name is a claim, not proof, and the balance only moves once a
+     * human has matched it against the statement.
+     */
+    private function awaitingSenderName(string $input, SessionContext $ctx): FlowResult
+    {
+        $name = trim($input);
+
+        if (mb_strlen($name) < 3 || ! preg_match('/\p{L}{2,}/u', $name)) {
+            return FlowResult::retry(
+                'Sorry, I need the *name* on the transaction — the name the money was sent from. 🙏',
+                'awaiting_sender_name'
+            );
+        }
+
+        $transaction = Transaction::find((int) $ctx->get('deposit_transaction_id'));
+        if (! $transaction) {
+            return FlowResult::fail('I couldn\'t find that deposit — reply *deposit* to start again, or type *support* for help.');
+        }
+
+        $name = mb_substr($name, 0, 80);
+        $transaction->update([
+            'notes' => "Paid via WhatsApp — sender name: {$name}. Awaiting admin verification (no screenshot sent).",
+        ]);
+
+        $this->notifyAdmins($transaction, $name);
+
+        return FlowResult::complete(
+            "✅ Got it — thanks *{$name}*.\n\n"
+            ."Our team is checking the payment against the statement now and will credit your wallet as soon as it's confirmed. "
+            ."You'll get a message here the moment it's done. 🙏\n\n"
+            .'_If you have the screenshot, sending it here speeds this up a lot._'
+        );
+    }
+
+    /** Money is waiting on a human — tell them, with a way to reply. */
+    private function notifyAdmins(Transaction $transaction, string $senderName): void
+    {
+        try {
+            $user = User::find($transaction->user_id);
+            $amount = number_format((float) abs($transaction->amount), 2);
+            $cur = $user?->currency ?? 'USD';
+
+            \App\Services\NotificationService::notifyAdmins(
+                'admin_deposit_proof',
+                'Deposit claimed (no screenshot)',
+                ($user?->name ?? 'A customer')." says they've paid {$amount} {$cur} — sender name *{$senderName}*, deposit #{$transaction->id}. "
+                ."Check the statement and credit it in Transactions.\n\nReply *RECEIVED* to confirm you've got this.",
+                [
+                    'transaction_id' => (int) $transaction->id,
+                    'user_name' => $user?->name,
+                    'amount' => $amount,
+                    'sender_name' => $senderName,
+                    'source' => 'whatsapp-declared',
+                ],
+            );
+        } catch (\Throwable $e) {
+            // The claim is already recorded; a failed alert must not lose it.
+            \Illuminate\Support\Facades\Log::warning('Deposit claim admin-notify failed', [
+                'transaction_id' => $transaction->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /** 5.00 → "5", 7.50 → "7.5" for clean bonus copy. */

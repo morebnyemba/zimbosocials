@@ -211,6 +211,19 @@ return [
 
     // Google Gemini — optional. When the API key is set, admins can opt in to
     // AI cleanup + Shona/Ndebele translation when importing upstream services.
+    'deposits' => [
+        /*
+         * Automatic (Paynow express / card) payment methods.
+         *
+         * Turned OFF: deposits are taken by manual transfer only, verified by an
+         * admin against the proof the customer sends. Set DEPOSITS_GATEWAY=true
+         * to bring the instant methods back — the Paynow code, the status poller
+         * and every in-flight transaction still work, they are simply not
+         * offered to new customers while this is false.
+         */
+        'gateway_enabled' => (bool) env('DEPOSITS_GATEWAY', false),
+    ],
+
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),

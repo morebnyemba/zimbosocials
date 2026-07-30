@@ -106,6 +106,10 @@ class WhatsAppInteractiveFlowTest extends TestCase
 
     public function test_partial_deposit_prefills_stop_at_first_missing_step(): void
     {
+        // Prefilling a gateway method is what this covers; express is switched
+        // off for customers but the path is intact behind the flag.
+        config(['services.deposits.gateway_enabled' => true]);
+
         $user = User::factory()->create(['balance' => 0]);
         $engine = app(FlowEngine::class);
 
