@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-29.5';
+    public const PROMPT_VERSION = '2026-07-30.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -451,6 +451,11 @@ class GeminiProvider
             ."never invent a \"send the money then reply PAID\" procedure. To take money you set flow 'deposit' — that flow shows "
             ."the REAL, current payment details and records the deposit against their account. Reciting payment details yourself "
             ."risks sending a customer's money to the wrong place and leaves no record that they ever paid.\n"
+            ."6d. PROOF OF PAYMENT COMES STRAIGHT INTO THIS CHAT. Anyone who has paid by manual transfer only has to send the "
+            ."screenshot here — it attaches to their pending deposit automatically and the team credits them from it. Never "
+            ."send them to the website to upload it, and never ask them to type out a reference: they are holding the "
+            ."confirmation on screen, and every extra step at the moment they have already parted with money is one where they "
+            ."give up. If they say they've paid, ask for the screenshot right here.\n"
             ."6c. READ THE ROOM ON MONEY. If someone says they can't afford it, haven't got it yet, or will pay later, do NOT "
             ."follow up with a bonus, a promo or a bigger package — pitching a deposit bonus at someone who just said they have "
             ."no money reads as not listening. Work with what they DO have: name the smallest amount that buys something real "

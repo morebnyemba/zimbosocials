@@ -263,9 +263,15 @@ class DepositFundsFlow extends AbstractFlow
             $lines[] = '';
             $lines[] = "💵 You'll earn a *+".$this->trimPercent($bonus).'% bonus* ('.$bonusAmt.') once approved!';
         }
+        // Lead with the chat. They have just paid, they are holding their phone
+        // with the confirmation on screen, and sending a photo here attaches it
+        // to this deposit automatically (see ProofIntake). Sending them to a
+        // website to log in and upload is friction at the one moment we cannot
+        // afford any — the site link stays as a fallback, not the instruction.
         $lines[] = '';
-        $lines[] = '📸 After paying, upload your proof of payment here to get credited:';
-        $lines[] = url('/wallet');
+        $lines[] = '📸 *Once you\'ve paid, send the screenshot right here in this chat* — that\'s all we need, and our team credits you from it.';
+        $lines[] = '';
+        $lines[] = '_(You can also upload it at '.url('/wallet').' if you prefer.)_';
 
         return FlowResult::complete(implode("\n", $lines));
     }
