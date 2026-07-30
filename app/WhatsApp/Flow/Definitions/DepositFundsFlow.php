@@ -131,7 +131,7 @@ class DepositFundsFlow extends AbstractFlow
         $map = [];
         $i = 0;
         $sections = [];
-        $gatewayOn = (bool) config('services.deposits.gateway_enabled', false);
+        $gatewayOn = (bool) config('services.deposits.whatsapp_gateway_enabled', false);
 
         // ⚡ Instant / express — auto-confirming Paynow methods. Off by default:
         // deposits are taken manually and verified by an admin (see the config).
@@ -214,7 +214,7 @@ class DepositFundsFlow extends AbstractFlow
         // Gateway express → collect the phone to charge. Re-checked here, not
         // just when building the menu: a customer can tap a row from a list we
         // sent before the gateway was switched off.
-        if (! config('services.deposits.gateway_enabled', false)) {
+        if (! config('services.deposits.whatsapp_gateway_enabled', false)) {
             return $this->methodMenu((float) $ctx->get('deposit_amount', 0), $ctx);
         }
 

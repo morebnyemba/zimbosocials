@@ -80,7 +80,7 @@ class DepositInputParsingTest extends TestCase
     {
         // Gateway express is switched off for customers, but the code path is
         // intact and this is what guards it for whenever it comes back.
-        config(['services.deposits.gateway_enabled' => true]);
+        config(['services.deposits.whatsapp_gateway_enabled' => true]);
 
         [$engine, $ctx] = $this->atAskAmount();
         $engine->advance($ctx, '5');            // → choose_method
@@ -106,7 +106,7 @@ class DepositInputParsingTest extends TestCase
 
     public function test_a_typed_number_still_wins_over_an_affirmative(): void
     {
-        config(['services.deposits.gateway_enabled' => true]);
+        config(['services.deposits.whatsapp_gateway_enabled' => true]);
 
         [$engine, $ctx] = $this->atAskAmount();
         $engine->advance($ctx, '5');
