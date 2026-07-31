@@ -34,6 +34,11 @@ class AdminPaymentDetailController extends Controller
             'account_name' => ['nullable', 'string', 'max:100'],
             'account_number' => ['nullable', 'string', 'max:100'],
             'instructions' => ['nullable', 'string', 'max:2000'],
+            // e.g. *151*1*1*{number}*{amount}#  — {amount} is filled in per
+            // deposit, so a code typed here with a fixed amount in it (which is
+            // what happened when this lived in the free-text instructions) can't
+            // tell every customer to pay the same figure.
+            'ussd_template' => ['nullable', 'string', 'max:100'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'is_active' => ['nullable', 'boolean'],
             'gateway_type' => ['nullable', 'string', 'in:paynow'],

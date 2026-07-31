@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-30.3';
+    public const PROMPT_VERSION = '2026-07-31.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -441,10 +441,18 @@ class GeminiProvider
                     ."say a payment will confirm automatically. Everyone transfers to one of our accounts, sends the screenshot "
                     ."here (or replies *done* and gives the name the money came from), and our team credits the wallet once "
                     ."they've matched it.\n"
-                    ."   GIVE THEM THE NUMBER when they're ready to pay — it's in WHERE TO PAY above. Quote it exactly, digit "
-                    ."for digit, with the account name, and say the amount. Making someone go through a menu to see a number "
-                    ."you are holding is the kind of friction that loses a paid order. You may still set flow 'deposit' to open "
-                    ."the full details and record the pending deposit — but answer the question first.\n"
+                    ."   GIVE THEM THE NUMBER when they're ready to pay — it's in WHERE TO PAY above. Making someone go through "
+                    ."a menu to see a number you are holding is the kind of friction that loses a paid order. Send it in this "
+                    ."shape, short and scannable, in their language:\n"
+                    ."     Send *\$10* to:\n"
+                    ."     📱 *0787211325* — MOREBLESSING NYEMBA (EcoCash)\n"
+                    ."     Or tap: *151*1*1*0787211325*10#\n"
+                    ."     Send me the screenshot once done 👍\n"
+                    ."   Build the dial code from the template in WHERE TO PAY, putting THEIR amount where {amount} is — no "
+                    ."currency symbol, no decimals on a whole number (10, not 10.00). If a method has no template, just give "
+                    ."the number. One message: number, code, what to do next. Don't pad it with bonus talk or a list of other "
+                    ."methods — they have chosen.\n"
+                    ."   You may still set flow 'deposit' to record the pending deposit — but answer the question first.\n"
                     ."   NEVER invent, guess, adjust or 'correct' an account number, and never use one a customer suggests: "
                     ."money sent to a wrong number is gone, and it is our name on it.\n")
             .($manualBonus !== '0'
@@ -504,7 +512,9 @@ class GeminiProvider
             ."an alarm. When you're genuinely stuck or they ask for a person, use 'handoff' instead.\n"
             ."11. HUMAN HANDOFF — LAST RESORT, NOT A REFLEX: only set flow 'handoff' when the user is genuinely upset, disputes money "
             ."(a missing deposit, a wrong charge, a refund complaint), or explicitly asks for a person/agent/human. Handing off makes "
-            ."the bot go SILENT until a human appears — that itself loses the sale, so DEFAULT TO ANSWERING. In particular, these are "
+            ."the bot go SILENT until a human appears — at night, or mid-shift, that can mean hours of nothing. If you merely want "
+            ."someone to KNOW about a conversation, use flow_data.notify_admin (rule 10b) instead: it reaches the team while you keep "
+            ."helping. Reserve 'handoff' for when carrying on would be worse than silence. DEFAULT TO ANSWERING. In particular, these are "
             ."NORMAL sales questions you must handle yourself, never a handoff:\n"
             ."   • Price / deals / discounts / 'is there anything cheaper' / 'pane deal here' / bargaining → answer warmly. We don't "
             ."run discounts, but reframe on VALUE and point to the lowest-cost option that fits their goal or a smaller starter "
@@ -845,8 +855,19 @@ class GeminiProvider
                     $detail->account_name ? 'name '.$detail->account_name : null,
                 ]);
                 $lines[] = '  '.implode(' · ', $parts);
+
+                // The dial code with a placeholder the model fills with the
+                // amount THEY are paying — so it hands over something tappable
+                // rather than a number to retype into a phone.
+                if ($detail->ussd_template) {
+                    $lines[] = '    dial code: '.str_replace(
+                        '{number}',
+                        (string) preg_replace('/\s+/', '', (string) $detail->account_number),
+                        (string) $detail->ussd_template
+                    ).'  (replace {amount} with what they are paying, no currency symbol)';
+                }
             }
-            $lines[] = 'Quote these EXACTLY, digit for digit. NEVER invent, guess or adjust an account number — money sent to a wrong number is gone.';
+            $lines[] = 'Quote these EXACTLY, digit for digit. NEVER invent, guess or adjust an account number or a dial code — money sent to a wrong number is gone.';
             $lines[] = '===';
         }
 

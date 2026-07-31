@@ -94,7 +94,8 @@ class WhatsAppLoopBreakerTest extends TestCase
 
         $this->say('tiktok');
         $this->say('dubie934');
-        $this->say('1000');   // 3rd identical reply — we take over
+        $this->say('1000');
+        $this->say('hello');   // 4th similar reply — only now do we step in
 
         // Straight to the price. The flow asks NOTHING; collection was the AI's job.
         $ctx = app(SessionManager::class)->load(self::PHONE);
@@ -105,42 +106,46 @@ class WhatsAppLoopBreakerTest extends TestCase
         $this->assertStringContainsString('dubie934', (string) $out->body);
     }
 
-    public function test_a_loop_missing_details_gets_a_human_not_an_interrogation(): void
+    public function test_a_repeat_nudges_the_team_without_silencing_the_bot(): void
     {
         $this->linkedAccount();
-        $service = Service::create([
-            'name' => 'TikTok Followers', 'name_sn' => 'x', 'description' => '', 'description_sn' => '',
-            'category' => 'TikTok', 'type' => 'followers', 'rate' => 10.0,
-            'min_qty' => 10, 'max_qty' => 1000000, 'is_active' => true,
-        ]);
-        // Knows the service but never got the link — exactly the live failure.
-        $this->brokenRecordAi(['service_id' => $service->id]);
-
-        $this->say('tiktok');
-        $this->say('my username');
-        $this->say('dubie934');
-
-        // A person takes over. We do NOT drop them into the flow to be
-        // questioned step by step.
-        $account = WhatsAppAccount::where('wa_phone', self::PHONE)->first();
-        $this->assertTrue($account->inAgentHandoff());
-        $this->assertNull(app(SessionManager::class)->load(self::PHONE)->flow);
-    }
-
-    public function test_a_loop_with_nothing_to_fall_back_on_gets_a_human(): void
-    {
-        $this->linkedAccount();
-        $this->brokenRecordAi();   // no service — nothing to hand the flow
+        User::factory()->create(['role' => 'admin', 'is_active' => true, 'whatsapp_number' => '263770000001']);
+        $this->brokenRecordAi();   // nothing gathered — no flow to hand to
 
         $this->say('hi');
         $this->say('i said tiktok');
         $this->say('are you listening');
+        $this->say('hello?');      // 4th similar reply
 
-        // Bot paused for a human, and the customer told plainly.
+        // Silencing the bot is the expensive move: if nobody is watching, the
+        // customer gets nothing at all. So the team is told and the assistant
+        // keeps going.
+        $account = WhatsAppAccount::where('wa_phone', self::PHONE)->first();
+        $this->assertFalse($account->inAgentHandoff(), 'a first repeat must not silence the bot');
+        $this->assertNotNull(
+            \App\Models\Notification::where('type', 'admin_whatsapp_nudge')->first(),
+            'the team should have been nudged'
+        );
+
+        // And the customer still got an answer.
+        $out = WhatsAppMessage::where('direction', 'out')->where('wa_phone', self::PHONE)->latest('id')->first();
+        $this->assertStringContainsString('link', (string) $out->body);
+    }
+
+    public function test_a_loop_that_keeps_going_eventually_hands_over(): void
+    {
+        $this->linkedAccount();
+        $this->brokenRecordAi();
+
+        foreach (['hi', 'i said tiktok', 'are you listening', 'hello?', 'anyone there', 'this is useless'] as $said) {
+            $this->say($said);
+        }
+
+        // Nudged once, still circling — now interrupting is the kinder option.
         $account = WhatsAppAccount::where('wa_phone', self::PHONE)->first();
         $this->assertTrue($account->inAgentHandoff());
 
-        $out = WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $out = WhatsAppMessage::where('direction', 'out')->where('wa_phone', self::PHONE)->latest('id')->first();
         $this->assertStringContainsString('going in circles', (string) $out->body);
     }
 
@@ -166,14 +171,19 @@ class WhatsAppLoopBreakerTest extends TestCase
         });
         $this->app->instance(GeminiClient::class, $mock);
 
+        User::factory()->create(['role' => 'admin', 'is_active' => true, 'whatsapp_number' => '263770000001']);
+
         $this->say('To grow my brand');
         $this->say('Okay');
         $this->say('Yaa');
+        $this->say('mmm');
 
-        // Nothing gathered to hand a flow, so a person takes over rather than
-        // the customer being asked a fourth time.
-        $account = WhatsAppAccount::where('wa_phone', self::PHONE)->first();
-        $this->assertTrue($account->inAgentHandoff(), 'a reworded third ask must count as a loop');
+        // Detection is the point here: reworded repeats must register as a loop
+        // at all, which verbatim matching missed entirely.
+        $this->assertNotNull(
+            \App\Models\Notification::where('type', 'admin_whatsapp_nudge')->first(),
+            'a reworded repeat must still register as a loop'
+        );
     }
 
     public function test_two_different_replies_are_not_a_loop(): void
