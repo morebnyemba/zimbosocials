@@ -4,7 +4,7 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 
-interface PaymentDetail { id: number; method_key: string; label: string; account_name?: string; account_number?: string; instructions?: string; is_active: boolean; sort_order: number; gateway_type?: string | null; }
+interface PaymentDetail { id: number; method_key: string; label: string; account_name?: string; account_number?: string; instructions?: string; ussd_template?: string; is_active: boolean; sort_order: number; gateway_type?: string | null; }
 interface Props { paymentDetails: PaymentDetail[]; }
 
 // Paynow-supported method keys — the gateway controller only handles these.
@@ -20,10 +20,10 @@ export default function PaymentDetails({ paymentDetails }: Props) {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
-    const { data, setData, post, put, processing, reset } = useForm({ method_key: '', label: '', account_name: '', account_number: '', instructions: '', sort_order: 0, is_active: true, gateway_type: '' });
+    const { data, setData, post, put, processing, reset } = useForm({ method_key: '', label: '', account_name: '', account_number: '', instructions: '', ussd_template: '', sort_order: 0, is_active: true, gateway_type: '' });
 
     const openCreate = () => { reset(); setEditingId(null); setShowForm(true); };
-    const openEdit = (p: PaymentDetail) => { setData({ method_key: p.method_key, label: p.label, account_name: p.account_name || '', account_number: p.account_number || '', instructions: p.instructions || '', sort_order: p.sort_order, is_active: p.is_active, gateway_type: p.gateway_type || '' }); setEditingId(p.id); setShowForm(true); };
+    const openEdit = (p: PaymentDetail) => { setData({ method_key: p.method_key, label: p.label, account_name: p.account_name || '', account_number: p.account_number || '', instructions: p.instructions || '', ussd_template: p.ussd_template || '', sort_order: p.sort_order, is_active: p.is_active, gateway_type: p.gateway_type || '' }); setEditingId(p.id); setShowForm(true); };
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -138,6 +138,16 @@ export default function PaymentDetails({ paymentDetails }: Props) {
                                         <div>
                                             <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Instructions</label>
                                             <textarea value={data.instructions} onChange={e => setData('instructions', e.target.value)} rows={3} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow resize-none" placeholder="Optional payment instructions for users" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1.5">Dial code (USSD)</label>
+                                            <input type="text" value={data.ussd_template} onChange={e => setData('ussd_template', e.target.value)} className="w-full rounded-lg bg-white border border-gray-300 text-gray-900 text-sm px-3 py-2.5 outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/20 shadow-sm transition-shadow font-mono" placeholder="*151*1*1*{number}*{amount}#" />
+                                            {/* A template, not a finished code: {amount} is filled in per
+                                                deposit, so one written with a fixed figure would tell every
+                                                customer to pay the same thing. */}
+                                            <p className="text-xs text-gray-500 mt-1.5">
+                                                Use <code className="bg-gray-100 px-1 rounded">{'{number}'}</code> and <code className="bg-gray-100 px-1 rounded">{'{amount}'}</code> — both are filled in for each customer. Leave blank if this method has no dial code.
+                                            </p>
                                         </div>
                                     </>
                                 )}

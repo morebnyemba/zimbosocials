@@ -275,6 +275,14 @@ class DepositFundsFlow extends AbstractFlow
         if ($detail->account_number) {
             $lines[] = '• Account: *'.$detail->account_number.'*';
         }
+        // A dialable code with THIS amount already in it — one tap instead of
+        // reading a number off the screen and typing it into a phone, which is
+        // where digits get transposed and money goes to a stranger.
+        if ($ussd = $detail->ussdFor($amount)) {
+            $lines[] = '';
+            $lines[] = '📱 *Tap to pay:* '.$ussd;
+        }
+
         if ($detail->instructions) {
             $lines[] = '';
             $lines[] = $detail->instructions;

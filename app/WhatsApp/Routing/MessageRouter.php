@@ -383,9 +383,11 @@ class MessageRouter
         $ctx->set('_last_reply_words', $words);
         $ctx->set('_reply_repeats', $repeats);
 
-        // Said once is normal, twice can be a genuine re-ask — three times is a
-        // loop, and by then the customer has already answered twice.
-        return $repeats >= 2;
+        // Deliberately slow to fire. Restating a point, or asking again after a
+        // vague answer, is ordinary conversation — and treating it as a fault
+        // hands people to a human who did not need one, which is worse than the
+        // repetition. Four similar replies in a row is a genuine loop.
+        return $repeats >= 3;
     }
 
     /** Content words only — the filler is identical in every message. */
@@ -426,8 +428,6 @@ class MessageRouter
      */
     private function breakLoop(SessionContext $ctx, WhatsAppAccount $account, array $flowData): bool
     {
-        $ctx->set('_reply_repeats', 0);
-
         // The flow is a confirmation step, never an interviewer — so we only
         // hand over when everything is already gathered and it can open
         // straight at the price. Anything less would put the customer through
@@ -440,6 +440,7 @@ class MessageRouter
             Log::info('WhatsApp AI loop broken — jumping straight to confirmation', [
                 'phone' => $ctx->phone, 'service_id' => $serviceId,
             ]);
+            $ctx->set('_reply_repeats', 0);
             $ctx->set('_prefill_service_id', $serviceId);
             $ctx->set('_prefill_link', $link);
             $ctx->set('_prefill_quantity', $quantity);
@@ -448,9 +449,23 @@ class MessageRouter
             return true;
         }
 
-        // Nothing concrete to fall back on — a person can untangle this faster
-        // than another identical question can.
-        Log::warning('WhatsApp AI loop broken — escalating to a human', ['phone' => $ctx->phone]);
+        // Nothing to hand the flow. Tell the team, but DON'T silence the bot:
+        // handing over stops the conversation dead, and if nobody is watching
+        // the customer is left with nothing at all. A nudge reaches someone who
+        // can step in, while the assistant carries on trying.
+        if (! $ctx->get('_loop_nudged')) {
+            $ctx->set('_loop_nudged', true);
+            // The counter is NOT reset: a loop that carries on after a nudge
+            // shouldn't get a fresh budget before anyone steps in.
+            Log::info('WhatsApp AI repeating — nudging the team, bot continues', ['phone' => $ctx->phone]);
+            \App\WhatsApp\AdminNudge::raise($ctx->phone, 'assistant is repeating itself — may need a person', 'loop');
+
+            return false; // reply still goes out
+        }
+
+        // Nudged already and STILL going round: now it is worth interrupting.
+        Log::warning('WhatsApp AI loop persists — escalating to a human', ['phone' => $ctx->phone]);
+        $ctx->set('_reply_repeats', 0);
         if ($ctx->inFlow()) {
             $this->engine->cancel($ctx);
         }
@@ -463,7 +478,8 @@ class MessageRouter
         \App\Services\NotificationService::notifyAdmins(
             'admin_whatsapp_handoff',
             'WhatsApp chat stuck in a loop',
-            "The assistant repeated itself to +{$ctx->phone} and handed over. Reply from Admin → WA Assistant → Conversations.",
+            "The assistant kept repeating itself to +{$ctx->phone} and has handed over.\n\n"
+            .'💬 Reply to them directly: https://wa.me/'.preg_replace('/\D+/', '', $ctx->phone),
             ['wa_phone' => $ctx->phone]
         );
 
