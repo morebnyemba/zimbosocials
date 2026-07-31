@@ -31,7 +31,7 @@ class MarketerController extends Controller
             ->selectRaw("
                 COUNT(*)                                                                     AS total_orders,
                 SUM(CASE WHEN status IN ('pending','processing','in_progress') THEN 1 ELSE 0 END) AS active_orders,
-                SUM(charge)                                                                  AS total_spend,
+                SUM(CASE WHEN status NOT IN ('refunded','cancelled') THEN charge ELSE 0 END)                                                                  AS total_spend,
                 SUM(CASE WHEN created_at >= ? AND created_at <= ? THEN 1 ELSE 0 END)         AS client_orders_this_month
             ", [now()->startOfMonth(), now()->endOfMonth()])
             ->first();

@@ -95,7 +95,7 @@ class AdminUserController extends Controller
                 COUNT(*) AS total,
                 SUM(CASE WHEN status IN ('pending','processing','in_progress') THEN 1 ELSE 0 END) AS active,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
-                SUM(charge) AS total_spent
+                SUM(CASE WHEN status NOT IN ('refunded','cancelled') THEN charge ELSE 0 END) AS total_spent
             ")
             ->first();
 

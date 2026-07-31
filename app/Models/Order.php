@@ -73,6 +73,35 @@ class Order extends Model
         return $query->whereIn('status', ['pending', 'processing', 'in_progress']);
     }
 
+    /** Statuses where the customer got their money back in full. */
+    public const NON_REVENUE_STATUSES = ['refunded', 'cancelled'];
+
+    /**
+     * Orders that actually earned us something.
+     *
+     * A refunded or cancelled order is money that went back to the customer, so
+     * counting its charge overstates the business — which is exactly what every
+     * revenue figure was doing.
+     */
+    public function scopeEarning(Builder $query): Builder
+    {
+        return $query->whereNotIn('status', self::NON_REVENUE_STATUSES);
+    }
+
+    /**
+     * SQL fragment for the same rule, for the aggregate queries that build
+     * several figures in one pass.
+     *
+     * Note this counts a *partial* order at its full charge even though some of
+     * it may have been refunded — those refunds are separate transactions.
+     * Overstated by that margin rather than by whole cancelled orders, which is
+     * a much smaller error and one worth fixing separately.
+     */
+    public static function earningSql(): string
+    {
+        return "status NOT IN ('".implode("','", self::NON_REVENUE_STATUSES)."')";
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     public function isActive(): bool
