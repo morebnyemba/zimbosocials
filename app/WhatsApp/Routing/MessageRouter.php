@@ -555,9 +555,13 @@ class MessageRouter
         ];
 
         if ($reply !== '') {
-            // Keep short-term memory (last 6 exchanges) for follow-ups.
+            // Keep short-term memory for follow-ups. Gemini's context window has
+            // ample room for this — 18 exchanges is still a small fraction of it
+            // — and a longer memory is what stops the model re-asking something
+            // the customer answered a few turns back (a repeat cause of the
+            // stuck-loop handoffs this bot used to trigger too eagerly).
             $history[] = ['user' => $text, 'model' => $reply];
-            $ctx->set('_ai_history', array_slice($history, -6));
+            $ctx->set('_ai_history', array_slice($history, -18));
         }
 
         // STUCK-LOOP BREAKER. Asking the same thing over and over is how a sale
@@ -715,10 +719,24 @@ class MessageRouter
 
         // Nothing was waiting on proof → it's a normal message that happens to
         // be a photo or a voice note. Let the AI actually look/listen.
-        if (empty($res['ok']) && ($res['reason'] ?? '') === 'no_pending'
-            && $this->understandMedia($ctx, $account, $media)
-        ) {
-            return ['handled_by' => 'ai', 'intent' => 'media', 'ai_used' => true];
+        if (empty($res['ok']) && ($res['reason'] ?? '') === 'no_pending') {
+            $mediaFailure = $this->understandMedia($ctx, $account, $media);
+            if ($mediaFailure === null) {
+                return ['handled_by' => 'ai', 'intent' => 'media', 'ai_used' => true];
+            }
+
+            // The AI genuinely tried to look/listen and came back empty — that
+            // is a different problem from "nothing was pending," and telling
+            // the customer to go start a deposit is actively misleading here.
+            if ($mediaFailure === 'ai_failed') {
+                $kind = (string) ($media['kind'] ?? 'file');
+                $message = $kind === 'audio'
+                    ? "Hmm, I couldn't quite listen to that voice note 🎧 Could you try sending it again?"
+                    : "Hmm, I couldn't quite see that image 📸 Could you try resending it?";
+                $this->responder->send($ctx->phone, $message, ['handled_by' => 'system', 'intent' => 'media_ai_failed']);
+
+                return ['handled_by' => 'system', 'intent' => 'media_ai_failed'];
+            }
         }
 
         if (! empty($res['ok'])) {
@@ -752,14 +770,17 @@ class MessageRouter
 
     /**
      * Hand a photo / voice note to the AI so it answers what the media actually
-     * contains. Returns false when media understanding is off, the type isn't
-     * supported, the download fails, or the AI is unavailable — the caller then
-     * falls back to the normal guidance message.
+     * contains.
+     *
+     * Returns null on success (the AI answered). On failure returns WHY, so the
+     * caller can tell "we never even tried" (disabled/unsupported_type) apart
+     * from "we tried and it didn't work" (download_failed/too_large/ai_failed)
+     * — those two used to look identical to the customer and to the logs.
      */
-    private function understandMedia(SessionContext $ctx, WhatsAppAccount $account, array $media): bool
+    private function understandMedia(SessionContext $ctx, WhatsAppAccount $account, array $media): ?string
     {
         if (! config('services.whatsapp.media_ai', true)) {
-            return false;
+            return 'disabled';
         }
 
         $mime = strtolower(trim(explode(';', (string) ($media['mime'] ?? ''))[0]));
@@ -771,7 +792,7 @@ class MessageRouter
         $audioOk = str_starts_with($mime, 'audio/') && config('services.whatsapp.audio_ai', true);
 
         if (! $imageOk && ! $audioOk) {
-            return false;
+            return 'unsupported_type';
         }
 
         // The archive already fetched these bytes on the way in — reuse them
@@ -780,13 +801,17 @@ class MessageRouter
             ? ['ok' => true, 'contents' => $media['contents'], 'mime' => $mime]
             : $this->gateway->downloadMedia((string) $media['id']);
         if (empty($dl['ok']) || ($dl['contents'] ?? '') === '') {
-            return false;
+            Log::warning('WhatsApp media understanding: download failed', ['mime' => $mime, 'kind' => $kind]);
+
+            return 'download_failed';
         }
 
         // Inline parts must stay well under the request cap.
         $maxBytes = (int) config('services.whatsapp.media_ai_max_bytes', 8 * 1024 * 1024);
         if (strlen((string) $dl['contents']) > $maxBytes) {
-            return false;
+            Log::warning('WhatsApp media understanding: too large', ['mime' => $mime, 'bytes' => strlen((string) $dl['contents'])]);
+
+            return 'too_large';
         }
 
         // Shrink photos before they become billable input. Gemini tiles images
@@ -798,7 +823,7 @@ class MessageRouter
             $contents = app(\App\WhatsApp\Messaging\MediaDownscaler::class)->shrink($contents, $mime);
         }
 
-        return $this->consultAi(
+        $handled = $this->consultAi(
             $ctx,
             $account,
             trim((string) ($media['caption'] ?? '')),
@@ -812,6 +837,14 @@ class MessageRouter
                 'kind' => $kind === 'audio' && ! empty($media['voice']) ? 'voice note' : $kind,
             ]],
         );
+
+        if (! $handled) {
+            Log::warning('WhatsApp media understanding: AI did not respond', ['mime' => $mime, 'kind' => $kind]);
+
+            return 'ai_failed';
+        }
+
+        return null;
     }
 
     /**
