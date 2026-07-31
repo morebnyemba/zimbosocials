@@ -40,7 +40,7 @@ class DashboardController extends Controller
                 COUNT(*)                                                                     AS total_orders,
                 SUM(CASE WHEN status IN ('pending','processing','in_progress') THEN 1 ELSE 0 END) AS active_orders,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)                       AS completed_orders,
-                SUM(charge)                                                                  AS total_spent,
+                SUM(CASE WHEN status NOT IN ('refunded','cancelled') THEN charge ELSE 0 END)                                                                  AS total_spent,
                 SUM(CASE WHEN DATE(created_at) = DATE('now') THEN 1 ELSE 0 END)              AS orders_today
             ")
             ->first();

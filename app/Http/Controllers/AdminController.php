@@ -33,12 +33,16 @@ class AdminController extends Controller
             ")->first();
 
             // Order counts + revenue — 1 query instead of 5
+            // Refunded and cancelled orders are money that went BACK to the
+            // customer — counting their charge as revenue overstates the
+            // business, and did so on every figure here.
+            $earning = Order::earningSql();
             $orderStats = Order::selectRaw("
                 COUNT(*)                                                                            AS total,
                 SUM(CASE WHEN status IN ('pending','processing','in_progress') THEN 1 ELSE 0 END)   AS active,
-                SUM(charge)                                                                         AS revenue,
-                SUM(CASE WHEN created_at >= ? THEN charge ELSE 0 END)                               AS today_revenue,
-                SUM(CASE WHEN created_at >= ? THEN charge ELSE 0 END)                               AS month_revenue
+                SUM(CASE WHEN {$earning} THEN charge ELSE 0 END)                                    AS revenue,
+                SUM(CASE WHEN created_at >= ? AND {$earning} THEN charge ELSE 0 END)                AS today_revenue,
+                SUM(CASE WHEN created_at >= ? AND {$earning} THEN charge ELSE 0 END)                AS month_revenue
             ", [now()->startOfDay(), now()->startOfMonth()])->first();
 
             // Transaction pending counts — 1 query instead of 2
@@ -102,8 +106,10 @@ class AdminController extends Controller
             ->limit(20)
             ->get();
 
+        // Excludes refunded/cancelled — see Order::scopeEarning.
         $daily_revenue = Order::selectRaw('DATE(created_at) as date, SUM(charge) as total, COUNT(*) as count')
             ->where('created_at', '>=', now()->subDays(14))
+            ->earning()
             ->groupBy('date')
             ->orderBy('date')
             ->get();
@@ -152,6 +158,7 @@ class AdminController extends Controller
 
             $dailyRevenue = Order::selectRaw('DATE(created_at) as date, SUM(charge) as total, COUNT(*) as count')
                 ->where('created_at', '>=', now()->subDays($days))
+                ->earning()
                 ->groupBy('date')
                 ->orderBy('date')
                 ->get()

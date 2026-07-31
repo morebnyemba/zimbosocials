@@ -237,10 +237,12 @@ class AdminTransactionController extends Controller
 
         $daily_revenue = Order::selectRaw('DATE(created_at) as date, SUM(charge) as total, COUNT(*) as count')
             ->where('created_at', '>=', now()->subDays($days))
+            ->earning()
             ->groupBy('date')->orderBy('date')->get();
 
+        // Top sellers by what they actually earned, not what was billed then returned.
         $top_services = Service::withCount('orders')
-            ->withSum('orders', 'charge')
+            ->withSum(['orders as orders_sum_charge' => fn ($q) => $q->earning()], 'charge')
             ->orderByDesc('orders_sum_charge')->limit(10)->get();
 
         $new_users = User::selectRaw('DATE(created_at) as date, COUNT(*) as count')
@@ -253,12 +255,12 @@ class AdminTransactionController extends Controller
         // Consolidated summary — 1 query instead of 6
         $summary = Cache::remember("admin:revenue_summary:{$days}", 120, function () {
             return [
-                'total_revenue' => Order::sum('charge'),
-                'month_revenue' => Order::where('created_at', '>=', now()->startOfMonth())->sum('charge'),
-                'today_revenue' => Order::where('created_at', '>=', now()->startOfDay())->sum('charge'),
+                'total_revenue' => Order::earning()->sum('charge'),
+                'month_revenue' => Order::earning()->where('created_at', '>=', now()->startOfMonth())->sum('charge'),
+                'today_revenue' => Order::earning()->where('created_at', '>=', now()->startOfDay())->sum('charge'),
                 'total_users' => User::count(),
                 'total_orders' => Order::count(),
-                'avg_order_value' => Order::avg('charge'),
+                'avg_order_value' => Order::earning()->avg('charge'),
             ];
         });
 
