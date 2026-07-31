@@ -123,6 +123,23 @@ class WhatsAppMediaUnderstandingTest extends TestCase
         $this->assertStringContainsString('Proof received', (string) $out->body);
     }
 
+    public function test_a_failed_ai_read_says_so_instead_of_hinting_at_deposits(): void
+    {
+        $this->linkedAccount();
+        $mock = Mockery::mock(GeminiClient::class);
+        $mock->shouldReceive('isConfigured')->andReturn(true);
+        // Every attempt comes back empty — simulates a vision-call failure
+        // (timeout, transient API error) rather than a config/type rejection.
+        $mock->shouldReceive('generateJson')->andReturn(null);
+        $this->app->instance(GeminiClient::class, $mock);
+
+        app(MessageRouter::class)->handle($this->mediaMessage(['id' => 'M1', 'mime' => 'image/jpeg', 'kind' => 'image']));
+
+        $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringContainsString('resending', (string) $out->body);
+        $this->assertStringNotContainsString('deposit', (string) $out->body);
+    }
+
     public function test_audio_can_be_switched_off_without_affecting_photos(): void
     {
         config(['services.whatsapp.audio_ai' => false]);
