@@ -32,10 +32,10 @@ class AdvertiseFlowTest extends TestCase
         return [$engine, $ctx, $user];
     }
 
-    /** Pick option 3 = the flat "1 week" package ($20) — payment is the only step. */
+    /** Pick option 3 = the flat "1 week" package ($25) — payment is the only step. */
     private function toConfirm(FlowEngine $engine, SessionContext $ctx): void
     {
-        $engine->advance($ctx, '3'); // 1 week — $20 → straight to confirm
+        $engine->advance($ctx, '3'); // 1 week — $25 → straight to confirm
     }
 
     public function test_a_confirmed_advert_charges_the_wallet_and_books_it(): void
@@ -54,13 +54,13 @@ class AdvertiseFlowTest extends TestCase
             'user_id' => $user->id,
             'package' => 'week1',
             'days' => 7,
-            'total' => 20.00,
+            'total' => 25.00,
             'status' => 'pending_setup',
         ]);
         // Details are collected by the team afterwards — not at booking.
         $this->assertNull(\App\Models\AdvertBooking::first()->promoting);
-        $this->assertSame(80.0, (float) $user->fresh()->balance); // 100 - 20
-        $this->assertDatabaseHas('transactions', ['user_id' => $user->id, 'type' => 'order_charge', 'amount' => -20.0]);
+        $this->assertSame(75.0, (float) $user->fresh()->balance); // 100 - 25
+        $this->assertDatabaseHas('transactions', ['user_id' => $user->id, 'type' => 'order_charge', 'amount' => -25.0]);
     }
 
     public function test_an_unconfirmed_advert_never_charges(): void
@@ -76,7 +76,7 @@ class AdvertiseFlowTest extends TestCase
 
     public function test_a_short_balance_offers_a_top_up_with_the_exact_shortfall(): void
     {
-        [$engine, $ctx, $user] = $this->start(balance: 5); // week1 needs 20
+        [$engine, $ctx, $user] = $this->start(balance: 5); // week1 needs 25
         $this->toConfirm($engine, $ctx);
 
         $res = $engine->resume($ctx);
@@ -84,7 +84,7 @@ class AdvertiseFlowTest extends TestCase
         $this->assertStringContainsString('short', (string) $res->reply);
         $this->assertSame('fl_deposit', $res->buttons[0]['id']);
         // The deposit flow is handed the exact amount still needed.
-        $this->assertSame(15.0, (float) $ctx->get('_prefill_amount'));
+        $this->assertSame(20.0, (float) $ctx->get('_prefill_amount'));
         $this->assertDatabaseCount('advert_bookings', 0);
     }
 
@@ -99,12 +99,13 @@ class AdvertiseFlowTest extends TestCase
 
         // Everything gathered → straight to the money gate.
         $this->assertSame('confirm', $ctx->state);
-        $this->assertStringContainsString('60.00', (string) $res->reply); // 1 month = $60 flat
+        $this->assertStringContainsString('65.00', (string) $res->reply); // 1 month = $65 flat
     }
 
     public function test_video_packages_are_flagged_and_boost_only_ones_are_not(): void
     {
-        // week1 ($20) includes a video; day3 ($10) is boost-only.
+        // week1 (video) vs day3 (boost-only) — includesVideo() keys off the
+        // package id, not the total, so these fixture amounts are incidental.
         $videoBooking = \App\Models\AdvertBooking::create([
             'user_id' => User::factory()->create()->id, 'wa_phone' => self::PHONE,
             'package' => 'week1', 'days' => 7, 'total' => 20.0, 'promoting' => 'x', 'status' => 'pending_setup',
@@ -126,9 +127,9 @@ class AdvertiseFlowTest extends TestCase
         $titles = collect($res->list['sections'][0]['rows'])->pluck('title')->implode(' | ');
 
         // A cheap day test AND longer week/month options, all flat-priced.
-        $this->assertStringContainsString('1 day — $5.00', $titles);
-        $this->assertStringContainsString('3 days — $10.00', $titles);
-        $this->assertStringContainsString('1 week — $20.00', $titles);
-        $this->assertStringContainsString('1 month — $60.00', $titles);
+        $this->assertStringContainsString('1 day — $6.00', $titles);
+        $this->assertStringContainsString('3 days — $14.00', $titles);
+        $this->assertStringContainsString('1 week — $25.00', $titles);
+        $this->assertStringContainsString('1 month — $65.00', $titles);
     }
 }
