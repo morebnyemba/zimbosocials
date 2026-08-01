@@ -104,7 +104,8 @@ class AdvertiseFlowTest extends TestCase
 
     public function test_video_packages_are_flagged_and_boost_only_ones_are_not(): void
     {
-        // week1 (video) vs day3 (boost-only) — includesVideo() keys off the
+        // week1 (video) vs day1 (boost-only, the only tier without one now
+        // that day3 also includes a video) — includesVideo() keys off the
         // package id, not the total, so these fixture amounts are incidental.
         $videoBooking = \App\Models\AdvertBooking::create([
             'user_id' => User::factory()->create()->id, 'wa_phone' => self::PHONE,
@@ -112,11 +113,17 @@ class AdvertiseFlowTest extends TestCase
         ]);
         $boostBooking = \App\Models\AdvertBooking::create([
             'user_id' => User::factory()->create()->id, 'wa_phone' => self::PHONE,
-            'package' => 'day3', 'days' => 3, 'total' => 10.0, 'promoting' => 'x', 'status' => 'pending_setup',
+            'package' => 'day1', 'days' => 1, 'total' => 5.0, 'promoting' => 'x', 'status' => 'pending_setup',
         ]);
 
         $this->assertTrue($videoBooking->includesVideo());
         $this->assertFalse($boostBooking->includesVideo());
+    }
+
+    public function test_day3_now_includes_a_video_now_that_prices_are_higher(): void
+    {
+        $pkg = \App\Models\AdvertBooking::package('day3');
+        $this->assertTrue($pkg['includes_video']);
     }
 
     public function test_both_short_day_runs_and_longer_packages_are_offered(): void
