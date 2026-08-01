@@ -47,6 +47,7 @@ class MessageRouter
         private readonly \App\WhatsApp\Messaging\WhatsAppGateway $gateway,
         private readonly \App\WhatsApp\Messaging\MediaArchive $archive,
         private readonly \App\WhatsApp\Order\LiveOrderStatus $liveOrders,
+        private readonly \App\WhatsApp\Admin\DepositApprovalCommand $depositApproval,
     ) {}
 
     public function handle(array $msg, ?string $displayName = null): void
@@ -77,14 +78,27 @@ class MessageRouter
 
         $account = $this->accounts->resolveOrCreate($phone, $displayName ?? ($msg['name'] ?? null));
 
+        // Admin deposit approval ("APPROVE 161", or a bare "approve"/"received"
+        // swipe-replied to the alert itself) — the ONLY WhatsApp path that
+        // moves money, so it's checked before anything else, including
+        // handoff/opt-out state, and short-circuits entirely either way.
+        $text = trim((string) ($msg['text'] ?? ''));
+        if ($text !== '') {
+            $approvalReply = $this->depositApproval->tryHandle($account, $text, $msg['quoted_wa_message_id'] ?? null);
+            if ($approvalReply !== null) {
+                $this->responder->send($phone, $approvalReply, ['handled_by' => 'system', 'intent' => 'deposit_approval']);
+                $this->messages->tagInbound($inboundId, ['handled_by' => 'system', 'intent' => 'deposit_approval']);
+
+                return;
+            }
+        }
+
         // Agent handoff — a human is handling this chat; record but stay silent.
         if ($account->inAgentHandoff()) {
             $this->messages->tagInbound($inboundId, ['handled_by' => 'agent', 'intent' => 'handoff']);
 
             return;
         }
-
-        $text = trim((string) ($msg['text'] ?? ''));
 
         // Opt-out gate.
         if (! $account->opted_in) {
