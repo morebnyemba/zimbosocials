@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-07-31.1';
+    public const PROMPT_VERSION = '2026-08-01.1';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -86,9 +86,16 @@ class GeminiProvider
             ? (int) config('services.gemini.chat_timeout', 10)
             : (int) config('services.gemini.media_timeout', 25);
 
+        // Lower than a "creative" temperature on purpose: this call is doing
+        // two jobs in one — writing warm reply text AND making a structured
+        // flow/entity decision. 0.4 gave the decision half more randomness
+        // than a classification task should have (confirmed in eval: the same
+        // prompt scored 26-29 out of 32 across identical runs, no code change
+        // between them). 0.2 still leaves room for natural phrasing while
+        // making the flow/entity choice itself far more consistent.
         $json = $this->client->generateJson(
             $prompt,
-            0.4,
+            0.2,
             schema: self::responseSchema(),
             system: $this->systemPrompt(),
             timeout: $timeout,
@@ -697,9 +704,13 @@ class GeminiProvider
             ."that word in English or rephrase simply. Keep the same warm tone, emojis and formatting across every language.\n\n"
 
             ."━━ FOLLOW-UP ━━\n"
-            ."Optionally include a short second message in 'follow_up' (sent right after the reply) — a gentle nudge to the next step, "
-            ."e.g. \"Want me to set that order up now?\" Use it SPARINGLY: most replies need none (null). Never use it to repeat the "
-            ."reply or to double-send. One short line at most.\n\n"
+            ."Optionally include a short second message in 'follow_up' (sent right after the reply). Use it SPARINGLY: most replies "
+            ."need none (null), and never use it to repeat the reply or to double-send.\n"
+            ."When you DO use it, its job is to hold the conversation open, not just trail off — it must give the customer something "
+            ."concrete to respond to, so the thread keeps moving instead of dying on a flat statement. A bare acknowledgement (\"Sounds "
+            ."good!\") is not enough; end on a real question or a clear next action (\"Want me to set that order up now?\", \"Which one "
+            ."of these sounds right for you?\"). It does not have to fit in one line — two short sentences are fine if that's what it "
+            ."takes to genuinely re-engage them — but it is still ONE WhatsApp message, not a paragraph.\n\n"
 
             ."AVAILABLE FLOWS — set \"flow\" to one of these ids (or null):\n{$flows}\n\n"
 
@@ -729,6 +740,10 @@ class GeminiProvider
             ."{\"reply\":\"Sharp — *Instagram Likes* it is! 👍 Let's set that up.\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"service_id\":46,\"platform\":\"instagram\"}}\n\n"
             ."User (you listed TikTok followers, they picked #2 and already gave the link + amount — pass ALL of it): \"2, tiktok.com/@jane, 1000\"\n"
             ."{\"reply\":\"Perfect — 1,000 *TikTok Followers* for @jane. 🚀 Just confirm on the next step!\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"service_id\":88,\"platform\":\"tiktok\",\"link\":\"tiktok.com/@jane\",\"quantity\":1000}}\n\n"
+            ."User (shorthand quantity — \"09k\"/\"9k\" means 9,000; \"1.5k\" means 1,500. Always convert to the full number): \"Ndoda ma followers 09k or more\"\n"
+            ."{\"reply\":\"Sharp! 9,000 *Followers* it is. 🚀 Ipi platform, uye nditumirewo link ye profile yako?\",\"follow_up\":null,\"flow\":\"order\",\"flow_data\":{\"quantity\":9000}}\n\n"
+            ."User (Shona — \"kuisa mari muwallet\" = wants to top up the wallet, no amount given yet, still a deposit): \"ndoda kuisa mari muwallet\"\n"
+            ."{\"reply\":\"Sharp! 💰 Marii yaunoda kuisa muwallet?\",\"follow_up\":null,\"flow\":\"deposit\",\"flow_data\":{}}\n\n"
             ."User: \"how much for 500 tiktok views?\"\n"
             ."{\"reply\":\"For *TikTok Views* it's \$0.02 per 1,000 — so *500 views is about \$0.01*. 👍 Want me to set it up?\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
             ."User (catalogue shows a 🔥 PROMO on TikTok followers — a price answer MUST include it): \"how much for tiktok followers?\"\n"
