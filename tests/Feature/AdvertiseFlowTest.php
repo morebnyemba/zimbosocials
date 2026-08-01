@@ -32,10 +32,10 @@ class AdvertiseFlowTest extends TestCase
         return [$engine, $ctx, $user];
     }
 
-    /** Pick option 3 = the flat "1 week" package ($25) — payment is the only step. */
+    /** Pick option 3 = the flat "1 week" package ($30) — payment is the only step. */
     private function toConfirm(FlowEngine $engine, SessionContext $ctx): void
     {
-        $engine->advance($ctx, '3'); // 1 week — $25 → straight to confirm
+        $engine->advance($ctx, '3'); // 1 week — $30 → straight to confirm
     }
 
     public function test_a_confirmed_advert_charges_the_wallet_and_books_it(): void
@@ -54,13 +54,13 @@ class AdvertiseFlowTest extends TestCase
             'user_id' => $user->id,
             'package' => 'week1',
             'days' => 7,
-            'total' => 25.00,
+            'total' => 30.00,
             'status' => 'pending_setup',
         ]);
         // Details are collected by the team afterwards — not at booking.
         $this->assertNull(\App\Models\AdvertBooking::first()->promoting);
-        $this->assertSame(75.0, (float) $user->fresh()->balance); // 100 - 25
-        $this->assertDatabaseHas('transactions', ['user_id' => $user->id, 'type' => 'order_charge', 'amount' => -25.0]);
+        $this->assertSame(70.0, (float) $user->fresh()->balance); // 100 - 30
+        $this->assertDatabaseHas('transactions', ['user_id' => $user->id, 'type' => 'order_charge', 'amount' => -30.0]);
     }
 
     public function test_an_unconfirmed_advert_never_charges(): void
@@ -76,7 +76,7 @@ class AdvertiseFlowTest extends TestCase
 
     public function test_a_short_balance_offers_a_top_up_with_the_exact_shortfall(): void
     {
-        [$engine, $ctx, $user] = $this->start(balance: 5); // week1 needs 25
+        [$engine, $ctx, $user] = $this->start(balance: 5); // week1 needs 30
         $this->toConfirm($engine, $ctx);
 
         $res = $engine->resume($ctx);
@@ -84,7 +84,7 @@ class AdvertiseFlowTest extends TestCase
         $this->assertStringContainsString('short', (string) $res->reply);
         $this->assertSame('fl_deposit', $res->buttons[0]['id']);
         // The deposit flow is handed the exact amount still needed.
-        $this->assertSame(20.0, (float) $ctx->get('_prefill_amount'));
+        $this->assertSame(25.0, (float) $ctx->get('_prefill_amount'));
         $this->assertDatabaseCount('advert_bookings', 0);
     }
 
@@ -99,7 +99,7 @@ class AdvertiseFlowTest extends TestCase
 
         // Everything gathered → straight to the money gate.
         $this->assertSame('confirm', $ctx->state);
-        $this->assertStringContainsString('65.00', (string) $res->reply); // 1 month = $65 flat
+        $this->assertStringContainsString('75.00', (string) $res->reply); // 1 month = $75 flat
     }
 
     public function test_video_packages_are_flagged_and_boost_only_ones_are_not(): void
@@ -127,9 +127,73 @@ class AdvertiseFlowTest extends TestCase
         $titles = collect($res->list['sections'][0]['rows'])->pluck('title')->implode(' | ');
 
         // A cheap day test AND longer week/month options, all flat-priced.
-        $this->assertStringContainsString('1 day — $6.00', $titles);
-        $this->assertStringContainsString('3 days — $14.00', $titles);
-        $this->assertStringContainsString('1 week — $25.00', $titles);
-        $this->assertStringContainsString('1 month — $65.00', $titles);
+        $this->assertStringContainsString('1 day — $7.00', $titles);
+        $this->assertStringContainsString('3 days — $17.00', $titles);
+        $this->assertStringContainsString('1 week — $30.00', $titles);
+        $this->assertStringContainsString('1 month — $75.00', $titles);
+    }
+
+    public function test_an_existing_contact_still_sees_the_old_price_during_the_grace_window(): void
+    {
+        config(['adverts.repriced_at' => now()->subDay()->toDateTimeString(), 'adverts.reprice_grace_days' => 7]);
+
+        $user = User::factory()->create(['balance' => 100]);
+        // Existed BEFORE the reprice — grandfathered.
+        $account = \App\Models\WhatsAppAccount::create([
+            'wa_phone' => self::PHONE, 'user_id' => $user->id,
+            'link_status' => 'linked', 'opted_in' => true,
+        ]);
+        $account->forceFill(['created_at' => now()->subDays(3)])->save();
+
+        $ctx = new SessionContext(self::PHONE);
+        $ctx->set('_user_id', $user->id);
+        $res = app(FlowEngine::class)->start($ctx, 'advertise');
+        $res = app(FlowEngine::class)->advance($ctx, '3'); // 1 week
+
+        $this->assertStringContainsString('25.00', (string) $res->reply);
+        $this->assertSame(25.0, (float) $ctx->get('_ad_quoted_price'));
+    }
+
+    public function test_a_brand_new_contact_gets_the_current_price_even_during_the_grace_window(): void
+    {
+        config(['adverts.repriced_at' => now()->subDay()->toDateTimeString(), 'adverts.reprice_grace_days' => 7]);
+
+        $user = User::factory()->create(['balance' => 100]);
+        // Created AFTER the reprice — never saw the old price, doesn't get it.
+        \App\Models\WhatsAppAccount::create([
+            'wa_phone' => self::PHONE, 'user_id' => $user->id,
+            'link_status' => 'linked', 'opted_in' => true,
+            'created_at' => now(),
+        ]);
+
+        $ctx = new SessionContext(self::PHONE);
+        $ctx->set('_user_id', $user->id);
+        app(FlowEngine::class)->start($ctx, 'advertise');
+        $res = app(FlowEngine::class)->advance($ctx, '3');
+
+        $this->assertStringContainsString('30.00', (string) $res->reply);
+    }
+
+    public function test_the_grandfathered_price_survives_a_flow_reset_mid_booking(): void
+    {
+        // '_ad_quoted_price' is '_'-prefixed, so a detour that resets the flow
+        // (e.g. to deposit funds) must not lose the price already locked in.
+        config(['adverts.repriced_at' => now()->subDay()->toDateTimeString(), 'adverts.reprice_grace_days' => 7]);
+
+        $user = User::factory()->create(['balance' => 0]);
+        $account = \App\Models\WhatsAppAccount::create([
+            'wa_phone' => self::PHONE, 'user_id' => $user->id,
+            'link_status' => 'linked', 'opted_in' => true,
+        ]);
+        $account->forceFill(['created_at' => now()->subDays(3)])->save();
+
+        $ctx = new SessionContext(self::PHONE);
+        $ctx->set('_user_id', $user->id);
+        app(FlowEngine::class)->start($ctx, 'advertise');
+        app(FlowEngine::class)->advance($ctx, '3'); // quotes $25, locks it in
+
+        $ctx->resetFlow(); // simulates a detour flow completing elsewhere
+
+        $this->assertSame(25.0, (float) $ctx->get('_ad_quoted_price'));
     }
 }

@@ -52,6 +52,7 @@ class AdvertiseFlow extends AbstractFlow
         $package = mb_strtolower(trim((string) $ctx->pullPrefill('package')));
         if ($package !== '' && AdvertBooking::package($package)) {
             $ctx->set('ad_package', $package);
+            $this->quotePrice($package, $ctx);
         }
 
         if (! $ctx->has('ad_package')) {
@@ -114,16 +115,35 @@ class AdvertiseFlow extends AbstractFlow
         }
 
         $ctx->set('ad_package', $key);
+        $this->quotePrice($key, $ctx);
 
         return $this->confirmPrompt($ctx);
+    }
+
+    /**
+     * Lock in the price the customer is actually being shown right now — as a
+     * '_'-prefixed key so it survives a flow reset (e.g. a deposit detour),
+     * and so a later reprice can never change what THIS booking charges once
+     * it's been quoted. Honors the grandfather window in AdvertBooking::
+     * priceFor() for an existing contact caught mid price-change.
+     */
+    private function quotePrice(string $key, SessionContext $ctx): void
+    {
+        $since = \App\Models\WhatsAppAccount::where('wa_phone', $ctx->phone)->value('created_at');
+        $price = AdvertBooking::priceFor($key, $since ? \Illuminate\Support\Carbon::parse($since) : null);
+        $ctx->set('_ad_quoted_price', $price);
     }
 
     private function confirmPrompt(SessionContext $ctx): FlowResult
     {
         $user = $this->user($ctx);
         $cur = $this->currency($ctx);
-        $pkg = AdvertBooking::package((string) $ctx->get('ad_package')) ?? [];
-        $total = round((float) ($pkg['price'] ?? 0), 2);
+        $key = (string) $ctx->get('ad_package');
+        $pkg = AdvertBooking::package($key) ?? [];
+        if (! $ctx->has('_ad_quoted_price')) {
+            $this->quotePrice($key, $ctx);
+        }
+        $total = round((float) $ctx->get('_ad_quoted_price', $pkg['price'] ?? 0), 2);
         $balance = (float) ($user?->balance ?? 0);
         $video = ! empty($pkg['includes_video']);
 
@@ -183,7 +203,13 @@ class AdvertiseFlow extends AbstractFlow
         }
 
         $days = (int) ($pkg['days'] ?? 0);
-        $total = round((float) $pkg['price'], 2);
+        // The price actually SHOWN at confirm — never re-read fresh here, so a
+        // reprice between "here's your total" and "yes, book it" can't change
+        // what gets charged from what was just quoted.
+        if (! $ctx->has('_ad_quoted_price')) {
+            $this->quotePrice($key, $ctx);
+        }
+        $total = round((float) $ctx->get('_ad_quoted_price', $pkg['price'] ?? 0), 2);
         $cur = $this->currency($ctx);
 
         try {

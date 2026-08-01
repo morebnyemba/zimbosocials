@@ -40,6 +40,36 @@ class AdvertBooking extends Model
         return self::packages()[$key] ?? null;
     }
 
+    /**
+     * The price for a package, honoring a temporary grandfather window: a
+     * contact who already existed before a reprice keeps seeing the old
+     * number for a short grace period, so a price change never yanks the rug
+     * out from under someone mid-conversation. A brand new contact always
+     * sees the current price. See config/adverts.php for the actual dates.
+     */
+    public static function priceFor(string $key, ?\Illuminate\Support\Carbon $contactSince = null): float
+    {
+        $pkg = self::package($key);
+        if (! $pkg) {
+            return 0.0;
+        }
+
+        $repricedAt = config('adverts.repriced_at');
+        $graceDays = (int) config('adverts.reprice_grace_days', 0);
+
+        if ($repricedAt && $graceDays > 0 && $contactSince !== null) {
+            $cutover = \Illuminate\Support\Carbon::parse($repricedAt);
+            if ($contactSince->lt($cutover) && now()->lt($cutover->copy()->addDays($graceDays))) {
+                $old = config("adverts.previous_packages.{$key}.price");
+                if ($old !== null) {
+                    return (float) $old;
+                }
+            }
+        }
+
+        return (float) ($pkg['price'] ?? 0);
+    }
+
     public function packageLabel(): string
     {
         return (string) (self::package($this->package)['label'] ?? ucfirst($this->package));
