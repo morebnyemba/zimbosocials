@@ -20,17 +20,21 @@ return [
     | 'recommended' marks the default the AI should nudge people toward.
     */
     'packages' => [
+        // Repriced 2026-08-01 off a $30/week anchor (previously $25). Per-day
+        // rate still falls as the duration grows, so the "better value at
+        // longer durations" story in the blurbs below still holds:
+        // $7/day, ~$5.67/day, ~$4.29/day, ~$3.57/day, $2.50/day.
         'day1' => [
             'label' => '1 day',
             'days' => 1,
-            'price' => 5.00,
+            'price' => 7.00,
             'includes_video' => false,
             'blurb' => 'A quick test run — we boost a post you already have.',
         ],
         'day3' => [
             'label' => '3 days',
             'days' => 3,
-            'price' => 10.00,
+            'price' => 17.00,
             'includes_video' => false,
             'blurb' => 'Boost-only, long enough to see real enquiries — most people start here.',
             'recommended' => true,
@@ -38,23 +42,48 @@ return [
         'week1' => [
             'label' => '1 week',
             'days' => 7,
-            'price' => 20.00,
+            'price' => 30.00,
             'includes_video' => true,
             'blurb' => 'A full week of reach — includes a custom video advert we make for you.',
         ],
         'week2' => [
             'label' => '2 weeks',
             'days' => 14,
-            'price' => 35.00,
+            'price' => 50.00,
             'includes_video' => true,
             'blurb' => 'Sustained presence + a custom video advert — better value per day.',
         ],
         'month1' => [
             'label' => '1 month',
             'days' => 30,
-            'price' => 60.00,
+            'price' => 75.00,
             'includes_video' => true,
             'blurb' => 'Maximum reach + a custom video advert — best for launches and busy seasons.',
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Price-change grandfathering
+    |--------------------------------------------------------------------------
+    | A contact who already existed before 'repriced_at' keeps seeing the price
+    | they'd have been quoted before, for 'reprice_grace_days' afterwards — a
+    | price change should never be a surprise to someone mid-conversation. A
+    | brand new contact created after 'repriced_at' always sees the current
+    | price above. See AdvertBooking::priceFor().
+    |
+    | These are the ORIGINAL prices that were actually live in production
+    | ($20/week) — not the $25/week intermediate, which was only ever a local
+    | commit and never reached a real customer, so there's nothing to
+    | grandfather from it.
+    */
+    'previous_packages' => [
+        'day1' => ['price' => 5.00],
+        'day3' => ['price' => 10.00],
+        'week1' => ['price' => 20.00],
+        'week2' => ['price' => 35.00],
+        'month1' => ['price' => 60.00],
+    ],
+    'repriced_at' => '2026-08-01 20:00:00',
+    'reprice_grace_days' => 7,
 ];

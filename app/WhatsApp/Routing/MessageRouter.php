@@ -678,6 +678,27 @@ class MessageRouter
         }
 
         if ($willStartFlow) {
+            // Switching away from an in-progress order (e.g. to deposit funds)
+            // completes THAT flow when it's done, and FlowEngine::apply() ->
+            // SessionContext::resetFlow() wipes every non-'_' context key on
+            // any flow completion — order_service_id/order_quantity/order_link
+            // included. Seen live: a customer confirmed her TikTok handle in
+            // chat, then deposited, and the resumed order had no memory of any
+            // of it — asked for the same link again from a blank slate. Stash
+            // what's already known before it's lost, so the deposit-resume
+            // path (OrderResumeService) has it once funds land.
+            if ($ctx->flow === 'order' && $flow !== 'order' && $account->user_id
+                && $ctx->has('order_service_id') && $ctx->has('order_quantity')
+            ) {
+                \App\WhatsApp\Order\OrderResumeService::stash(
+                    (int) $account->user_id,
+                    $ctx->phone,
+                    (int) $ctx->get('order_service_id'),
+                    (string) $ctx->get('order_link', ''),
+                    (int) $ctx->get('order_quantity'),
+                );
+            }
+
             foreach ($flowData as $k => $v) {
                 $ctx->set('_prefill_'.$k, $v);
             }
