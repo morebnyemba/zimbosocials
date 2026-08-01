@@ -158,6 +158,10 @@ class InboundNormalizer
             'interactive_id' => $interactiveId,
             'media' => $media,
             'ad_referral' => $adReferral,
+            // Set when this message is a WhatsApp "swipe reply" quoting an
+            // earlier one — lets an admin reply directly to a deposit alert
+            // instead of typing its transaction id.
+            'quoted_wa_message_id' => $m['context']['id'] ?? null,
             'name' => $names[$from] ?? null,
             'timestamp' => isset($m['timestamp']) ? (int) $m['timestamp'] : null,
             'raw' => $m,
