@@ -339,10 +339,20 @@ class MessageRouter
         //    the input, the AI brain gets first crack at it — it can answer,
         //    adjust the current flow's data, or switch to another flow. The
         //    flow's own error text is only sent when the AI can't help.
+        //
+        //    Registration is exempt: seen live — a customer typed "Ahh" instead
+        //    of an email, the AI "rescued" it with an unrelated pitch about
+        //    service pricing, never mentioned the email at all, and the actual
+        //    "that's not a valid email" message only surfaced a turn later,
+        //    reading as if it were about something else entirely. Nothing can
+        //    be ordered or funded without an account, so a wrong AI tangent
+        //    here costs more than anywhere else — always show the plain retry.
         if ($ctx->inFlow() && $text !== '') {
             $res = $this->engine->advance($ctx, $text);
 
-            if ($res->isRetry() && $this->consultAi($ctx, $account, $text, inFlow: true)) {
+            if ($res->isRetry() && $ctx->flow !== 'register'
+                && $this->consultAi($ctx, $account, $text, inFlow: true)
+            ) {
                 return ['handled_by' => 'ai', 'intent' => 'flow_rescue', 'ai_used' => true];
             }
 
