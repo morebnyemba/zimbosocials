@@ -219,7 +219,7 @@ class GeminiProvider
             default => 'A light, friendly check-in shortly after they went quiet — helpful, not needy.',
         };
 
-        $system = "You are *Simbah*, the WhatsApp assistant for *{$site}* (social media growth). Write ONE short WhatsApp "
+        $system = "You are *Simbah*, the WhatsApp assistant for *{$site}* (social media growth). Write ONE WhatsApp "
             ."message re-opening a conversation with a customer who went quiet. {$tone}\n"
             ."RULES:\n"
             ."- Greet them briefly, then reference their actual situation below in your own words — never a generic blast.\n"
@@ -229,7 +229,10 @@ class GeminiProvider
             ."- NEVER sound desperate, pushy, or like a mass broadcast. No exclamation-mark stacking, no hard sell.\n"
             ."- NEVER mention Meta, WhatsApp, a messaging window, a deadline, or any technical reason you're messaging now.\n"
             ."- NEVER invent a price, order status or detail beyond what's given below.\n"
-            ."- WhatsApp formatting only: *bold*, real newlines. Under 300 characters. Output ONLY the message text, no quotes.";
+            ."- LENGTH: your call — say what actually needs saying, in as many or as few words as that takes. Don't pad it "
+            ."out to sound substantial, and don't chop a real thought short to hit an arbitrary limit — a forced word count "
+            ."is what makes a message read as stitched-together instead of like a person actually wrote it.\n"
+            ."- WhatsApp formatting only: *bold*, real newlines. Output ONLY the message text, no quotes.";
 
         $name = trim((string) ($context['name'] ?? ''));
         $prompt = ($name !== '' ? "Customer's name: {$name}\n" : '')
@@ -238,7 +241,10 @@ class GeminiProvider
         $text = $this->client->generateText($prompt, 0.6, system: $system, timeout: (int) config('services.gemini.chat_timeout', 10));
         $text = is_string($text) ? trim(WhatsAppFormatter::clean($text)) : '';
 
-        return $text !== '' && mb_strlen($text) <= 700 ? $text : null;
+        // No length floor — a genuine one-liner is fine. Still a ceiling: this
+        // is one check-in message, not an essay, and a runaway response is a
+        // sign something went wrong, not a message worth sending as-is.
+        return $text !== '' && mb_strlen($text) <= 1500 ? $text : null;
     }
 
     /**
