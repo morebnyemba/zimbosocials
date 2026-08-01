@@ -11,19 +11,21 @@ return [
     | maths for the customer.
     |
     | 'includes_video' => the package price includes our team PRODUCING a short
-    | video advert for them. Cheap test runs are boost-only (we run whatever they
-    | already have); the longer packages get a made-for-you video. Flip the flag
-    | on any tier to change what's promised.
+    | video advert for them. Only the 1-day test stays boost-only (we run
+    | whatever they already have); everything from 3 days up gets a made-for-you
+    | video — moved down from "1 week+" when prices rose, so the jump from the
+    | cheapest test tier buys real, visible extra value. Flip the flag on any
+    | tier to change what's promised.
     |
     | Keep the "Sponsored adverts" knowledge-base entry in step with these
     | prices/inclusions — the assistant quotes the KB when it explains packages.
     | 'recommended' marks the default the AI should nudge people toward.
     */
     'packages' => [
-        // Repriced 2026-08-01 off a $30/week anchor (previously $25). Per-day
-        // rate still falls as the duration grows, so the "better value at
-        // longer durations" story in the blurbs below still holds:
-        // $7/day, ~$5.67/day, ~$4.29/day, ~$3.57/day, $2.50/day.
+        // Repriced 2026-08-01 off a $30/week anchor (previously $20). Per-day
+        // rate still falls as the duration grows: $7/day, ~$5.67/day,
+        // ~$4.29/day, ~$3.57/day, $2.50/day. Benefits now escalate with price
+        // too, not just reach — see each blurb.
         'day1' => [
             'label' => '1 day',
             'days' => 1,
@@ -35,8 +37,8 @@ return [
             'label' => '3 days',
             'days' => 3,
             'price' => 17.00,
-            'includes_video' => false,
-            'blurb' => 'Boost-only, long enough to see real enquiries — most people start here.',
+            'includes_video' => true,
+            'blurb' => 'Long enough to see real enquiries — now includes a custom AI video advert too. Most people start here.',
             'recommended' => true,
         ],
         'week1' => [
@@ -44,21 +46,21 @@ return [
             'days' => 7,
             'price' => 30.00,
             'includes_video' => true,
-            'blurb' => 'A full week of reach — includes a custom video advert we make for you.',
+            'blurb' => 'A full week of reach — custom video advert, plus a progress update from our team partway through.',
         ],
         'week2' => [
             'label' => '2 weeks',
             'days' => 14,
             'price' => 50.00,
             'includes_video' => true,
-            'blurb' => 'Sustained presence + a custom video advert — better value per day.',
+            'blurb' => 'Sustained presence — custom video advert (pick from 2 concepts), a progress update partway through, and better value per day.',
         ],
         'month1' => [
             'label' => '1 month',
             'days' => 30,
             'price' => 75.00,
             'includes_video' => true,
-            'blurb' => 'Maximum reach + a custom video advert — best for launches and busy seasons.',
+            'blurb' => 'Maximum reach — custom video advert (pick from 2 concepts), priority setup, a progress update partway through, and a wrap-up performance summary. Best for launches and busy seasons.',
         ],
     ],
 
