@@ -255,11 +255,15 @@ return [
         'cache_ttl_seconds' => (int) env('GEMINI_CACHE_TTL', 3600),
 
         // Output is billed at several times the input rate. The prompt already
-        // asks for short WhatsApp replies; this is the hard backstop for the
-        // rare response that ignores it — generous enough not to clip a normal
-        // multi-service list, tight enough to stop a runaway one being billed
-        // in full.
+        // asks for short WhatsApp replies; these are the hard backstop for the
+        // rare response that ignores it. JSON responses need a much bigger
+        // ceiling than plain text — the schema envelope (follow_up, flow,
+        // flow_data) wraps the same short reply, and a cap sized for plain
+        // text truncates the JSON mid-string, which fails the whole request
+        // rather than just shortening it (this took live accuracy from ~93%
+        // to 78% the one time it shipped with a single shared cap).
         'max_output_tokens' => (int) env('GEMINI_MAX_OUTPUT_TOKENS', 400),
+        'max_output_tokens_json' => (int) env('GEMINI_MAX_OUTPUT_TOKENS_JSON', 1200),
     ],
 
 ];

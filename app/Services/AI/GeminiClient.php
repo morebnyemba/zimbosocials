@@ -26,7 +26,7 @@ class GeminiClient
      */
     public function generateText(string $prompt, float $temperature = 0.7, ?string $system = null, ?int $timeout = null): ?string
     {
-        return $this->send($prompt, $this->baseConfig($temperature), $system, $timeout);
+        return $this->send($prompt, $this->baseConfig($temperature, json: false), $system, $timeout);
     }
 
     /**
@@ -42,7 +42,7 @@ class GeminiClient
      */
     public function generateJson(string $prompt, float $temperature = 0.2, ?array $schema = null, ?string $system = null, ?int $timeout = null, array $media = []): ?array
     {
-        $config = array_merge($this->baseConfig($temperature), ['responseMimeType' => 'application/json']);
+        $config = array_merge($this->baseConfig($temperature, json: true), ['responseMimeType' => 'application/json']);
         if ($schema !== null) {
             $config['responseSchema'] = $schema;
         }
@@ -80,14 +80,25 @@ class GeminiClient
      * Output is priced roughly 8x input, and the prompt already asks for
      * short WhatsApp-length replies — but an instruction is not a ceiling.
      * A generous hard cap costs nothing on a normal reply and stops the rare
-     * runaway response (a long explanation, a repeated loop) from being
-     * generated — and billed — in full before anyone reads a word of it.
+     * runaway response from being generated — and billed — in full before
+     * anyone reads a word of it.
+     *
+     * JSON calls need a MUCH bigger ceiling than plain text: the structured
+     * reply carries the same short WhatsApp message, but wrapped in the full
+     * schema envelope (follow_up, flow, flow_data) — a multi-service listing
+     * plus that overhead routinely runs well past a tight text-sized cap. Cut
+     * off mid-string, the JSON is no longer valid JSON at all: a too-tight cap
+     * here doesn't shorten the reply, it fails the whole request (confirmed
+     * live — accuracy dropped from ~93% to 78% the first time this shipped
+     * with one shared cap for both).
      */
-    private function baseConfig(float $temperature): array
+    private function baseConfig(float $temperature, bool $json): array
     {
+        $key = $json ? 'services.gemini.max_output_tokens_json' : 'services.gemini.max_output_tokens';
+
         return [
             'temperature' => $temperature,
-            'maxOutputTokens' => (int) config('services.gemini.max_output_tokens', 400),
+            'maxOutputTokens' => (int) config($key, $json ? 1200 : 400),
         ];
     }
 

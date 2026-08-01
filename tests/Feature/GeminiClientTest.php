@@ -44,9 +44,17 @@ class GeminiClientTest extends TestCase
         Http::assertSentCount(1);
     }
 
-    public function test_every_call_carries_a_hard_output_token_cap(): void
+    public function test_json_calls_get_a_much_bigger_cap_than_plain_text(): void
     {
-        config(['services.gemini.api_key' => 'test-key', 'services.gemini.max_output_tokens' => 250]);
+        // A shared cap sized for short text truncates a JSON reply mid-string,
+        // which fails the WHOLE request rather than just shortening it —
+        // confirmed live (accuracy dropped from ~93% to 78% the one time this
+        // shipped with a single cap for both). The two must stay independent.
+        config([
+            'services.gemini.api_key' => 'test-key',
+            'services.gemini.max_output_tokens' => 250,
+            'services.gemini.max_output_tokens_json' => 900,
+        ]);
         Http::fake(['generativelanguage.googleapis.com/*' => Http::response(
             ['candidates' => [['content' => ['parts' => [['text' => '{"reply":"hi"}']]]]]]
         )]);
@@ -55,8 +63,13 @@ class GeminiClientTest extends TestCase
         app(GeminiClient::class)->generateJson('prompt');
 
         Http::assertSentCount(2);
-        Http::assertSent(function ($request) {
-            return ($request->data()['generationConfig']['maxOutputTokens'] ?? null) === 250;
+        $requests = [];
+        Http::assertSent(function ($request) use (&$requests) {
+            $requests[] = $request->data();
+
+            return true;
         });
+        $this->assertSame(250, $requests[0]['generationConfig']['maxOutputTokens']);
+        $this->assertSame(900, $requests[1]['generationConfig']['maxOutputTokens']);
     }
 }
