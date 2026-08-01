@@ -43,4 +43,20 @@ class GeminiClientTest extends TestCase
         $this->assertNull(app(GeminiClient::class)->generateJson('prompt'));
         Http::assertSentCount(1);
     }
+
+    public function test_every_call_carries_a_hard_output_token_cap(): void
+    {
+        config(['services.gemini.api_key' => 'test-key', 'services.gemini.max_output_tokens' => 250]);
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response(
+            ['candidates' => [['content' => ['parts' => [['text' => '{"reply":"hi"}']]]]]]
+        )]);
+
+        app(GeminiClient::class)->generateText('prompt');
+        app(GeminiClient::class)->generateJson('prompt');
+
+        Http::assertSentCount(2);
+        Http::assertSent(function ($request) {
+            return ($request->data()['generationConfig']['maxOutputTokens'] ?? null) === 250;
+        });
+    }
 }

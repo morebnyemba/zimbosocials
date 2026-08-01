@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\ManualPaymentDetail;
+use App\Models\Service;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WhatsAppAccount;
 use App\Services\AI\GeminiClient;
 use App\WhatsApp\Routing\MessageRouter;
+use App\WhatsApp\Session\SessionManager;
 use App\WhatsApp\Webhook\InboundNormalizer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -121,6 +123,44 @@ class WhatsAppMediaUnderstandingTest extends TestCase
 
         $out = \App\Models\WhatsAppMessage::where('direction', 'out')->latest('id')->first();
         $this->assertStringContainsString('Proof received', (string) $out->body);
+    }
+
+    public function test_a_screenshot_sent_at_the_link_step_fills_in_the_order(): void
+    {
+        $this->linkedAccount();
+        $service = Service::create([
+            'name' => 'IG Followers', 'name_sn' => 'x', 'description' => '', 'description_sn' => '',
+            'category' => 'Instagram', 'type' => 'followers', 'rate' => 1.0,
+            'min_qty' => 100, 'max_qty' => 100000, 'is_active' => true,
+        ]);
+
+        $sessions = app(SessionManager::class);
+        $ctx = $sessions->load(self::PHONE);
+        $ctx->setFlow('order', 'enter_link');
+        $ctx->set('order_service_id', $service->id);
+        $sessions->save($ctx);
+
+        $mock = Mockery::mock(GeminiClient::class);
+        $mock->shouldReceive('isConfigured')->andReturn(true);
+        $mock->shouldReceive('generateJson')
+            ->andReturnUsing(function (...$args) {
+                // The prompt must actually tell the model it's waiting on a link.
+                $this->assertStringContainsString('enter_link step of an order RIGHT NOW', $args[0]);
+
+                return [
+                    'reply' => 'Sharp, got your profile!', 'follow_up' => null,
+                    'flow' => 'order', 'flow_data' => ['link' => '@testhandle'],
+                ];
+            });
+        $this->app->instance(GeminiClient::class, $mock);
+
+        app(MessageRouter::class)->handle($this->mediaMessage(['id' => 'M1', 'mime' => 'image/jpeg', 'kind' => 'image']));
+
+        $after = $sessions->load(self::PHONE);
+        $this->assertStringContainsString('testhandle', (string) $after->get('order_link'));
+        // The link was accepted, so the flow moved on to asking for a quantity
+        // instead of asking for the same link a second time.
+        $this->assertSame('enter_quantity', $after->state);
     }
 
     public function test_a_failed_ai_read_says_so_instead_of_hinting_at_deposits(): void

@@ -227,7 +227,29 @@ class MessageRouter
         //    fallback when AI is off or over budget.
         if ($selection === null) {
             $cmd = $this->commands->match($text);
+            $orderIdHint = null;
+
+            // No exact keyword — try the same two intents phrased naturally.
+            // Only outside an active flow: mid-flow, free text belongs to
+            // whatever step is waiting (section 5 below), not to this shortcut.
+            if ($cmd === null && ! $ctx->inFlow() && $text !== '') {
+                $phrase = $this->commands->matchPhrase($text);
+                if ($phrase !== null) {
+                    $cmd = $phrase['command'];
+                    $orderIdHint = $phrase['order_id'];
+                }
+            }
+
             if ($cmd !== null) {
+                // Extracted up front (before the AI even runs) so the deterministic
+                // flow has it either way: if the AI resolves this itself it can
+                // still use it as a flow_data prefill, and if the AI is unavailable
+                // the fallback below jumps straight to the named order instead of
+                // asking again.
+                if ($orderIdHint !== null) {
+                    $ctx->set('_prefill_order_id', $orderIdHint);
+                }
+
                 if (! $this->commands->isControl($text)
                     && $this->consultAi($ctx, $account, $text, inFlow: $ctx->inFlow())
                 ) {

@@ -26,7 +26,7 @@ class GeminiClient
      */
     public function generateText(string $prompt, float $temperature = 0.7, ?string $system = null, ?int $timeout = null): ?string
     {
-        return $this->send($prompt, ['temperature' => $temperature], $system, $timeout);
+        return $this->send($prompt, $this->baseConfig($temperature), $system, $timeout);
     }
 
     /**
@@ -42,7 +42,7 @@ class GeminiClient
      */
     public function generateJson(string $prompt, float $temperature = 0.2, ?array $schema = null, ?string $system = null, ?int $timeout = null, array $media = []): ?array
     {
-        $config = ['responseMimeType' => 'application/json', 'temperature' => $temperature];
+        $config = array_merge($this->baseConfig($temperature), ['responseMimeType' => 'application/json']);
         if ($schema !== null) {
             $config['responseSchema'] = $schema;
         }
@@ -74,6 +74,21 @@ class GeminiClient
         }
 
         return null;
+    }
+
+    /**
+     * Output is priced roughly 8x input, and the prompt already asks for
+     * short WhatsApp-length replies — but an instruction is not a ceiling.
+     * A generous hard cap costs nothing on a normal reply and stops the rare
+     * runaway response (a long explanation, a repeated loop) from being
+     * generated — and billed — in full before anyone reads a word of it.
+     */
+    private function baseConfig(float $temperature): array
+    {
+        return [
+            'temperature' => $temperature,
+            'maxOutputTokens' => (int) config('services.gemini.max_output_tokens', 400),
+        ];
     }
 
     /**

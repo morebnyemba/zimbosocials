@@ -253,6 +253,13 @@ return [
         // input on every message. See GeminiPromptCache.
         'cache_system_prompt' => (bool) env('GEMINI_CACHE_SYSTEM_PROMPT', true),
         'cache_ttl_seconds' => (int) env('GEMINI_CACHE_TTL', 3600),
+
+        // Output is billed at several times the input rate. The prompt already
+        // asks for short WhatsApp replies; this is the hard backstop for the
+        // rare response that ignores it — generous enough not to clip a normal
+        // multi-service list, tight enough to stop a runaway one being billed
+        // in full.
+        'max_output_tokens' => (int) env('GEMINI_MAX_OUTPUT_TOKENS', 400),
     ],
 
 ];
