@@ -150,8 +150,8 @@ class AdvertiseFlowTest extends TestCase
         $res = app(FlowEngine::class)->start($ctx, 'advertise');
         $res = app(FlowEngine::class)->advance($ctx, '3'); // 1 week
 
-        $this->assertStringContainsString('25.00', (string) $res->reply);
-        $this->assertSame(25.0, (float) $ctx->get('_ad_quoted_price'));
+        $this->assertStringContainsString('20.00', (string) $res->reply);
+        $this->assertSame(20.0, (float) $ctx->get('_ad_quoted_price'));
     }
 
     public function test_a_brand_new_contact_gets_the_current_price_even_during_the_grace_window(): void
@@ -190,10 +190,10 @@ class AdvertiseFlowTest extends TestCase
         $ctx = new SessionContext(self::PHONE);
         $ctx->set('_user_id', $user->id);
         app(FlowEngine::class)->start($ctx, 'advertise');
-        app(FlowEngine::class)->advance($ctx, '3'); // quotes $25, locks it in
+        app(FlowEngine::class)->advance($ctx, '3'); // quotes $20, locks it in
 
         $ctx->resetFlow(); // simulates a detour flow completing elsewhere
 
-        $this->assertSame(25.0, (float) $ctx->get('_ad_quoted_price'));
+        $this->assertSame(20.0, (float) $ctx->get('_ad_quoted_price'));
     }
 }

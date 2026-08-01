@@ -71,13 +71,18 @@ return [
     | price change should never be a surprise to someone mid-conversation. A
     | brand new contact created after 'repriced_at' always sees the current
     | price above. See AdvertBooking::priceFor().
+    |
+    | These are the ORIGINAL prices that were actually live in production
+    | ($20/week) — not the $25/week intermediate, which was only ever a local
+    | commit and never reached a real customer, so there's nothing to
+    | grandfather from it.
     */
     'previous_packages' => [
-        'day1' => ['price' => 6.00],
-        'day3' => ['price' => 14.00],
-        'week1' => ['price' => 25.00],
-        'week2' => ['price' => 42.00],
-        'month1' => ['price' => 65.00],
+        'day1' => ['price' => 5.00],
+        'day3' => ['price' => 10.00],
+        'week1' => ['price' => 20.00],
+        'week2' => ['price' => 35.00],
+        'month1' => ['price' => 60.00],
     ],
     'repriced_at' => '2026-08-01 20:00:00',
     'reprice_grace_days' => 7,
