@@ -49,9 +49,10 @@ class SessionManager
                 'status' => $status,
                 'last_activity' => $now,
                 'expires_at' => $now->copy()->addMinutes(self::TTL_MINUTES),
-                // They just acted — clear any stall nudge so a *later* stall can
-                // be nudged again.
+                // They just acted — clear any stall nudge (and which tier it
+                // reached) so a *later* stall gets its own fresh set of checks.
                 'nudged_at' => null,
+                'nudge_tier' => 0,
             ]
         );
     }

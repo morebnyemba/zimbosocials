@@ -44,19 +44,56 @@ docker compose build
 say "Migrating"
 docker compose run --rm --no-deps app php artisan migrate --force
 
-# ── 4. Swap ───────────────────────────────────────────────────────────────────
+# ── 4. Gate on AI prompt accuracy ─────────────────────────────────────────────
+# Only worth real, billed Gemini calls when something that could change the
+# model's behaviour actually moved — the prompt, the resolver, or the golden
+# set itself. A prompt/model change that quietly degrades flow accuracy has
+# shipped before (see PROMPT_VERSION history); this catches it before it's
+# live, using the image already built in step 2, not yet serving traffic.
+SKIP_AI_EVAL="${SKIP_AI_EVAL:-0}"
+AI_EVAL_MIN_ACCURACY="${AI_EVAL_MIN_ACCURACY:-85}"
+RUN_AI_EVAL=1
+if [[ "$PULL" == "1" ]]; then
+    if [[ "$BEFORE" == "$AFTER" ]] \
+        || ! git diff --name-only "$BEFORE" "$AFTER" | grep -qE 'GeminiProvider\.php|IntentEngine\.php|whatsapp-ai-golden\.json'
+    then
+        RUN_AI_EVAL=0
+    fi
+fi
+[[ "$SKIP_AI_EVAL" == "1" ]] && RUN_AI_EVAL=0
+
+if [[ "$RUN_AI_EVAL" == "1" ]]; then
+    say "Checking AI prompt accuracy (floor: ${AI_EVAL_MIN_ACCURACY}%)"
+    EVAL_OUT="$(docker compose run --rm --no-deps app php artisan whatsapp:ai-eval 2>&1)" || true
+    echo "$EVAL_OUT"
+    ACCURACY="$(echo "$EVAL_OUT" | grep -oE '\([0-9]+%\)' | tail -1 | tr -d '(%)')"
+    if [[ -z "$ACCURACY" ]]; then
+        echo "✗ Could not read an accuracy figure from whatsapp:ai-eval (missing GEMINI_API_KEY? Gemini down?)."
+        echo "  Refusing to deploy an unverified prompt/model change. Re-run with SKIP_AI_EVAL=1 to override."
+        exit 1
+    fi
+    if (( ACCURACY < AI_EVAL_MIN_ACCURACY )); then
+        echo "✗ AI flow accuracy is ${ACCURACY}%, below the ${AI_EVAL_MIN_ACCURACY}% floor. Not deploying this prompt/model change."
+        exit 1
+    fi
+    echo "✓ AI flow accuracy ${ACCURACY}% ≥ ${AI_EVAL_MIN_ACCURACY}%."
+else
+    echo "    (skipping AI eval — no prompt/resolver/golden-set changes detected)"
+fi
+
+# ── 5. Swap ───────────────────────────────────────────────────────────────────
 # --wait blocks until the web container's healthcheck passes, so a container
 # that cannot actually answer is never left in place silently.
 say "Starting new containers"
 docker compose up -d --wait --wait-timeout 120
 
-# ── 5. Prime ──────────────────────────────────────────────────────────────────
+# ── 6. Prime ──────────────────────────────────────────────────────────────────
 say "Refreshing caches"
 docker compose exec -T app php artisan optimize:clear
 docker compose exec -T app php artisan config:cache
 docker compose exec -T app php artisan route:cache
 
-# ── 6. Prove it ───────────────────────────────────────────────────────────────
+# ── 7. Prove it ───────────────────────────────────────────────────────────────
 say "Verifying"
 code="$(docker compose exec -T web wget -qO- -S -T 5 http://127.0.0.1/up 2>&1 | awk '/HTTP\//{print $2; exit}')"
 if [[ "$code" != "200" ]]; then

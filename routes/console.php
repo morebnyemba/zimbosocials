@@ -71,6 +71,12 @@ Schedule::command('whatsapp:remind-saved-orders')->hourly()->withoutOverlapping(
 // following up is still natural.
 Schedule::command('whatsapp:flag-idle-leads')->everyTenMinutes()->withoutOverlapping();
 
+// An already-engaged, linked customer who goes quiet gets three AI-composed
+// check-ins (2h/12h/23h since their last message) before Meta's 24h free-form
+// window closes — distinct from the lead-flagging above, which is for brand
+// new contacts and alerts a human instead of messaging them again.
+Schedule::command('whatsapp:nudge-idle-customers')->everyFifteenMinutes()->withoutOverlapping();
+
 // One rolled-up admin summary a day, in place of a per-event WhatsApp ping for
 // every sign-up and order (that volume of near-identical utility messages to
 // our own number reads as spam to WhatsApp).

@@ -191,5 +191,43 @@
         "message": "I'm opening a bakery, what should I grow?",
         "authenticated": true,
         "expect_flow": null
+    },
+    {
+        "message": "Ndoda ma followers  09k or more",
+        "authenticated": true,
+        "current_flow": "order",
+        "current_state": "enter_link",
+        "history": [
+            {
+                "user": "(no text — see the attached media above)",
+                "model": "Unogona kunditumira *link* ye profile yako ye TikTok. Inotaridzika seyi: _tiktok.com/@zimbosocials_. Kana kuti, unogona kungondipa *username* yako, kana kutumira *screenshot* ye profile yako."
+            }
+        ],
+        "expect_flow": "order",
+        "expect_entities": {
+            "quantity": 9000
+        }
+    },
+    {
+        "message": "Yes so you need money to help me or not",
+        "authenticated": true,
+        "history": [
+            {
+                "user": "hie",
+                "model": "Hie! 👋 How can I help you grow your socials today? Are you looking for followers, likes, views, or perhaps sponsored adverts?"
+            }
+        ],
+        "expect_flow": null
+    },
+    {
+        "message": "Sooo kti mundibatsire munoda mariii hre or mahara",
+        "authenticated": true,
+        "history": [
+            {
+                "user": "Tiktok",
+                "model": "Sharp! Pa TikTok, tinonyanya kubatsira nema *Followers* kuti profile yako ikure. Unoda kuona ma options edu ema TikTok followers here?"
+            }
+        ],
+        "expect_flow": null
     }
 ]

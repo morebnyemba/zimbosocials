@@ -77,7 +77,7 @@ class GeminiProvider
             .$this->referralBlock($context)
             .$this->activeFlowBlock($context)
             .$this->historyBlock($context['history'] ?? [])
-            .$this->mediaBlock($media)
+            .$this->mediaBlock($media, $context)
             ."\n\n=== USER MESSAGE ===\n".($text !== '' ? $text : '(no text — see the attached media above)');
 
         // Audio/vision take longer than a text turn; give them room rather than
@@ -190,6 +190,44 @@ class GeminiProvider
         }
 
         return $voiced;
+    }
+
+    /**
+     * One short, warm re-engagement message for a customer who went quiet —
+     * used at three checkpoints (2h/12h/23h since their last message) before
+     * Meta's 24h free-form window closes. The customer never sees any of
+     * that; they just get a natural check-in grounded in what they were
+     * actually doing, never a generic broadcast. Null on any failure — a
+     * missed check-in is fine, an invented or wrong one is not.
+     *
+     * @param  array{name:?string, situation:string, tier:int}  $context
+     */
+    public function reengagementMessage(array $context): ?string
+    {
+        $site = self::siteName();
+        $tone = match ($context['tier'] ?? 1) {
+            3 => 'This is the last natural moment to check in before the conversation goes quiet on our side — still warm '
+                .'and low-pressure, and never mention any window, deadline or technical reason for messaging now.',
+            2 => "It's been a while since they replied — warm and low-key, checking in without any pressure to buy.",
+            default => 'A light, friendly check-in shortly after they went quiet — casual, not needy.',
+        };
+
+        $system = "You are *Simbah*, the WhatsApp assistant for *{$site}* (social media growth). Write ONE short WhatsApp "
+            ."message re-opening a conversation with a customer who went quiet. {$tone}\n"
+            ."RULES:\n"
+            ."- Greet them briefly, then reference their actual situation below in your own words — never a generic blast.\n"
+            ."- NEVER mention Meta, WhatsApp, a messaging window, a deadline, or any technical reason you're messaging now.\n"
+            ."- NEVER invent a price, order status or detail beyond what's given below.\n"
+            ."- WhatsApp formatting only: *bold*, real newlines. Under 300 characters. Output ONLY the message text, no quotes.";
+
+        $name = trim((string) ($context['name'] ?? ''));
+        $prompt = ($name !== '' ? "Customer's name: {$name}\n" : '')
+            .'Their situation: '.$context['situation'];
+
+        $text = $this->client->generateText($prompt, 0.6, system: $system, timeout: (int) config('services.gemini.chat_timeout', 10));
+        $text = is_string($text) ? trim(WhatsAppFormatter::clean($text)) : '';
+
+        return $text !== '' && mb_strlen($text) <= 700 ? $text : null;
     }
 
     /**
@@ -940,8 +978,9 @@ class GeminiProvider
      * media rather than ignoring it.
      *
      * @param  array<int, array{mime:string, data:string, kind?:string}>  $media
+     * @param  array{current_flow:?string, current_state:?string}  $context
      */
-    private function mediaBlock(array $media): string
+    private function mediaBlock(array $media, array $context = []): string
     {
         if ($media === []) {
             return '';
@@ -952,12 +991,24 @@ class GeminiProvider
             $kinds[] = ($item['kind'] ?? 'file').' ('.($item['mime'] ?? 'unknown').')';
         }
 
+        // The order flow's enter_link step is waiting for exactly this kind of
+        // image — say so explicitly. "If legible, use it" was too vague: the
+        // model would describe the screenshot warmly and never actually set
+        // flow_data, so the customer's screenshot was read but never fed back
+        // into their order (they'd be asked for the same link again).
+        $awaitingLink = ($context['current_flow'] ?? null) === 'order' && ($context['current_state'] ?? null) === 'enter_link';
+        $linkRule = $awaitingLink
+            ? "\n- They are waiting at the enter_link step of an order RIGHT NOW. If this screenshot shows a @handle or page "
+                ."name, that IS their answer to that step: set flow to 'order' and flow_data to {\"link\": \"<the exact handle "
+                ."or page name you can read>\"}. Copy it EXACTLY as shown — never guess or complete a partial handle."
+            : '';
+
         return "\n\n=== THE CUSTOMER SENT MEDIA ===\n"
             .'Attached above: '.implode(', ', $kinds).".\n"
             ."Actually look at / listen to it and respond to what it CONTAINS — never say you can't open files.\n"
             ."- A VOICE NOTE: treat it exactly like they typed it. Answer in the language they SPOKE.\n"
             ."- A screenshot of a social profile or post: that's what they want grown — say what you can see, and offer the "
-            ."matching service. If a username or link is legible, use it.\n"
+            ."matching service. If a username or link is legible, use it.{$linkRule}\n"
             ."- A payment screenshot/receipt: if they have a deposit awaiting proof it's already been filed, so just reassure "
             ."them the team will verify it. Otherwise explain how to top up. NEVER confirm a payment yourself or credit a balance.\n"
             ."- A product, shop, flyer or event photo: this is a selling moment — that's exactly what a *sponsored advert* is for.\n"

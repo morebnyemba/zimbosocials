@@ -55,6 +55,41 @@ class CommandRegistry
     }
 
     /**
+     * Loose phrase matching for "balance" and "track", so a natural phrasing
+     * ("show me my balance", "where is my order 1231?") is recognised the
+     * same as the bare keyword — the AI still gets first crack at these (see
+     * MessageRouter), but recognising the phrase means there's a correct
+     * deterministic fallback if the AI is unavailable, and order_id is
+     * extracted either way so the flow can jump straight to the named order
+     * instead of asking again. Returns null when nothing matches.
+     *
+     * @return array{command:string, order_id:?int}|null
+     */
+    public function matchPhrase(string $text): ?array
+    {
+        $t = mb_strtolower(trim($text));
+        if ($t === '') {
+            return null;
+        }
+
+        if (preg_match('/\border\b.{0,15}?(\d+)/u', $t, $m)
+            || preg_match('/(\d+).{0,15}?\border\b/u', $t, $m)
+        ) {
+            return ['command' => 'track', 'order_id' => (int) $m[1]];
+        }
+
+        if (preg_match('/\btrack\b|where.{0,12}(is|are).{0,12}order|order.{0,12}status/u', $t)) {
+            return ['command' => 'track', 'order_id' => null];
+        }
+
+        if (preg_match('/\b(balance|wallet)\b/u', $t)) {
+            return ['command' => 'balance', 'order_id' => null];
+        }
+
+        return null;
+    }
+
+    /**
      * Whether the typed keyword is a conversation control (instant, no AI).
      * Data shortcuts like "balance" or greetings like "hi" return false — the
      * router gives the AI first crack at those, falling back to the mapped

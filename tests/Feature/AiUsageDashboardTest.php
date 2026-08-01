@@ -71,6 +71,11 @@ class AiUsageDashboardTest extends TestCase
 
     public function test_yesterdays_usage_counts_to_the_month_but_not_today(): void
     {
+        // Fixed to a safe mid-month date: "yesterday" needs to land in the
+        // SAME calendar month as "today" for this test's premise to hold —
+        // true on 364 days a year, but not on the 1st.
+        $this->travelTo(\Illuminate\Support\Carbon::create(2026, 1, 15, 12));
+
         AiUsage::create([
             'day' => now()->subDay()->toDateString(), 'model' => 'gemini-2.5-flash',
             'requests' => 5, 'prompt_tokens' => 1000, 'cached_tokens' => 0, 'output_tokens' => 10,
@@ -82,6 +87,8 @@ class AiUsageDashboardTest extends TestCase
                 ->where('stats.ai.today_requests', 0)
                 ->where('stats.ai.month_requests', 5)
             );
+
+        $this->travelBack();
     }
 
     public function test_no_usage_yet_shows_zero_rather_than_breaking(): void
