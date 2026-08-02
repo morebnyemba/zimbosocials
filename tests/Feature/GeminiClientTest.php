@@ -72,4 +72,39 @@ class GeminiClientTest extends TestCase
         $this->assertSame(250, $requests[0]['generationConfig']['maxOutputTokens']);
         $this->assertSame(900, $requests[1]['generationConfig']['maxOutputTokens']);
     }
+
+    public function test_plain_text_is_uncapped_by_default(): void
+    {
+        // A fixed cap fights whatever length the prompt itself asks for — a
+        // cap sized for a short nudge cut off a genuine paragraph the moment
+        // nudges were allowed to compose their own length. Default (0) omits
+        // maxOutputTokens entirely rather than sending an arbitrary ceiling.
+        config(['services.gemini.api_key' => 'test-key', 'services.gemini.max_output_tokens' => 0]);
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response(
+            ['candidates' => [['content' => ['parts' => [['text' => 'a long, natural reply']]]]]]
+        )]);
+
+        app(GeminiClient::class)->generateText('prompt');
+
+        Http::assertSent(function ($request) {
+            return ! array_key_exists('maxOutputTokens', $request->data()['generationConfig']);
+        });
+    }
+
+    public function test_json_calls_are_never_uncapped_even_if_configured_to_zero(): void
+    {
+        // JSON always needs a real ceiling — omitting it entirely risks an
+        // unbounded structured response, which is a different risk profile
+        // than plain text (see class docblock on baseConfig()).
+        config(['services.gemini.api_key' => 'test-key', 'services.gemini.max_output_tokens_json' => 1200]);
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response(
+            ['candidates' => [['content' => ['parts' => [['text' => '{"reply":"hi"}']]]]]]
+        )]);
+
+        app(GeminiClient::class)->generateJson('prompt');
+
+        Http::assertSent(function ($request) {
+            return ($request->data()['generationConfig']['maxOutputTokens'] ?? null) === 1200;
+        });
+    }
 }

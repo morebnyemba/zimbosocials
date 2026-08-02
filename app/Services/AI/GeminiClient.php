@@ -77,29 +77,38 @@ class GeminiClient
     }
 
     /**
-     * Output is priced roughly 8x input, and the prompt already asks for
-     * short WhatsApp-length replies — but an instruction is not a ceiling.
-     * A generous hard cap costs nothing on a normal reply and stops the rare
-     * runaway response from being generated — and billed — in full before
-     * anyone reads a word of it.
+     * JSON calls keep a real ceiling: the structured reply carries the same
+     * short WhatsApp message, but wrapped in the full schema envelope
+     * (follow_up, flow, flow_data) — cut off mid-string, that's no longer
+     * valid JSON at all, so a too-tight cap here doesn't shorten the reply,
+     * it fails the whole request (confirmed live — accuracy dropped from
+     * ~93% to 78% the first time this shared one cap with plain text).
      *
-     * JSON calls need a MUCH bigger ceiling than plain text: the structured
-     * reply carries the same short WhatsApp message, but wrapped in the full
-     * schema envelope (follow_up, flow, flow_data) — a multi-service listing
-     * plus that overhead routinely runs well past a tight text-sized cap. Cut
-     * off mid-string, the JSON is no longer valid JSON at all: a too-tight cap
-     * here doesn't shorten the reply, it fails the whole request (confirmed
-     * live — accuracy dropped from ~93% to 78% the first time this shipped
-     * with one shared cap for both).
+     * Plain-text calls (re-engagement nudges, the admin dashboard's AI
+     * summary, marketing copy, etc.) are uncapped by default: a fixed cap
+     * here fights whatever length the prompt itself actually asks for — a
+     * cap sized for a short nudge cut off a genuine paragraph mid-sentence
+     * the moment nudges were allowed to compose their own length. A prompt
+     * asking for brevity still gets brevity; this just stops an ARBITRARY
+     * number from overriding it. Set GEMINI_MAX_OUTPUT_TOKENS to a positive
+     * value to reinstate a hard ceiling if a runaway response is ever seen.
      */
     private function baseConfig(float $temperature, bool $json): array
     {
-        $key = $json ? 'services.gemini.max_output_tokens_json' : 'services.gemini.max_output_tokens';
+        $config = ['temperature' => $temperature];
 
-        return [
-            'temperature' => $temperature,
-            'maxOutputTokens' => (int) config($key, $json ? 1200 : 400),
-        ];
+        if ($json) {
+            $config['maxOutputTokens'] = (int) config('services.gemini.max_output_tokens_json', 1200);
+
+            return $config;
+        }
+
+        $limit = (int) config('services.gemini.max_output_tokens', 0);
+        if ($limit > 0) {
+            $config['maxOutputTokens'] = $limit;
+        }
+
+        return $config;
     }
 
     /**
