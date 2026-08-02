@@ -751,6 +751,7 @@ class MessageRouter
             'track' => 'track', 'profile' => 'profile', 'history' => 'history',
             'search' => 'search', 'faq' => 'faq', 'settings' => 'settings',
             'ask_ai' => 'ask_ai', 'referral' => 'referral',
+            'account_help' => 'account_help',
         ];
         $flowId = $flowMap[$cmd] ?? null;
         if ($flowId !== null) {

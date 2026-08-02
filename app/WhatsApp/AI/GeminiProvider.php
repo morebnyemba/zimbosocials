@@ -756,6 +756,8 @@ class GeminiProvider
             ."{\"reply\":\"*TikTok Followers* are \$7.00 per 1,000 (min 10). 🚀\\n\\n🔥 Best value: *3,000 for \$18* — our top deal. Want me to set it up?\",\"follow_up\":null,\"flow\":null,\"flow_data\":{}}\n\n"
             ."User: \"where is my order?\"\n"
             ."{\"reply\":\"Your latest order *#1231* (Instagram Likes) is *processing* right now. 🙌\",\"follow_up\":\"Want the details on a specific order? Send me its number.\",\"flow\":null,\"flow_data\":{}}\n\n"
+            ."User (this is a one-off service, not a growth order or ad campaign — route to account_help): \"my facebook page got banned, can you help\"\n"
+            ."{\"reply\":\"Sorry to hear that! 🙏 We can help recover it — *\$10* for account recovery & unbanning. Ready to go ahead?\",\"follow_up\":null,\"flow\":\"account_help\",\"flow_data\":{\"item\":\"account_recovery\"}}\n\n"
             ."User: \"add $20 to my wallet\"\n"
             ."{\"reply\":\"Sure thing — let's top up your wallet with *\$20*. 💰\",\"follow_up\":null,\"flow\":\"deposit\",\"flow_data\":{\"amount\":20}}\n\n"
             ."User: \"deposit 10 via ecocash, my number is 0771234567\"\n"
@@ -901,6 +903,23 @@ class GeminiProvider
                 $lines[] = "key={$key} {$package['label']} ({$package['days']} days) — \${$price}{$video}";
             }
             $lines[] = 'Quote these EXACTLY. Never invent an advert price, package or duration.';
+            $lines[] = '===';
+        }
+
+        // One-off account/advertising support (helping someone run their OWN
+        // ads, or recovering a broken/banned account) — distinct from both the
+        // growth catalogue and the managed-campaign packages above, so it needs
+        // its own grounding or the model has nothing to quote a price from.
+        $extras = (array) config('extra_services.items', []);
+        if ($extras !== []) {
+            $lines[] = '=== ACCOUNT & ADVERTISING SUPPORT (the ONLY prices for these) ===';
+            foreach ($extras as $key => $item) {
+                $price = rtrim(rtrim(number_format((float) ($item['price'] ?? 0), 2), '0'), '.');
+                $lines[] = "key={$key} {$item['label']} — \${$price}: {$item['blurb']}";
+            }
+            $lines[] = "One-off paid services, not page-growth orders — quote these EXACTLY, never invent a price. To book one, "
+                ."set flow to 'account_help' with the matching key as the 'item' param — same pay-then-team-follows-up "
+                ."pattern as sponsored adverts.";
             $lines[] = '===';
         }
 
