@@ -361,10 +361,23 @@ class MessageRouter
         //    reading as if it were about something else entirely. Nothing can
         //    be ordered or funded without an account, so a wrong AI tangent
         //    here costs more than anywhere else — always show the plain retry.
+        //
+        //    Also exempt: the deposit flow's awaiting_sender_name step. Seen
+        //    live — a customer replied "#46" (an order number, not a name),
+        //    that failed validation, the AI "rescued" it by answering about
+        //    order #46 instead of re-asking, and the customer's NEXT message
+        //    ("Ndikuda ma followers pliz" — not a name either) was what
+        //    actually got captured and stored as the sender name an admin
+        //    later matches against a real bank statement. Garbage here isn't
+        //    just a bad reply, it corrupts money verification — same reasoning
+        //    as registration, always show the plain retry.
+        $exemptFromAiRescue = $ctx->flow === 'register'
+            || ($ctx->flow === 'deposit' && $ctx->state === 'awaiting_sender_name');
+
         if ($ctx->inFlow() && $text !== '') {
             $res = $this->engine->advance($ctx, $text);
 
-            if ($res->isRetry() && $ctx->flow !== 'register'
+            if ($res->isRetry() && ! $exemptFromAiRescue
                 && $this->consultAi($ctx, $account, $text, inFlow: true)
             ) {
                 return ['handled_by' => 'ai', 'intent' => 'flow_rescue', 'ai_used' => true];
