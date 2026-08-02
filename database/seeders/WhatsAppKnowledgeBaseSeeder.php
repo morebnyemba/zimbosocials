@@ -53,8 +53,15 @@ class WhatsAppKnowledgeBaseSeeder extends Seeder
             [
                 'title' => 'Sponsored adverts',
                 'question' => 'Do you run sponsored adverts advertising facebook instagram ads promote my business get customers how much per week',
-                'answer' => "Yes! Alongside growing your page, we run *sponsored adverts* on Facebook & Instagram that put your business in front of new customers.\n\nPick the run that suits you:\n• *\$5* — 1 day (a quick test, we boost a post you have)\n• *\$10* — 3 days (boost-only, most people start here)\n• *\$20* — 1 week 🎬 *includes an AI video advert*\n• *\$35* — 2 weeks 🎬 *includes an AI video advert*\n• *\$60* — 1 month 🎬 *AI video + maximum reach*\n\nJust pick a package and pay — our team then messages you to get your details (what you're promoting, your page, the areas to target) and sets it all up.",
-                'keywords' => 'sponsored advert adverts advertising ads facebook ads instagram ads promote promotion boost campaign marketing customers sales business day 3 days week month package 5 10 20 35 60 price cost target area',
+                'answer' => "Yes! Alongside growing your page, we run *sponsored adverts* on Facebook & Instagram that put your business in front of new customers.\n\nPick the run that suits you:\n• *\$6* — 1 day (a quick test, we boost a post you have)\n• *\$14* — 3 days 🎬 *includes an AI video advert* — most people start here\n• *\$25* — 1 week 🎬 video + a progress update partway through\n• *\$42* — 2 weeks 🎬 video (pick from 2 concepts) + a progress update\n• *\$65* — 1 month 🎬 video (pick from 2 concepts) + priority setup + a progress update + a wrap-up summary\n\nJust pick a package and pay — our team then messages you to get your details (what you're promoting, your page, the areas to target) and sets it all up.",
+                'keywords' => 'sponsored advert adverts advertising ads facebook ads instagram ads promote promotion boost campaign marketing customers sales business day 3 days week month package 6 14 25 42 65 price cost target area video',
+                'category' => 'advertising',
+            ],
+            [
+                'title' => 'Account & advertising support',
+                'question' => 'Can you teach me to advertise myself, ads account not working, fix my ads account, facebook account hacked disabled banned, whatsapp account banned, instagram account hacked, recover my account, unban my account, advertising training setup',
+                'answer' => "We also help with a few one-off things outside our usual growth packages:\n\n• *\$20* — Advertising setup & training _(want to run your own Facebook/Instagram ads? We set up your ad account and show you how)_\n• *\$5* — Ads account fix _(your ads account isn't working properly — we diagnose and fix it)_\n• *\$10* — Account recovery & unbanning _(Facebook, WhatsApp or Instagram account hacked, disabled or banned — we help you get back in)_\n\nReply *support* and our team will get you sorted.",
+                'keywords' => 'advertise myself advertising training setup teach learn run my own ads ad account fix broken not working restricted facebook hacked disabled banned whatsapp banned instagram hacked banned recover recovery unban unbanning account access',
                 'category' => 'advertising',
             ],
             [

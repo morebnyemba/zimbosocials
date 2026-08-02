@@ -37,6 +37,7 @@ class MenuProvider
         'fl_faq' => 'faq',
         'fl_ai' => 'ask_ai',
         'fl_advertise' => 'advertise',
+        'fl_account_help' => 'account_help',
         'fl_referral' => 'referral',
         'fl_register' => 'register',
         'fl_login' => 'link',
