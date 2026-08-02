@@ -91,11 +91,29 @@ class GeminiClientTest extends TestCase
         });
     }
 
-    public function test_json_calls_are_never_uncapped_even_if_configured_to_zero(): void
+    public function test_json_is_also_uncapped_by_default(): void
     {
-        // JSON always needs a real ceiling — omitting it entirely risks an
-        // unbounded structured response, which is a different risk profile
-        // than plain text (see class docblock on baseConfig()).
+        // Same reasoning as plain text: a fixed cap sized for one reply shape
+        // truncates another JSON reply mid-string, which fails the whole
+        // request rather than shortening it. Default (0) omits maxOutputTokens
+        // entirely for JSON too.
+        config(['services.gemini.api_key' => 'test-key', 'services.gemini.max_output_tokens_json' => 0]);
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response(
+            ['candidates' => [['content' => ['parts' => [['text' => '{"reply":"hi"}']]]]]]
+        )]);
+
+        app(GeminiClient::class)->generateJson('prompt');
+
+        Http::assertSent(function ($request) {
+            return ! array_key_exists('maxOutputTokens', $request->data()['generationConfig']);
+        });
+    }
+
+    public function test_json_cap_still_applies_when_explicitly_set(): void
+    {
+        // The busiest path in the system (runs on every inbound message) — if
+        // a runaway/repetitive response is ever seen there, this is the knob
+        // to reach for first, and it must still work.
         config(['services.gemini.api_key' => 'test-key', 'services.gemini.max_output_tokens_json' => 1200]);
         Http::fake(['generativelanguage.googleapis.com/*' => Http::response(
             ['candidates' => [['content' => ['parts' => [['text' => '{"reply":"hi"}']]]]]]

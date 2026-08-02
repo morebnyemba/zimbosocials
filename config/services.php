@@ -254,24 +254,23 @@ return [
         'cache_system_prompt' => (bool) env('GEMINI_CACHE_SYSTEM_PROMPT', true),
         'cache_ttl_seconds' => (int) env('GEMINI_CACHE_TTL', 3600),
 
-        // JSON responses (the main conversation decision) keep a real ceiling
-        // — the schema envelope (follow_up, flow, flow_data) wraps the same
-        // short reply, and cutting it off mid-string fails the whole request
-        // rather than just shortening it (this took live accuracy from ~93%
-        // to 78% the one time it shared a cap with plain text).
+        // Both plain-text and JSON calls are UNCAPPED by default (0 = no
+        // maxOutputTokens sent at all) — a fixed cap fights whatever length
+        // the prompt/schema actually calls for. This bit JSON hardest: cut
+        // off mid-string, a truncated structured reply isn't shorter, it's
+        // not valid JSON at all, so a too-tight shared cap failed the whole
+        // request rather than shortening it (this took live accuracy from
+        // ~93% to 78% the one time it happened). Plain-text calls hit the
+        // same shape of bug once nudges were allowed to compose their own
+        // length instead of being forced under ~300 characters.
         //
-        // Plain-text calls (re-engagement nudges, the admin dashboard's AI
-        // summary, marketing copy, etc.) are UNCAPPED by default (0). They
-        // were originally capped at 400 alongside a prompt rule forcing
-        // nudges under ~300 characters — belt AND suspenders. Once that
-        // character rule was relaxed so nudges could compose their own
-        // length, the 400-token cap became the ACTIVE limit instead of a
-        // backstop, and both nudges and the ~150-word dashboard summary
-        // started getting cut off mid-sentence. Each prompt already states
-        // its own length expectation; set this to a positive number only if
-        // a genuinely runaway response is seen in practice.
+        // GEMINI_MAX_OUTPUT_TOKENS_JSON is the one to reach for first if a
+        // genuinely runaway/repetitive response is ever seen — that call
+        // runs on every inbound message, by far the busiest path in the
+        // system. GEMINI_MAX_OUTPUT_TOKENS covers the lower-volume
+        // plain-text calls (nudges, dashboard summary, marketing copy, etc.).
         'max_output_tokens' => (int) env('GEMINI_MAX_OUTPUT_TOKENS', 0),
-        'max_output_tokens_json' => (int) env('GEMINI_MAX_OUTPUT_TOKENS_JSON', 1200),
+        'max_output_tokens_json' => (int) env('GEMINI_MAX_OUTPUT_TOKENS_JSON', 0),
     ],
 
 ];
