@@ -254,15 +254,23 @@ return [
         'cache_system_prompt' => (bool) env('GEMINI_CACHE_SYSTEM_PROMPT', true),
         'cache_ttl_seconds' => (int) env('GEMINI_CACHE_TTL', 3600),
 
-        // Output is billed at several times the input rate. The prompt already
-        // asks for short WhatsApp replies; these are the hard backstop for the
-        // rare response that ignores it. JSON responses need a much bigger
-        // ceiling than plain text — the schema envelope (follow_up, flow,
-        // flow_data) wraps the same short reply, and a cap sized for plain
-        // text truncates the JSON mid-string, which fails the whole request
-        // rather than just shortening it (this took live accuracy from ~93%
-        // to 78% the one time it shipped with a single shared cap).
-        'max_output_tokens' => (int) env('GEMINI_MAX_OUTPUT_TOKENS', 400),
+        // Output is billed at several times the input rate. JSON responses
+        // need a much bigger ceiling than plain text — the schema envelope
+        // (follow_up, flow, flow_data) wraps the same short reply, and a cap
+        // sized for plain text truncates the JSON mid-string, which fails the
+        // whole request rather than just shortening it (this took live
+        // accuracy from ~93% to 78% the one time it shipped with a single
+        // shared cap).
+        //
+        // Plain-text calls (re-engagement nudges, the admin dashboard's AI
+        // summary) were originally capped at 400 alongside a prompt rule
+        // forcing them under ~300 characters — belt AND suspenders. Once the
+        // character rule was relaxed so nudges could compose their own length
+        // (see GeminiProvider::reengagementMessage), 400 tokens became the
+        // ACTIVE limit instead of a backstop, and both nudges and the ~150-word
+        // dashboard summary started getting cut off mid-sentence. Raised to
+        // give a genuine paragraph-length reply room to finish.
+        'max_output_tokens' => (int) env('GEMINI_MAX_OUTPUT_TOKENS', 800),
         'max_output_tokens_json' => (int) env('GEMINI_MAX_OUTPUT_TOKENS_JSON', 1200),
     ],
 
