@@ -460,6 +460,28 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Service Name</label>
                                                 <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" />
                                             </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">
+                                                    Description <span className="normal-case font-medium text-zinc-400">— shown to the customer once they pick this service on the order screen</span>
+                                                </label>
+                                                <textarea
+                                                    rows={2}
+                                                    value={form.description}
+                                                    onChange={e => setForm({ ...form, description: e.target.value })}
+                                                    className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-medium text-zinc-900 focus:ring-2 focus:ring-emerald-500 resize-y"
+                                                    placeholder="What this service does, and anything a customer should know before ordering."
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Description (Shona)</label>
+                                                <textarea
+                                                    rows={2}
+                                                    value={form.description_sn}
+                                                    onChange={e => setForm({ ...form, description_sn: e.target.value })}
+                                                    className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-medium text-zinc-900 focus:ring-2 focus:ring-emerald-500 resize-y"
+                                                    placeholder="Optional — falls back to the English description if left blank."
+                                                />
+                                            </div>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">
@@ -568,6 +590,12 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Max Quantity</label>
                                                 <input type="number" value={form.max_qty} onChange={e => setForm({ ...form, max_qty: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" />
                                             </div>
+                                            <div className="col-span-2">
+                                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">
+                                                    Avg Delivery Time (minutes) <span className="normal-case font-medium text-zinc-400">— shown to the customer as "starts within ~Xh/Xd"; leave blank if unknown</span>
+                                                </label>
+                                                <input type="number" min="0" value={form.avg_time_minutes} onChange={e => setForm({ ...form, avg_time_minutes: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" placeholder="e.g. 120 for ~2 hours" />
+                                            </div>
                                         </div>
                                     </section>
 
@@ -646,6 +674,19 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                                 </label>
                                             ))}
                                         </div>
+                                        {form.is_refill && (
+                                            <div className="mt-4">
+                                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Refill Guarantee (days)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={form.refill_days}
+                                                    onChange={e => setForm({ ...form, refill_days: e.target.value })}
+                                                    className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500"
+                                                    placeholder="e.g. 30"
+                                                />
+                                            </div>
+                                        )}
                                     </section>
                                 </div>
                                 
