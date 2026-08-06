@@ -78,6 +78,7 @@ class CreateOrderFlow extends AbstractFlow
                 }
                 if ($normalized !== null) {
                     $ctx->set('order_link', $normalized);
+                    $ctx->set('link_attempts', 0);
                 }
             }
             $qty = (int) preg_replace('/\D+/', '', (string) $quantity);
@@ -86,7 +87,7 @@ class CreateOrderFlow extends AbstractFlow
             }
 
             if (! $ctx->has('order_link')) {
-                return FlowResult::step($this->askForLink($service), 'enter_link');
+                return FlowResult::step($this->askForLink($service, $ctx), 'enter_link');
             }
             if (! $ctx->has('order_quantity')) {
                 return FlowResult::step("🔢 How many? (min *{$service->min_qty}*, max *{$service->max_qty}*)", 'enter_quantity');
@@ -199,15 +200,21 @@ class CreateOrderFlow extends AbstractFlow
 
         $ctx->set('order_service_id', $service->id);
 
-        return FlowResult::step($this->askForLink($service), 'enter_link');
+        return FlowResult::step($this->askForLink($service, $ctx), 'enter_link');
     }
 
     /**
      * Ask for the link, ALWAYS with a concrete example of the right shape for
      * this service. "Send the link" alone is where people get stuck — they know
      * their page, not how to copy its url.
+     *
+     * Repeating this exact message is what turned one real conversation into a
+     * six-message loop that ended in a frustrated customer and a human handoff
+     * (see WhatsAppLoopBreakerTest). Past the first couple of tries, escalate
+     * to concrete "how do I actually copy a link" steps and a human fallback,
+     * rather than asking the identical question again — see link_attempts.
      */
-    private function askForLink(Service $service): string
+    private function askForLink(Service $service, SessionContext $ctx): string
     {
         $example = \App\Services\Upstream\LinkTarget::exampleFor(
             (string) $service->category, (string) $service->name, (string) $service->type
@@ -215,9 +222,35 @@ class CreateOrderFlow extends AbstractFlow
         $wantsPost = \App\Services\Upstream\LinkTarget::wantedFor((string) $service->name, (string) $service->type) === 'post';
         $what = $wantsPost ? 'the *post/video*' : 'your *page/profile*';
 
-        return "🔗 Send the link to {$what} for *{$service->name}*.\n\n"
-            ."Example: _{$example}_\n"
-            .'You can also just send your *username*, or a *screenshot* of the page. 👍';
+        $attempts = (int) $ctx->get('link_attempts', 0);
+        $ctx->set('link_attempts', $attempts + 1);
+
+        if ($attempts < 2) {
+            return "🔗 Send the link to {$what} for *{$service->name}*.\n\n"
+                ."Example: _{$example}_\n"
+                .'You can also just send your *username*, or a *screenshot* of the page. 👍';
+        }
+
+        // Still stuck after a couple of tries — a screenshot or a name alone
+        // hasn't worked, so give the actual steps instead of asking again, and
+        // an out for anyone who just wants a person to take it from here.
+        $howTo = $this->copyLinkInstructionsFor((string) $service->category);
+
+        return "Let's get this working — here's exactly how to grab it:\n\n{$howTo}\n\n"
+            ."Paste that link here once you've got it. If it's easier, reply *support* and our team will help you set it up directly. 🙏";
+    }
+
+    /** Where the "copy link" action actually lives, per platform — a name or a screenshot alone can't be turned into one. */
+    private function copyLinkInstructionsFor(string $category): string
+    {
+        return match (mb_strtolower(trim($category))) {
+            'facebook' => "1️⃣ Open your Facebook *page* (not just a post)\n2️⃣ Tap the *⋯* (three dots) near the top\n3️⃣ Tap *Copy Link*",
+            'instagram' => "1️⃣ Open the *profile*\n2️⃣ Tap the *⋯* (three dots) top-right\n3️⃣ Tap *Copy Link*",
+            'tiktok' => "1️⃣ Open the *profile*\n2️⃣ Tap *Share*\n3️⃣ Tap *Copy Link*",
+            'youtube' => "1️⃣ Open the *channel*\n2️⃣ Tap *Share*\n3️⃣ Tap *Copy Link*",
+            'twitter', 'twitter / x' => "1️⃣ Open the *profile*\n2️⃣ Tap *Share* (the icon next to Follow)\n3️⃣ Tap *Copy Link to Profile*",
+            default => "1️⃣ Open the page in your browser or app\n2️⃣ Look for a *Share* or *⋯* (three dots) button\n3️⃣ Tap *Copy Link*",
+        };
     }
 
     private function enterLink(string $input, SessionContext $ctx): FlowResult
@@ -233,7 +266,7 @@ class CreateOrderFlow extends AbstractFlow
 
         if ($link === null) {
             $help = $service
-                ? $this->askForLink($service)
+                ? $this->askForLink($service, $ctx)
                 : "🔗 Send the link to your *page/profile*.\n\nExample: _tiktok.com/@yourname_\nYou can also just send your *username*, or a *screenshot* of the page. 👍";
 
             return FlowResult::retry("That doesn't look like a link I can use.\n\n{$help}\n\nOr type *cancel* to stop.", 'enter_link');
@@ -257,6 +290,7 @@ class CreateOrderFlow extends AbstractFlow
 
             // Recovered it — say which page we'll use so they can correct us.
             $ctx->set('order_link', $derived);
+            $ctx->set('link_attempts', 0);
 
             return FlowResult::step(
                 "👍 That was a link to a post, so I've taken the page from it:\n{$derived}\n\n"
@@ -266,6 +300,7 @@ class CreateOrderFlow extends AbstractFlow
         }
 
         $ctx->set('order_link', $link);
+        $ctx->set('link_attempts', 0);
 
         return FlowResult::step(
             "🔢 How many? (min *{$service->min_qty}*, max *{$service->max_qty}*)",

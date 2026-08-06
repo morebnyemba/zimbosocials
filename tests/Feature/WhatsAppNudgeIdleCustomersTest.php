@@ -8,6 +8,7 @@ use App\Models\WhatsAppAccount;
 use App\Models\WhatsAppMessage;
 use App\Models\WhatsAppSession;
 use App\Services\AI\GeminiClient;
+use App\WhatsApp\Session\SessionManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -151,6 +152,44 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
         $this->assertSame(0, WhatsAppMessage::where('direction', 'out')->count());
     }
 
+    /**
+     * A loop handoff's 2h window lapsing does not mean the underlying
+     * frustration is resolved — only a human picking it up does. Nudging on
+     * top of an unresolved escalation is exactly the "the bot doesn't
+     * listen" pattern that drives a customer to block the number.
+     */
+    public function test_a_lapsed_but_recent_handoff_still_skips_the_nudge(): void
+    {
+        $account = $this->linkedAccountWithSession();
+        $account->update(['agent_handoff_until' => now()->subHours(2)]); // window closed, but recent
+        $this->mockAiText('Should never be called.');
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $this->assertSame(0, WhatsAppMessage::where('direction', 'out')->count());
+    }
+
+    public function test_a_handoff_from_days_ago_no_longer_blocks_nudges(): void
+    {
+        $account = $this->linkedAccountWithSession();
+        $account->update(['agent_handoff_until' => now()->subDays(3)]);
+        $this->mockAiText('Hey! Still around?');
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $this->assertSame(1, WhatsAppMessage::where('direction', 'out')->count());
+    }
+
+    public function test_a_flagged_loop_without_a_full_handoff_still_skips_the_nudge(): void
+    {
+        $this->linkedAccountWithSession(['context' => ['_loop_nudged' => true]]);
+        $this->mockAiText('Should never be called.');
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $this->assertSame(0, WhatsAppMessage::where('direction', 'out')->count());
+    }
+
     public function test_a_stall_at_the_order_confirm_step_is_described_to_the_ai(): void
     {
         $service = Service::create([
@@ -183,7 +222,7 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
     {
         $this->linkedAccountWithSession(['nudge_tier' => 2, 'nudged_at' => now()->subMinutes(5)]);
 
-        $sessions = app(\App\WhatsApp\Session\SessionManager::class);
+        $sessions = app(SessionManager::class);
         $ctx = $sessions->load(self::PHONE);
         $sessions->save($ctx);
 

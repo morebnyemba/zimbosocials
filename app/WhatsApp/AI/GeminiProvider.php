@@ -1036,15 +1036,30 @@ class GeminiProvider
         }
 
         // The order flow's enter_link step is waiting for exactly this kind of
-        // image — say so explicitly. "If legible, use it" was too vague: the
-        // model would describe the screenshot warmly and never actually set
-        // flow_data, so the customer's screenshot was read but never fed back
-        // into their order (they'd be asked for the same link again).
+        // image — say so explicitly. Two failure modes lived here before:
+        // "If legible, use it" was too vague and the model would describe the
+        // screenshot warmly without ever setting flow_data. The fix after that
+        // over-corrected the other way — it told the model a bare PAGE NAME was
+        // an acceptable answer, but LinkTarget::fromHandle() rejects anything
+        // with a space (a name isn't a handle and can't become a real url), so
+        // flow_data.link silently failed to resolve and the customer got the
+        // exact same "send the link" prompt again — now with no visible reason
+        // why, reading as the bot ignoring what they just sent. A handle
+        // ("lunchbarsecurity") and a display name ("Lunch Bar Security
+        // Solution") need different responses, so the model must tell them
+        // apart rather than pass either one through the same way.
         $awaitingLink = ($context['current_flow'] ?? null) === 'order' && ($context['current_state'] ?? null) === 'enter_link';
         $linkRule = $awaitingLink
-            ? "\n- They are waiting at the enter_link step of an order RIGHT NOW. If this screenshot shows a @handle or page "
-                ."name, that IS their answer to that step: set flow to 'order' and flow_data to {\"link\": \"<the exact handle "
-                ."or page name you can read>\"}. Copy it EXACTLY as shown — never guess or complete a partial handle."
+            ? "\n- They are waiting at the enter_link step of an order RIGHT NOW. Look for a @handle or plain username on the "
+                ."screenshot — ONE word, no spaces (e.g. \"lunchbarsecurity\", \"@jane_doe\"). If you can read one, that IS "
+                ."their answer: set flow to 'order' and flow_data to {\"link\": \"<the exact handle, copied exactly, never "
+                ."guessed or completed>\"}.\n"
+                ."  If instead all you can read is a display NAME (has spaces, e.g. \"Lunch Bar Security Solution\") — do NOT "
+                ."put it in flow_data.link, it will not work. Instead, in your reply: confirm the exact name you can see (so "
+                ."they know you looked), explain a screenshot doesn't include the page's actual link/address, then walk them "
+                ."through getting it — on the page, tap the *⋯* (three dots) near the top, then *Copy Link*, and paste that "
+                ."here. Also offer the fallback: if they know their plain username (no spaces) they can just type that "
+                ."instead. Do NOT set flow_data at all in this case — let them answer your question first."
             : '';
 
         return "\n\n=== THE CUSTOMER SENT MEDIA ===\n"
