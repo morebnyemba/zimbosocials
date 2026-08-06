@@ -24,10 +24,10 @@ class OrderController extends Controller
      */
     public function create(Request $request): Response
     {
-        $services = Service::active()->orderBy('category')->orderBy('display_order')->get();
+        $services = Service::active()->with('promoBundles')->orderBy('category')->orderBy('display_order')->get();
         $categories = $services->pluck('category')->unique()->values();
         $selected = $request->query('service_id')
-            ? Service::find($request->query('service_id'))
+            ? Service::with('promoBundles')->find($request->query('service_id'))
             : null;
 
         return Inertia::render('Orders/Create', [

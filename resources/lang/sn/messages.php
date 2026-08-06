@@ -79,6 +79,44 @@ return [
     'current_balance' => 'Mari Iripo',
     'remaining_after' => 'Inosara Mushure',
     'insufficient_funds_campaign' => 'Mari haina kukwana. Ndapota wedzera mari muchikwama chako kuti utange mushandirapamwe uyu.',
+    'deal_tag' => 'Dhiri',
+    'deal_from' => ':quantity nemari ye $:price',
+
+    // ─── Advertise (sponsored ad packages) ──────────────────────────────────────
+    'advertise_title' => 'Zvokushambadzira',
+    'advertise_subtitle' => 'Tinomhanyisa mushandirapamwe wako paFacebook & Instagram kuti uonekwe nevatengi vatsva. Sarudza pakeji — kubva pakuedza pazuva rimwe kusvika mwedzi wakazara.',
+    'advertise_ai_video_tag' => 'Vhidhiyo yeAI',
+    'advertise_most_popular' => 'Inodiwa zvikuru',
+    'advertise_booking_summary' => 'Chidzidzo chekubhuka',
+    'advertise_package_label' => 'Pakeji',
+    'advertise_includes' => 'Zvinosanganisira',
+    'advertise_includes_video' => 'Vhidhiyo yekushambadzira yeAI',
+    'advertise_pay_book' => 'Bhadhara uye ubhuke',
+    'advertise_pay_note' => 'Kana wabhadhara, timu yedu inokutumira meseji kuti titore mamiriro ekushambadzira kwako.',
+    'advertise_insufficient' => 'Mari haina kukwana pakeji iyi — wedzera mari muchikwama chako kutanga.',
+
+    // ─── Account Help (one-off account/advertising support) ────────────────────
+    'account_help_title' => 'Rubatsiro rweAkaunti neKushambadzira',
+    'account_help_subtitle' => 'Rubatsiro rwakasiyana nemapakeji edu ekukura — sarudza chaunoda.',
+    'account_help_booking_summary' => 'Chidzidzo chekubhuka',
+    'account_help_service_label' => 'Sevhisi',
+    'account_help_pay' => 'Bhadhara ikozvino',
+    'account_help_pay_note' => 'Kana wabhadhara, timu yedu inokutumira meseji pano kuti titange.',
+    'account_help_insufficient' => 'Mari haina kukwana sevhisi iyi — wedzera mari muchikwama chako kutanga.',
+
+    // ─── Account Setup (replace auto-generated WhatsApp sign-up details) ───────
+    'account_setup_title' => 'Chengetedza akaunti yako',
+    'account_setup_subtitle' => 'Wakanyoresa paWhatsApp, saka takakugadzirira zita rekushandisa, password, uye (kana usina kutipa rimwe) email. Isa rako pazasi kuti ugare uchikwanisa kupinda.',
+    'account_setup_username' => 'Zita rekushandisa',
+    'account_setup_email' => 'Email',
+    'account_setup_email_placeholder' => 'iwe@sampuro.com',
+    'account_setup_placeholder_note' => 'Iyi inongova nzvimbo yekumisa — isa email yako chaiyo.',
+    'account_setup_password' => 'Password Itsva',
+    'account_setup_password_confirm' => 'Simbisa Password',
+    'account_setup_skip' => 'Siya izvozvi',
+    'account_setup_save' => 'Chengetedza uenderere',
+    'account_setup_banner' => 'Uchiri kushandisa zita nepassword zvakagadzirwa wega.',
+    'account_setup_banner_cta' => 'Isa rako',
 
     // ─── Service Catalog (Services) ─────────────────────────────────────────────
     'service_catalog' => 'Katalogu yeMasevhisi',

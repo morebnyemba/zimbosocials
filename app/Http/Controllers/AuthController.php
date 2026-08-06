@@ -124,6 +124,7 @@ class AuthController extends Controller
             'whatsapp_number' => $waNumber,
             'phone' => $waNumber,      // also set phone for convenience
             'password' => Hash::make($data['password']),
+            'credentials_set_at' => now(),
             'locale' => $request->get('locale', 'sn'),
             'referral_code' => User::generateReferralCode(),
             'referred_by' => $referrer?->getKey(),

@@ -24,6 +24,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'username',
         'email',
         'password',
+        'credentials_set_at',
         'balance',
         'api_key',
         'api_key_hash',
@@ -74,6 +75,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'monetizer_unlocked_at' => 'datetime',
             'manager_role' => 'string',
             'password' => 'hashed',
+            'credentials_set_at' => 'datetime',
             'balance' => 'decimal:4',
             'is_active' => 'boolean',
             'notification_prefs' => 'array',
@@ -159,6 +161,12 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    /** Still on auto-generated username/password/email (a WhatsApp sign-up that hasn't replaced them yet). */
+    public function needsCredentialsSetup(): bool
+    {
+        return $this->credentials_set_at === null;
     }
 
     public function hasFullAdminAccess(): bool

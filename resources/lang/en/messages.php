@@ -79,6 +79,44 @@ return [
     'current_balance' => 'Current Balance',
     'remaining_after' => 'Balance After',
     'insufficient_funds_campaign' => 'Not enough funds. Please top up your wallet to place this order.',
+    'deal_tag' => 'Deal',
+    'deal_from' => ':quantity for $:price',
+
+    // ─── Advertise (sponsored ad packages) ──────────────────────────────────────
+    'advertise_title' => 'Sponsored Adverts',
+    'advertise_subtitle' => 'We run your campaign on Facebook & Instagram to put you in front of new customers. Pick a package — from a quick 1-day test up to a full month.',
+    'advertise_ai_video_tag' => 'AI video',
+    'advertise_most_popular' => 'Most popular',
+    'advertise_booking_summary' => 'Booking summary',
+    'advertise_package_label' => 'Package',
+    'advertise_includes' => 'Includes',
+    'advertise_includes_video' => 'AI video advert',
+    'advertise_pay_book' => 'Pay & book',
+    'advertise_pay_note' => 'Once you pay, our team messages you to collect your advert details.',
+    'advertise_insufficient' => "You don't have enough balance for this package — top up your wallet first.",
+
+    // ─── Account Help (one-off account/advertising support) ────────────────────
+    'account_help_title' => 'Account & Advertising Support',
+    'account_help_subtitle' => 'One-off help outside our usual growth packages — pick what you need.',
+    'account_help_booking_summary' => 'Booking summary',
+    'account_help_service_label' => 'Service',
+    'account_help_pay' => 'Pay now',
+    'account_help_pay_note' => 'Once you pay, our team messages you here to get started.',
+    'account_help_insufficient' => "You don't have enough balance for this service — top up your wallet first.",
+
+    // ─── Account Setup (replace auto-generated WhatsApp sign-up details) ───────
+    'account_setup_title' => 'Secure your account',
+    'account_setup_subtitle' => "You signed up on WhatsApp, so we generated a username, password, and (if you never gave us one) an email for you. Set your own below so you can always get back in.",
+    'account_setup_username' => 'Username',
+    'account_setup_email' => 'Email',
+    'account_setup_email_placeholder' => 'you@example.com',
+    'account_setup_placeholder_note' => "This is a placeholder — add your real email.",
+    'account_setup_password' => 'New Password',
+    'account_setup_password_confirm' => 'Confirm Password',
+    'account_setup_skip' => 'Skip for now',
+    'account_setup_save' => 'Save & continue',
+    'account_setup_banner' => "You're still on an auto-generated username & password.",
+    'account_setup_banner_cta' => 'Set your own',
 
     // ─── Service Catalog (Services) ─────────────────────────────────────────────
     'service_catalog' => 'Services',

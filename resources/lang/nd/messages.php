@@ -84,6 +84,44 @@ return [
     'current_balance' => 'Imali Ekhona',
     'remaining_after' => 'Esele Ngemva',
     'insufficient_funds_campaign' => 'Imali kayanele. Engeza imali esikhwameni sakho ukuze uqalise lo mkhankaso.',
+    'deal_tag' => 'Idili',
+    'deal_from' => ':quantity nge $:price',
+
+    // ─── Advertise (sponsored ad packages) ──────────────────────────────────────
+    'advertise_title' => 'Ukukhangisa Okuxhaswayo',
+    'advertise_subtitle' => 'Sigijimisa umkhankaso wakho kuFacebook lo-Instagram ukuze ubonwe ngamakhasimende amasha. Khetha iphakheji — kusukela ekuhloleni kwelanga elilodwa kuya enyangeni egcweleyo.',
+    'advertise_ai_video_tag' => 'Ividiyo ye-AI',
+    'advertise_most_popular' => 'Ethandwa kakhulu',
+    'advertise_booking_summary' => 'Isifinyezo sokubhuka',
+    'advertise_package_label' => 'Iphakheji',
+    'advertise_includes' => 'Kufaka',
+    'advertise_includes_video' => 'Ividiyo yokukhangisa ye-AI',
+    'advertise_pay_book' => 'Khokha ubhuke',
+    'advertise_pay_note' => 'Nxa usukhokhile, ithimba lethu likuthumela umlayezo ukuqoqa imininingwane yokukhangisa kwakho.',
+    'advertise_insufficient' => 'Awulayo imali eyenele yale phakheji — engeza imali esikhwameni sakho kuqala.',
+
+    // ─── Account Help (one-off account/advertising support) ────────────────────
+    'account_help_title' => 'Usizo Lwe-akhawunti Lokukhangisa',
+    'account_help_subtitle' => 'Usizo olungaphandle kwamaphakheji ethu ajwayelekile okukhula — khetha lokho okudingayo.',
+    'account_help_booking_summary' => 'Isifinyezo sokubhuka',
+    'account_help_service_label' => 'Insiza',
+    'account_help_pay' => 'Khokha khathesi',
+    'account_help_pay_note' => 'Nxa usukhokhile, ithimba lethu likuthumela umlayezo lapha ukuze siqalise.',
+    'account_help_insufficient' => 'Awulayo imali eyenele yale nsiza — engeza imali esikhwameni sakho kuqala.',
+
+    // ─── Account Setup (replace auto-generated WhatsApp sign-up details) ───────
+    'account_setup_title' => 'Vikela i-akhawunti yakho',
+    'account_setup_subtitle' => 'Ubhalise nge-WhatsApp, ngakho sakwenzela ibizo lokungena, iphasiwedi, kanye (nxa ungazange usiphe elinye) i-imeyili. Beka eyakho ngezansi ukuze uhlale ukwazi ukungena.',
+    'account_setup_username' => 'Ibizo Lokungena',
+    'account_setup_email' => 'I-imeyili',
+    'account_setup_email_placeholder' => 'wena@isibonelo.com',
+    'account_setup_placeholder_note' => 'Lokhu yindawo yesikhashana — engeza i-imeyili yakho yeqiniso.',
+    'account_setup_password' => 'Iphasiwedi Entsha',
+    'account_setup_password_confirm' => 'Qinisekisa Iphasiwedi',
+    'account_setup_skip' => 'Yeqa okwamanje',
+    'account_setup_save' => 'Gcina uqhubeke',
+    'account_setup_banner' => 'Usasebenzisa ibizo lokungena lephasiwedi ezenzakalele.',
+    'account_setup_banner_cta' => 'Beka eyakho',
 
     // ─── Service Catalog (Services) ─────────────────────────────────────────────
     'service_catalog' => 'Ikhathalogi Yezinsiza',

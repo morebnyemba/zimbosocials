@@ -13,7 +13,7 @@ class ServiceController extends Controller
 {
     public function index(Request $request): Response
     {
-        $query = Service::active()->orderBy('category')->orderBy('display_order');
+        $query = Service::active()->with('promoBundles')->orderBy('category')->orderBy('display_order');
 
         if ($cat = $request->query('category')) {
             $query->byCategory($cat);

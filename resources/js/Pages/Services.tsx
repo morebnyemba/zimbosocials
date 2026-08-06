@@ -9,6 +9,13 @@ import {
     FaTelegram, FaWhatsapp, FaRocket, FaSync, FaSearch, FaFilter, FaArrowRight, FaClock, FaGlobe
 } from 'react-icons/fa';
 
+interface PromoBundle {
+    id: number;
+    quantity: number;
+    price: number;
+    label: string | null;
+}
+
 interface Service {
     id: number;
     name: string;
@@ -19,6 +26,7 @@ interface Service {
     is_refill: boolean;
     avg_time_minutes: number;
     description?: string | null;
+    promo_bundles?: PromoBundle[];
 }
 
 interface Props extends PageProps {
@@ -143,6 +151,9 @@ export default function Services({ services, categories }: Props) {
                         ) : (
                             filtered.map((service, idx) => {
                                 const meta = getCategoryMeta(service.category);
+                                const cheapestDeal = (service.promo_bundles ?? [])
+                                    .slice()
+                                    .sort((a, b) => Number(a.price) - Number(b.price))[0];
                                 return (
                                     <motion.div
                                         layout
@@ -168,6 +179,11 @@ export default function Services({ services, categories }: Props) {
                                                 <p className="text-zinc-500 text-xs font-medium leading-relaxed line-clamp-3">
                                                     {service.description || t('service_desc_fallback')}
                                                 </p>
+                                                {cheapestDeal && (
+                                                    <p className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-black">
+                                                        🔥 {t('deal_from', { quantity: Number(cheapestDeal.quantity).toLocaleString(), price: Number(cheapestDeal.price).toFixed(2) })}
+                                                    </p>
+                                                )}
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-3">

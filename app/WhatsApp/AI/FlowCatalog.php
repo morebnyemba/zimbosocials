@@ -25,6 +25,7 @@ class FlowCatalog
             'browse' => ['desc' => 'Browse available services', 'params' => ['platform']],
             'advertise' => ['desc' => 'Book and PAY for a sponsored advert campaign we run on Facebook/Instagram. Flat-price packages by duration (package: day1|day3|week1|week2|month1 — a 1-day test up to a month; week1+ include an AI video advert). The flow only takes payment; the team collects the advert details (what to promote, page, target areas) afterwards.', 'params' => ['package']],
             'account_help' => ['desc' => 'Request and PAY for a one-off account/advertising service, NOT a growth order or ad campaign: advertising setup & training (item: ad_setup_training) for someone who wants to run their OWN ads, an ads account fix (item: ads_account_fix), or Facebook/WhatsApp/Instagram account recovery & unbanning (item: account_recovery). The flow only takes payment; the team follows up to do the work.', 'params' => ['item']],
+            'weblogin' => ['desc' => 'Send a one-tap link that logs the customer straight into the website — no password needed. Use when they ask to access/log into the site, the dashboard, or "the app", or say they forgot their password and are already chatting here.', 'params' => []],
             'ticket' => ['desc' => 'Open a support ticket', 'params' => ['subject', 'message']],
             'tickets' => ['desc' => 'View support tickets, read the team\'s responses, and reply to a ticket', 'params' => ['ticket_id']],
             'profile' => ['desc' => 'Show account/profile details', 'params' => []],
