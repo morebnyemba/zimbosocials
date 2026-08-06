@@ -69,6 +69,10 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
         });
     };
     const [form, setForm] = useState<any>(emptyForm);
+    // Category is a select over existing values by default — "+ Add new
+    // category" swaps in a text field so a brand-new grouping can still be
+    // typed without leaving the picker open to any free-text drift.
+    const [addingCategory, setAddingCategory] = useState(false);
     const [pendingDeactivateId, setPendingDeactivateId] = useState<number | null>(null);
     const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
     const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -92,8 +96,9 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
     const applySearch = () => router.get(route('admin.services.index'), { ...filters, search }, { preserveState: true });
     const filterCategory = (cat: string) => router.get(route('admin.services.index'), { ...filters, category: cat || undefined }, { preserveState: true });
 
-    const openCreate = () => { setForm({ ...emptyForm, upstreams: [] }); setEditingId(null); setShowForm(true); };
+    const openCreate = () => { setForm({ ...emptyForm, upstreams: [] }); setEditingId(null); setAddingCategory(false); setShowForm(true); };
     const openEdit = (s: Service) => {
+        setAddingCategory(false);
         setForm({
             name: s.name, name_sn: s.name_sn || '', description: s.description || '', description_sn: s.description_sn || '',
             category: s.category, platform: s.platform || '', type: s.type, rate: s.rate, min_qty: String(s.min_qty), max_qty: String(s.max_qty),
@@ -460,7 +465,38 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">
                                                         Category <span className="normal-case font-medium text-zinc-400">— groups this service within its Platform on the order screen</span>
                                                     </label>
-                                                    <input type="text" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" placeholder="e.g. Followers, Likes, Views" />
+                                                    {addingCategory ? (
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                autoFocus
+                                                                value={form.category}
+                                                                onChange={e => setForm({ ...form, category: e.target.value })}
+                                                                className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500"
+                                                                placeholder="e.g. Followers, Likes, Views"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => { setAddingCategory(false); setForm({ ...form, category: '' }); }}
+                                                                className="shrink-0 px-3 rounded-xl bg-zinc-100 text-zinc-500 text-xs font-bold hover:bg-zinc-200"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <select
+                                                            value={form.category}
+                                                            onChange={e => {
+                                                                if (e.target.value === '__new__') { setAddingCategory(true); setForm({ ...form, category: '' }); }
+                                                                else setForm({ ...form, category: e.target.value });
+                                                            }}
+                                                            className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500"
+                                                        >
+                                                            <option value="" disabled>Choose a category…</option>
+                                                            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                                            <option value="__new__">+ Add new category…</option>
+                                                        </select>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Type</label>
