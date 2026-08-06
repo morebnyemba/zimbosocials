@@ -269,6 +269,7 @@ class AdminUpstreamProviderController extends Controller
             'description_sn' => $enriched['description_sn'] ?? $description,
             'description_nd' => $enriched['description_nd'] ?? $description,
             'category' => ServiceCategoryNormalizer::normalize((string) ($providerService['category'] ?? 'Default')),
+            'platform' => Service::inferPlatform((string) ($providerService['category'] ?? 'Default')),
             'type' => $providerService['type'] ?? 'Default',
             'rate' => round($localRate, 4),
             'min_qty' => (int) ($providerService['min'] ?? 0),
