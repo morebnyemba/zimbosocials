@@ -72,6 +72,18 @@ class NudgeIdleCustomers extends Command
                 continue;
             }
 
+            // Recently frustrated is not the same as quiet. Someone who just
+            // went through (or is mid-) a loop escalation to a human — even if
+            // that 2h handoff window has since lapsed — went idle BECAUSE the
+            // bot was already the problem; an automated "still there?" on top
+            // of that reads as the same bot that just failed them pretending
+            // nothing happened. Give a human a full day to actually pick it up
+            // before the bot re-approaches. See WhatsAppLoopBreakerTest and
+            // MessageRouter::breakLoop().
+            if ($this->recentlyEscalated($account, $session)) {
+                continue;
+            }
+
             $elapsedHours = $session->last_activity->diffInHours(now());
             $tier = null;
             foreach (self::TIERS as $t => $hours) {
@@ -109,6 +121,23 @@ class NudgeIdleCustomers extends Command
         $this->info("Nudged {$sent} customer(s).");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * True if this contact was escalated to a human within the last 24h
+     * (loop handoff or otherwise), or the bot itself already flagged the
+     * conversation as repeating before they went quiet. Either way, a human
+     * — not another automated message — is the right next move.
+     */
+    private function recentlyEscalated(WhatsAppAccount $account, WhatsAppSession $session): bool
+    {
+        if ($account->agent_handoff_until !== null && $account->agent_handoff_until->gt(now()->subDay())) {
+            return true;
+        }
+
+        $context = (array) $session->context;
+
+        return (bool) ($context['_loop_nudged'] ?? false);
     }
 
     /** Ground the AI in what the customer was actually doing before they went quiet. */

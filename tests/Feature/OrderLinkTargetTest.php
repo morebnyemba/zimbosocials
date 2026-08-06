@@ -210,4 +210,52 @@ class OrderLinkTargetTest extends TestCase
         $this->assertSame('enter_quantity', $res->nextState);
         $this->assertTrue($ctx->has('order_link'));
     }
+
+    /**
+     * A real conversation asked "send the link" verbatim six times before
+     * escalating (see WhatsAppLoopBreakerTest) — the customer had sent a
+     * screenshot that only showed a page NAME, which can never become a
+     * working link. Past a couple of failed tries, stop repeating the same
+     * question and give concrete copy-link steps plus a human fallback.
+     */
+    public function test_repeated_failures_at_the_link_step_escalate_to_concrete_instructions(): void
+    {
+        $service = Service::create([
+            'name' => 'Facebook Page Followers', 'name_sn' => 'x', 'description' => '', 'description_sn' => '',
+            'category' => 'Facebook', 'type' => 'followers', 'rate' => 5.0,
+            'min_qty' => 100, 'max_qty' => 100000, 'is_active' => true,
+        ]);
+
+        $ctx = new SessionContext('263771234567');
+        $ctx->set('order_service_id', $service->id);
+
+        // A display name (has spaces) is never a usable handle — same shape
+        // as "Lunch Bar Security Solution" read off a screenshot.
+        $first = app(CreateOrderFlow::class)->handle('enter_link', 'Lunch Bar Security Solution', $ctx);
+        $second = app(CreateOrderFlow::class)->handle('enter_link', 'Lunch Bar Security Solution', $ctx);
+        $third = app(CreateOrderFlow::class)->handle('enter_link', 'Lunch Bar Security Solution', $ctx);
+
+        $this->assertStringNotContainsString('Copy Link', $first->reply);
+        $this->assertStringNotContainsString('Copy Link', $second->reply);
+        $this->assertStringContainsString('Copy Link', $third->reply);
+        $this->assertStringContainsString('support', $third->reply);
+        $this->assertFalse($ctx->has('order_link'));
+    }
+
+    public function test_link_attempts_resets_once_a_link_actually_lands(): void
+    {
+        $service = Service::create([
+            'name' => 'Facebook Page Followers', 'name_sn' => 'x', 'description' => '', 'description_sn' => '',
+            'category' => 'Facebook', 'type' => 'followers', 'rate' => 5.0,
+            'min_qty' => 100, 'max_qty' => 100000, 'is_active' => true,
+        ]);
+
+        $ctx = new SessionContext('263771234567');
+        $ctx->set('order_service_id', $service->id);
+
+        app(CreateOrderFlow::class)->handle('enter_link', 'Lunch Bar Security Solution', $ctx);
+        app(CreateOrderFlow::class)->handle('enter_link', self::PAGE_LINK, $ctx);
+
+        $this->assertSame(0, $ctx->get('link_attempts'));
+    }
 }
