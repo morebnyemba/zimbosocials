@@ -81,6 +81,13 @@ Route::middleware('cache.headers:public;max_age=300;etag')->group(function () {
 // Public marketer portfolio
 Route::get('/marketers/{user}', [PortfolioController::class, 'show'])->name('portfolio.show');
 
+// One-tap login link sent over WhatsApp (see WebLoginFlow) — deliberately
+// outside the 'guest' group since it must also work for someone already
+// signed in on this browser (it just switches identity).
+Route::get('/wa-login/{token}', [\App\Http\Controllers\WebLoginController::class, 'consume'])
+    ->middleware('throttle:10,1')
+    ->name('weblogin.consume');
+
 // ─── Guest routes ─────────────────────────────────────────────────────────────
 
 Route::middleware('guest')->group(function () {
@@ -136,6 +143,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Replace auto-generated WhatsApp sign-up credentials with your own
+    Route::get('/account/setup', [\App\Http\Controllers\AccountSetupController::class, 'edit'])->name('account.setup.edit');
+    Route::post('/account/setup', [\App\Http\Controllers\AccountSetupController::class, 'update'])->name('account.setup.update');
+    Route::post('/account/setup/skip', [\App\Http\Controllers\AccountSetupController::class, 'skip'])->name('account.setup.skip');
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -200,6 +212,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/adverts/{advert}/message', [\App\Http\Controllers\AdminAdvertController::class, 'message'])->name('adverts.message');
         // Deliver the finished advert video (or a picture) straight into the chat.
         Route::post('/adverts/{advert}/media', [\App\Http\Controllers\AdminAdvertController::class, 'media'])->name('adverts.media');
+
+        // Account/advertising support bookings (one-off, human-fulfilled)
+        Route::get('/extra-services', [\App\Http\Controllers\AdminExtraServiceController::class, 'index'])->name('extra-services.index');
+        Route::post('/extra-services/{extraService}/status', [\App\Http\Controllers\AdminExtraServiceController::class, 'updateStatus'])->name('extra-services.status');
+        Route::post('/extra-services/{extraService}/refund', [\App\Http\Controllers\AdminExtraServiceController::class, 'refund'])->name('extra-services.refund');
+        Route::post('/extra-services/{extraService}/message', [\App\Http\Controllers\AdminExtraServiceController::class, 'message'])->name('extra-services.message');
 
         // Order management
         Route::get('/orders', [AdminOrderController::class, 'index'])->name('orders.index');
@@ -327,6 +345,14 @@ Route::middleware('auth')->group(function () {
 
     // Services (read-only list)
     Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
+
+    // Sponsored advert bookings (human-fulfilled campaigns)
+    Route::get('/advertise', [\App\Http\Controllers\AdvertiseController::class, 'index'])->name('advertise.index');
+    Route::post('/advertise', [\App\Http\Controllers\AdvertiseController::class, 'store'])->name('advertise.store');
+
+    // One-off account/advertising support services
+    Route::get('/account-help', [\App\Http\Controllers\AccountHelpController::class, 'index'])->name('account-help.index');
+    Route::post('/account-help', [\App\Http\Controllers\AccountHelpController::class, 'store'])->name('account-help.store');
 
     // Wallet
     Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');

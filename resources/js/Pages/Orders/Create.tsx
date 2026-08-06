@@ -10,14 +10,22 @@ import {
     FaShoppingCart, FaLink, FaListOl, FaBolt, FaWallet
 } from 'react-icons/fa';
 
+interface PromoBundle {
+    id: number;
+    quantity: number;
+    price: number;
+    label: string | null;
+}
+
 interface Service {
-    id: number; 
-    name: string; 
+    id: number;
+    name: string;
     category: string;
-    min_qty: number; 
-    max_qty: number; 
-    rate: number; 
+    min_qty: number;
+    max_qty: number;
+    rate: number;
     description?: string;
+    promo_bundles?: PromoBundle[];
 }
 
 interface Props extends PageProps {
@@ -52,7 +60,13 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
 
     const chosenService = services.find((s) => s.id === Number(data.service_id));
     const serviceRate = chosenService ? Number(chosenService.rate) : 0;
-    const rawCharge = chosenService ? ((Number(data.quantity) / 1000) * serviceRate) : 0;
+    const bundles = chosenService?.promo_bundles ?? [];
+    // A flat-price deal for this EXACT quantity — mirrors Service::calculateCharge
+    // server-side, so the quote shown here never disagrees with what's charged.
+    const activeBundle = bundles.find((b) => b.quantity === Number(data.quantity));
+    const rawCharge = chosenService
+        ? (activeBundle ? Number(activeBundle.price) : (Number(data.quantity) / 1000) * serviceRate)
+        : 0;
     // Money shows 2dp; fall back to 4dp only when 2dp would round a real
     // amount down to $0.00 (tiny quantities on cheap services).
     const money = (n: number) => (n > 0 && n < 0.01 ? n.toFixed(4) : n.toFixed(2));
@@ -69,9 +83,14 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
     const isQtyInvalid = Boolean(chosenService) && (!Number.isFinite(qty) || qty < minQty || qty > maxQty);
 
     // Quick-pick amounts so buyers can tap instead of typing. Only show presets
-    // that actually fall within the chosen service's allowed range.
+    // that actually fall within the chosen service's allowed range. Bundle
+    // quantities (flat-price deals) are merged in so a deal is never hidden
+    // behind a quantity the buyer wasn't going to think to type.
     const PRESET_AMOUNTS = [100, 250, 500, 1000, 2500, 5000, 10000];
-    const presets = chosenService ? PRESET_AMOUNTS.filter((p) => p >= minQty && p <= maxQty) : [];
+    const bundleQuantities = bundles.map((b) => b.quantity);
+    const presets = chosenService
+        ? Array.from(new Set([...PRESET_AMOUNTS, ...bundleQuantities])).filter((p) => p >= minQty && p <= maxQty).sort((a, b) => a - b)
+        : [];
 
     // Reset service when category changes
     useEffect(() => {
@@ -211,18 +230,27 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                                                         <div className="flex flex-wrap gap-2 mb-3">
                                                             {presets.map((p) => {
                                                                 const isActive = qty === p;
+                                                                const deal = bundles.find((b) => b.quantity === p);
                                                                 return (
                                                                     <button
                                                                         key={p}
                                                                         type="button"
                                                                         onClick={() => setData('quantity', String(p))}
-                                                                        className={`px-4 py-2 rounded-xl text-sm font-black transition-all ${
+                                                                        className={`relative px-4 py-2 rounded-xl text-sm font-black transition-all ${
                                                                             isActive
                                                                                 ? 'bg-zinc-900 text-white shadow-md'
+                                                                                : deal
+                                                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:border-emerald-400'
                                                                                 : 'bg-zinc-50 text-zinc-600 border border-zinc-200 hover:border-zinc-300'
                                                                         }`}
                                                                     >
+                                                                        {deal && (
+                                                                            <span className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wide">
+                                                                                {t('deal_tag')}
+                                                                            </span>
+                                                                        )}
                                                                         {p.toLocaleString()}
+                                                                        {deal && <span className="ml-1.5 font-mono opacity-75">${money(Number(deal.price))}</span>}
                                                                     </button>
                                                                 );
                                                             })}

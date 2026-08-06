@@ -31,6 +31,8 @@ import {
     FaPen,
     FaTrophy,
     FaLanguage,
+    FaBullhorn,
+    FaTools,
 } from 'react-icons/fa';
 
 function LangSwitcher() {
@@ -131,6 +133,8 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
         { href: route('dashboard'), name: 'dashboard', label: 'Dashboard', icon: FaChartPie },
         { href: route('services.index'), name: 'services.index', label: 'Services', icon: FaBox },
         { href: route('orders.index'), name: 'orders.index', label: 'Orders', icon: FaRocket },
+        { href: route('advertise.index'), name: 'advertise.index', label: 'Advertise', icon: FaBullhorn },
+        { href: route('account-help.index'), name: 'account-help.index', label: 'Account Help', icon: FaTools },
         { href: route('wallet.index'), name: 'wallet.index', label: 'Wallet', icon: FaWallet },
         { href: route('referrals.index'), name: 'referrals.index', label: 'Referrals', icon: FaUsers },
         { href: route('leaderboard.index'), name: 'leaderboard.index', label: 'Leaderboard', icon: FaTrophy },
@@ -154,6 +158,18 @@ export default function AuthenticatedLayout({ header, children }: PropsWithChild
                         Leave Session
                     </button>
                 </div>
+            )}
+
+            {/* Auto-generated credentials nudge — hidden on the setup page itself */}
+            {user.needs_credentials_setup && !route().current('account.setup.edit') && (
+                <Link
+                    href={route('account.setup.edit')}
+                    className="flex items-center justify-center gap-3 bg-indigo-600 text-white px-6 py-2 text-xs font-black uppercase tracking-widest hover:bg-indigo-500 transition-colors"
+                >
+                    <FaShieldAlt />
+                    {t('account_setup_banner')}
+                    <span className="underline underline-offset-2">{t('account_setup_banner_cta')}</span>
+                </Link>
             )}
 
             {/* Top Logo Bar */}

@@ -12,6 +12,7 @@ export interface User {
     profile_image_url?: string;
     account_type?: 'individual' | 'business' | 'marketer';
     can_use_monetizer?: boolean;
+    needs_credentials_setup?: boolean;
     monetizer_unlocked_at?: string;
     youtube_channel_id?: string;
     facebook_page_id?: string;

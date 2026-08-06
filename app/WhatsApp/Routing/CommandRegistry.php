@@ -39,6 +39,7 @@ class CommandRegistry
         'deposit' => 'deposit', 'topup' => 'deposit', 'fund' => 'deposit',
         'advertise' => 'advertise', 'advert' => 'advertise', 'adverts' => 'advertise', 'ads' => 'advertise',
         'accounthelp' => 'account_help', 'unban' => 'account_help', 'unbanning' => 'account_help',
+        'weblogin' => 'weblogin', 'webaccess' => 'weblogin', 'sitelogin' => 'weblogin',
         'track' => 'track',
         'profile' => 'profile', 'account' => 'profile',
         'settings' => 'settings',

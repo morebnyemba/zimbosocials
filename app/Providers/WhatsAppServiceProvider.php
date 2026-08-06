@@ -18,6 +18,7 @@ use App\WhatsApp\Flow\Definitions\TrackOrderFlow;
 use App\WhatsApp\Flow\Definitions\TransactionHistoryFlow;
 use App\WhatsApp\Flow\Definitions\ViewTicketsFlow;
 use App\WhatsApp\Flow\Definitions\WalletBalanceFlow;
+use App\WhatsApp\Flow\Definitions\WebLoginFlow;
 use App\WhatsApp\Flow\FlowRegistry;
 use Illuminate\Support\ServiceProvider;
 
@@ -52,6 +53,7 @@ class WhatsAppServiceProvider extends ServiceProvider
         \App\WhatsApp\Flow\Definitions\ReferralFlow::class,
         \App\WhatsApp\Flow\Definitions\AdvertiseFlow::class,
         \App\WhatsApp\Flow\Definitions\AccountHelpFlow::class,
+        WebLoginFlow::class,
     ];
 
     public function register(): void
