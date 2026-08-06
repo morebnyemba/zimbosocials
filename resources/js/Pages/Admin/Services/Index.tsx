@@ -21,12 +21,12 @@ const primaryCost = (upstreams?: ServiceUpstream[]): number | null => {
     return primary ? Number(primary.external_rate) : null;
 };
 interface PromoBundle { id: number; quantity: number; price: string; label?: string | null; }
-interface Service { id: number; promo_bundles?: PromoBundle[]; name: string; name_sn?: string; category: string; type: string; rate: string; min_qty: number; max_qty: number; is_active: boolean; is_dripfeed: boolean; is_refill: boolean; refill_days?: number; avg_time_minutes?: number; display_order?: number; orders_count: number; description?: string; description_sn?: string; upstreams?: ServiceUpstream[]; }
-interface Props { services: { data: Service[]; links: any[]; total: number }; categories: string[]; categoryCounts: Record<string, number>; providers: UpstreamProvider[]; stats: { total: number; active: number; inactive: number }; filters: Record<string, string>; }
+interface Service { id: number; promo_bundles?: PromoBundle[]; name: string; name_sn?: string; category: string; platform?: string; type: string; rate: string; min_qty: number; max_qty: number; is_active: boolean; is_dripfeed: boolean; is_refill: boolean; refill_days?: number; avg_time_minutes?: number; display_order?: number; orders_count: number; description?: string; description_sn?: string; upstreams?: ServiceUpstream[]; }
+interface Props { services: { data: Service[]; links: any[]; total: number }; categories: string[]; categoryCounts: Record<string, number>; providers: UpstreamProvider[]; platforms: Record<string, string>; stats: { total: number; active: number; inactive: number }; filters: Record<string, string>; }
 
-const emptyForm = { name: '', name_sn: '', description: '', description_sn: '', category: '', type: 'default', rate: '', min_qty: '100', max_qty: '10000', is_active: true, is_dripfeed: false, is_refill: false, refill_days: '', avg_time_minutes: '', display_order: '0', upstreams: [] as ServiceUpstream[] };
+const emptyForm = { name: '', name_sn: '', description: '', description_sn: '', category: '', platform: '', type: 'default', rate: '', min_qty: '100', max_qty: '10000', is_active: true, is_dripfeed: false, is_refill: false, refill_days: '', avg_time_minutes: '', display_order: '0', upstreams: [] as ServiceUpstream[] };
 
-export default function ServicesIndex({ services, categories, categoryCounts, providers, stats, filters }: Props) {
+export default function ServicesIndex({ services, categories, categoryCounts, providers, platforms, stats, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -96,7 +96,7 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
     const openEdit = (s: Service) => {
         setForm({
             name: s.name, name_sn: s.name_sn || '', description: s.description || '', description_sn: s.description_sn || '',
-            category: s.category, type: s.type, rate: s.rate, min_qty: String(s.min_qty), max_qty: String(s.max_qty),
+            category: s.category, platform: s.platform || '', type: s.type, rate: s.rate, min_qty: String(s.min_qty), max_qty: String(s.max_qty),
             is_active: s.is_active, is_dripfeed: s.is_dripfeed, is_refill: s.is_refill,
             refill_days: s.refill_days ? String(s.refill_days) : '',
             avg_time_minutes: s.avg_time_minutes ? String(s.avg_time_minutes) : '',
@@ -457,8 +457,10 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Category</label>
-                                                    <input type="text" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" placeholder="e.g. Instagram" />
+                                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">
+                                                        Category <span className="normal-case font-medium text-zinc-400">— groups this service within its Platform on the order screen</span>
+                                                    </label>
+                                                    <input type="text" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500" placeholder="e.g. Followers, Likes, Views" />
                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">Type</label>
@@ -466,6 +468,17 @@ export default function ServicesIndex({ services, categories, categoryCounts, pr
                                                         <option value="default">Default</option>
                                                         <option value="custom_data">Custom Data</option>
                                                         <option value="package">Package</option>
+                                                    </select>
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">
+                                                        Platform <span className="normal-case font-medium text-zinc-400">— drives the icon shown everywhere this service appears; left blank, we infer it from Category</span>
+                                                    </label>
+                                                    <select value={form.platform} onChange={e => setForm({ ...form, platform: e.target.value })} className="w-full bg-zinc-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-zinc-900 focus:ring-2 focus:ring-emerald-500">
+                                                        <option value="">Auto-detect from category</option>
+                                                        {Object.entries(platforms).map(([slug, label]) => (
+                                                            <option key={slug} value={slug}>{label}</option>
+                                                        ))}
                                                     </select>
                                                 </div>
                                             </div>

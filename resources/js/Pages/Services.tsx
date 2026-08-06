@@ -1,13 +1,11 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { PageProps } from '@/types';
 import { useTranslation } from '@/lib/i18n';
+import { getPlatformMeta, dominantPlatform } from '@/lib/platformIcons';
 import { Head, Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    FaInstagram, FaYoutube, FaTiktok, FaFacebook, FaTwitter, 
-    FaTelegram, FaWhatsapp, FaRocket, FaSync, FaSearch, FaFilter, FaArrowRight, FaClock, FaGlobe
-} from 'react-icons/fa';
+import { FaRocket, FaSync, FaSearch, FaFilter, FaArrowRight, FaClock } from 'react-icons/fa';
 
 interface PromoBundle {
     id: number;
@@ -20,6 +18,7 @@ interface Service {
     id: number;
     name: string;
     category: string;
+    platform?: string | null;
     rate: number;
     min_qty: number;
     max_qty: number;
@@ -34,17 +33,6 @@ interface Props extends PageProps {
     categories: string[];
 }
 
-const getCategoryMeta = (category: string) => {
-    const lower = category.toLowerCase();
-    if (lower.includes('instagram')) return { label: 'Instagram', icon: FaInstagram, color: 'text-pink-500', bg: 'bg-pink-500/10' };
-    if (lower.includes('youtube')) return { label: 'YouTube', icon: FaYoutube, color: 'text-red-500', bg: 'bg-red-500/10' };
-    if (lower.includes('tiktok')) return { label: 'TikTok', icon: FaTiktok, color: 'text-zinc-900', bg: 'bg-zinc-900/10' };
-    if (lower.includes('twitter') || lower.includes('x /') || lower === 'x') return { label: 'Twitter / X', icon: FaTwitter, color: 'text-blue-400', bg: 'bg-blue-400/10' };
-    if (lower.includes('facebook')) return { label: 'Facebook', icon: FaFacebook, color: 'text-blue-600', bg: 'bg-blue-600/10' };
-    if (lower.includes('telegram')) return { label: 'Telegram', icon: FaTelegram, color: 'text-sky-500', bg: 'bg-sky-500/10' };
-    if (lower.includes('whatsapp')) return { label: 'WhatsApp', icon: FaWhatsapp, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
-    return { label: category, icon: FaGlobe, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
-};
 
 export default function Services({ services, categories }: Props) {
     const { t } = useTranslation();
@@ -63,6 +51,12 @@ export default function Services({ services, categories }: Props) {
         if (minutes < 1440) return `~${Math.round(minutes / 60)}h`;
         return `~${Math.round(minutes / 1440)}d`;
     };
+
+    const categoryTabPlatform = useMemo(() => {
+        const map: Record<string, string | undefined> = {};
+        for (const cat of categories) map[cat] = dominantPlatform(services.filter((s) => s.category === cat));
+        return map;
+    }, [services, categories]);
 
     return (
         <AuthenticatedLayout>
@@ -113,7 +107,7 @@ export default function Services({ services, categories }: Props) {
                     {/* Category Tabs (Visible on larger screens) */}
                     <div className="hidden sm:flex flex-wrap gap-2 w-full">
                         {categories.map((cat) => {
-                            const meta = getCategoryMeta(cat);
+                            const meta = getPlatformMeta(categoryTabPlatform[cat]);
                             const isSelected = active === cat;
                             return (
                                 <button
@@ -150,7 +144,7 @@ export default function Services({ services, categories }: Props) {
                             </motion.div>
                         ) : (
                             filtered.map((service, idx) => {
-                                const meta = getCategoryMeta(service.category);
+                                const meta = getPlatformMeta(service.platform);
                                 const cheapestDeal = (service.promo_bundles ?? [])
                                     .slice()
                                     .sort((a, b) => Number(a.price) - Number(b.price))[0];

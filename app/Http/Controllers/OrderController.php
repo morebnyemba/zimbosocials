@@ -25,14 +25,20 @@ class OrderController extends Controller
     public function create(Request $request): Response
     {
         $services = Service::active()->with('promoBundles')->orderBy('category')->orderBy('display_order')->get();
-        $categories = $services->pluck('category')->unique()->values();
+
+        // Platform tabs in a stable, sensible order (Service::PLATFORMS) rather
+        // than however they happen to sort — restricted to platforms that
+        // actually have an active service right now.
+        $present = $services->pluck('platform')->filter()->unique();
+        $platforms = collect(array_keys(Service::PLATFORMS))->filter(fn ($p) => $present->contains($p))->values();
+
         $selected = $request->query('service_id')
             ? Service::with('promoBundles')->find($request->query('service_id'))
             : null;
 
         return Inertia::render('Orders/Create', [
             'services' => $services,
-            'categories' => $categories,
+            'platforms' => $platforms,
             'selected' => $selected,
         ]);
     }

@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -102,6 +103,7 @@ class AdminServiceController extends Controller
             'categoryCounts' => $categoryCounts,
             'stats' => $stats,
             'providers' => UpstreamProvider::where('is_active', true)->get(),
+            'platforms' => Service::PLATFORMS,
             'filters' => $request->only(['search', 'category', 'active']),
         ]);
     }
@@ -114,6 +116,7 @@ class AdminServiceController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'description_sn' => ['nullable', 'string', 'max:2000'],
             'category' => ['required', 'string', 'max:100'],
+            'platform' => ['nullable', 'string', Rule::in(array_keys(Service::PLATFORMS))],
             'type' => ['required', 'string', 'max:50'],
             'rate' => ['required', 'numeric', 'min:0'],
             'min_qty' => ['required', 'integer', 'min:1'],
@@ -135,6 +138,7 @@ class AdminServiceController extends Controller
         $data['is_active'] = $request->boolean('is_active');
         $data['is_dripfeed'] = $request->boolean('is_dripfeed');
         $data['is_refill'] = $request->boolean('is_refill');
+        $data['platform'] = ($data['platform'] ?? null) ?: Service::inferPlatform($data['category']);
 
         $service = DB::transaction(function () use ($data) {
             $service = Service::create($data);
@@ -167,6 +171,7 @@ class AdminServiceController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'description_sn' => ['nullable', 'string', 'max:2000'],
             'category' => ['required', 'string', 'max:100'],
+            'platform' => ['nullable', 'string', Rule::in(array_keys(Service::PLATFORMS))],
             'type' => ['required', 'string', 'max:50'],
             'rate' => ['required', 'numeric', 'min:0'],
             'min_qty' => ['required', 'integer', 'min:1'],
@@ -188,6 +193,7 @@ class AdminServiceController extends Controller
         $data['is_active'] = $request->boolean('is_active');
         $data['is_dripfeed'] = $request->boolean('is_dripfeed');
         $data['is_refill'] = $request->boolean('is_refill');
+        $data['platform'] = ($data['platform'] ?? null) ?: Service::inferPlatform($data['category']);
 
         $old = $service->toArray();
 

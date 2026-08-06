@@ -1,13 +1,13 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { PageProps } from '@/types';
 import { useTranslation } from '@/lib/i18n';
+import { getPlatformMeta } from '@/lib/platformIcons';
 import { Head, useForm } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    FaInstagram, FaYoutube, FaTiktok, FaFacebook, FaTwitter, 
-    FaTelegram, FaSpotify, FaGlobe, FaCheckCircle, FaExclamationCircle, 
-    FaShoppingCart, FaLink, FaListOl, FaBolt, FaWallet
+import {
+    FaCheckCircle, FaExclamationCircle, FaShoppingCart, FaLink, FaListOl, FaBolt, FaWallet,
+    FaSyncAlt, FaTachometerAlt, FaClock, FaArrowsAltH,
 } from 'react-icons/fa';
 
 interface PromoBundle {
@@ -21,36 +21,47 @@ interface Service {
     id: number;
     name: string;
     category: string;
+    platform?: string | null;
     min_qty: number;
     max_qty: number;
     rate: number;
     description?: string;
+    is_refill?: boolean;
+    is_dripfeed?: boolean;
+    refill_days?: number;
+    avg_time_minutes?: number;
     promo_bundles?: PromoBundle[];
 }
 
 interface Props extends PageProps {
     services: Service[];
-    categories: string[];
+    platforms: string[];
     selected?: Service | null;
 }
 
-// Map category names to icons and brand colors
-const getCategoryIconAndColor = (category: string) => {
-    const lower = category.toLowerCase();
-    if (lower.includes('instagram')) return { icon: FaInstagram, color: 'text-pink-500', bg: 'bg-pink-50', border: 'border-pink-200' };
-    if (lower.includes('youtube')) return { icon: FaYoutube, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' };
-    if (lower.includes('tiktok')) return { icon: FaTiktok, color: 'text-black', bg: 'bg-zinc-100', border: 'border-zinc-300' };
-    if (lower.includes('twitter') || lower.includes('x /') || lower === 'x') return { icon: FaTwitter, color: 'text-blue-400', bg: 'bg-blue-50', border: 'border-blue-200' };
-    if (lower.includes('facebook')) return { icon: FaFacebook, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' };
-    if (lower.includes('telegram')) return { icon: FaTelegram, color: 'text-sky-500', bg: 'bg-sky-50', border: 'border-sky-200' };
-    if (lower.includes('spotify')) return { icon: FaSpotify, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200' };
-    return { icon: FaGlobe, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' };
-};
-
-export default function OrderCreate({ auth, services, categories, selected }: Props) {
+export default function OrderCreate({ auth, services, platforms, selected }: Props) {
     const { t } = useTranslation();
-    const [category, setCategory] = useState(selected?.category ?? categories[0] ?? '');
-    const filteredServices = services.filter((s) => s.category === category);
+
+    // Three levels: platform (Instagram/YouTube/...) → category (whatever an
+    // admin has grouped that platform's services into — Followers, Likes, a
+    // custom name, anything) → the specific service.
+    const [platform, setPlatform] = useState(selected?.platform ?? platforms[0] ?? '');
+    const platformServices = useMemo(() => services.filter((s) => s.platform === platform), [services, platform]);
+    const categoriesForPlatform = useMemo(
+        () => Array.from(new Set(platformServices.map((s) => s.category))),
+        [platformServices]
+    );
+
+    const [category, setCategory] = useState(selected?.category ?? '');
+    // Keep the chosen category valid as the platform changes — falls back to
+    // that platform's first category rather than leaving a stale selection.
+    useEffect(() => {
+        if (!categoriesForPlatform.includes(category)) {
+            setCategory(categoriesForPlatform[0] ?? '');
+        }
+    }, [platform, categoriesForPlatform]);
+
+    const filteredServices = platformServices.filter((s) => s.category === category);
 
     const { data, setData, post, processing, errors } = useForm({
         service_id: selected?.id?.toString() ?? '',
@@ -106,6 +117,13 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
         });
     }
 
+    const formatTime = (minutes?: number) => {
+        if (!minutes) return null;
+        if (minutes < 60) return `~${minutes}m`;
+        if (minutes < 1440) return `~${Math.round(minutes / 60)}h`;
+        return `~${Math.round(minutes / 1440)}d`;
+    };
+
     return (
         <AuthenticatedLayout>
             <Head title={t('deploy_campaign')} />
@@ -124,30 +142,30 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                     <div className="lg:col-span-8 space-y-10">
                         <form id="order-form" onSubmit={submit} className="space-y-10">
                             
-                            {/* Step 1: Category Selection */}
+                            {/* Step 1: Platform Selection */}
                             <section>
                                 <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                     <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-100 text-zinc-500">1</span>
                                     {t('select_platform')}
                                 </h3>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                    {categories.map((cat) => {
-                                        const { icon: Icon, color, bg, border } = getCategoryIconAndColor(cat);
-                                        const isSelected = category === cat;
+                                    {platforms.map((p) => {
+                                        const { icon: Icon, color, bg, border, label } = getPlatformMeta(p);
+                                        const isSelected = platform === p;
                                         return (
                                             <button
-                                                key={cat}
+                                                key={p}
                                                 type="button"
-                                                onClick={() => setCategory(cat)}
+                                                onClick={() => setPlatform(p)}
                                                 className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all duration-200 ${
-                                                    isSelected 
-                                                        ? `${border} ${bg} shadow-md scale-[1.02]` 
+                                                    isSelected
+                                                        ? `${border} ${bg} shadow-md scale-[1.02]`
                                                         : 'border-zinc-100 bg-white hover:border-zinc-200 hover:bg-zinc-50'
                                                 }`}
                                             >
                                                 <Icon className={`text-4xl ${isSelected ? color : 'text-zinc-300'}`} />
                                                 <span className={`text-[10px] font-black uppercase tracking-widest text-center ${isSelected ? 'text-zinc-900' : 'text-zinc-500'}`}>
-                                                    {cat}
+                                                    {label}
                                                 </span>
                                             </button>
                                         );
@@ -155,45 +173,109 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                                 </div>
                             </section>
 
+                            {/* Step 2: Category Selection — whatever an admin has grouped
+                                this platform's services into (Followers, Likes, a custom
+                                name, anything). A platform with only one category still
+                                shows it, so the grouping is always visible and real. */}
+                            <AnimatePresence mode="wait">
+                                {platform && categoriesForPlatform.length > 0 && (
+                                    <motion.section
+                                        key="categories"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                    >
+                                        <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-100 text-zinc-500">2</span>
+                                            {t('select_category')}
+                                        </h3>
+                                        <div className="flex flex-wrap gap-2">
+                                            {categoriesForPlatform.map((cat) => {
+                                                const isSelected = category === cat;
+                                                return (
+                                                    <button
+                                                        key={cat}
+                                                        type="button"
+                                                        onClick={() => setCategory(cat)}
+                                                        className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all ${
+                                                            isSelected
+                                                                ? 'bg-zinc-900 text-white shadow-md'
+                                                                : 'bg-white text-zinc-500 border border-zinc-200 hover:border-zinc-300'
+                                                        }`}
+                                                    >
+                                                        {cat}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </motion.section>
+                                )}
+                            </AnimatePresence>
+
                             <AnimatePresence mode="wait">
                                 {category && (
-                                    <motion.section 
+                                    <motion.section
                                         key="services"
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="space-y-6"
                                     >
                                         <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-100 text-zinc-500">2</span>
+                                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-100 text-zinc-500">3</span>
                                             {t('configure_metrics')}
                                         </h3>
                                         
                                         <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm space-y-6">
-                                            {/* Service Selection */}
+                                            {/* Service Selection — a clickable list rather than a native <select>,
+                                                so every service carries its own platform icon (a <select><option>
+                                                can't render one). */}
                                             <div>
                                                 <label className="mb-2 block text-xs font-black text-zinc-900 uppercase tracking-widest">{t('select_service')}</label>
-                                                <select
-                                                    value={data.service_id}
-                                                    onChange={(e) => setData('service_id', e.target.value)}
-                                                    className="w-full rounded-2xl border-2 border-zinc-100 bg-zinc-50 px-4 py-4 font-bold text-zinc-900 focus:border-emerald-500 focus:bg-white focus:outline-none transition-all"
-                                                    required
-                                                >
-                                                    <option value="" disabled>{t('select_service_placeholder')}</option>
-                                                    {filteredServices.map((s) => (
-                                                        <option key={s.id} value={s.id}>ID: {s.id} - {s.name} - ${s.rate}/k</option>
-                                                    ))}
-                                                </select>
+                                                {filteredServices.length === 0 ? (
+                                                    <p className="rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50 px-4 py-6 text-center text-sm font-medium text-zinc-400">
+                                                        {t('select_service_placeholder')}
+                                                    </p>
+                                                ) : (
+                                                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                                                        {filteredServices.map((s) => {
+                                                            const meta = getPlatformMeta(s.platform);
+                                                            const isSelected = data.service_id === String(s.id);
+                                                            return (
+                                                                <button
+                                                                    key={s.id}
+                                                                    type="button"
+                                                                    onClick={() => setData('service_id', String(s.id))}
+                                                                    className={`w-full flex items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all ${
+                                                                        isSelected
+                                                                            ? 'border-emerald-500 bg-emerald-50/60'
+                                                                            : 'border-zinc-100 bg-zinc-50 hover:border-zinc-200 hover:bg-white'
+                                                                    }`}
+                                                                >
+                                                                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${meta.bg}`}>
+                                                                        <meta.icon className={`text-lg ${meta.color}`} />
+                                                                    </span>
+                                                                    <span className="min-w-0 flex-1">
+                                                                        <span className="block truncate text-sm font-bold text-zinc-900">{s.name}</span>
+                                                                        <span className="block text-xs font-medium text-zinc-400">${money(Number(s.rate))} {t('per_1000')}</span>
+                                                                    </span>
+                                                                    {isSelected && <FaCheckCircle className="shrink-0 text-emerald-500" />}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                                 {errors.service_id && <p className="mt-2 text-xs font-bold text-red-500 flex items-center gap-1"><FaExclamationCircle/> {errors.service_id}</p>}
                                             </div>
 
-                                            {/* Active Service Card */}
+                                            {/* Active Service Card: badges, description, and an auto-built
+                                                "how it works" summary from data already on the service — no
+                                                separate instructions field to maintain. */}
                                             {chosenService && (
-                                                <motion.div 
-                                                    initial={{ opacity: 0, height: 0 }} 
+                                                <motion.div
+                                                    initial={{ opacity: 0, height: 0 }}
                                                     animate={{ opacity: 1, height: 'auto' }}
                                                     className="overflow-hidden"
                                                 >
-                                                    <div className="rounded-2xl bg-zinc-50 border border-zinc-200 p-5 space-y-3">
+                                                    <div className="rounded-2xl bg-zinc-50 border border-zinc-200 p-5 space-y-4">
                                                         <div className="flex flex-wrap gap-2">
                                                             <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold flex items-center gap-1"><FaBolt className="text-emerald-500"/> ${serviceRate} {t('per_1000')}</span>
                                                             <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-bold">{t('min_short')}: {Number(chosenService.min_qty).toLocaleString()}</span>
@@ -204,6 +286,34 @@ export default function OrderCreate({ auth, services, categories, selected }: Pr
                                                                 {chosenService.description}
                                                             </p>
                                                         )}
+                                                        <div className="bg-white p-4 rounded-xl border border-zinc-100">
+                                                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2.5">{t('how_it_works')}</p>
+                                                            <ul className="space-y-2 text-xs font-medium text-zinc-600">
+                                                                <li className="flex items-center gap-2">
+                                                                    <FaSyncAlt className={chosenService.is_refill ? 'text-emerald-500' : 'text-zinc-300'} />
+                                                                    {chosenService.is_refill
+                                                                        ? t('instructions_refill', { days: chosenService.refill_days ?? 30 })
+                                                                        : t('instructions_no_refill')}
+                                                                </li>
+                                                                <li className="flex items-center gap-2">
+                                                                    <FaTachometerAlt className={chosenService.is_dripfeed ? 'text-emerald-500' : 'text-zinc-300'} />
+                                                                    {chosenService.is_dripfeed ? t('instructions_dripfeed') : t('instructions_instant')}
+                                                                </li>
+                                                                {formatTime(chosenService.avg_time_minutes) && (
+                                                                    <li className="flex items-center gap-2">
+                                                                        <FaClock className="text-emerald-500" />
+                                                                        {t('instructions_delivery', { time: formatTime(chosenService.avg_time_minutes) as string })}
+                                                                    </li>
+                                                                )}
+                                                                <li className="flex items-center gap-2">
+                                                                    <FaArrowsAltH className="text-emerald-500" />
+                                                                    {t('instructions_range', {
+                                                                        min: Number(chosenService.min_qty).toLocaleString(),
+                                                                        max: Number(chosenService.max_qty).toLocaleString(),
+                                                                    })}
+                                                                </li>
+                                                            </ul>
+                                                        </div>
                                                     </div>
                                                 </motion.div>
                                             )}

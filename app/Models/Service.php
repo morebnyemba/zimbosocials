@@ -4,6 +4,7 @@
 
 namespace App\Models;
 
+use App\Support\ServiceCategoryNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,10 +16,70 @@ class Service extends Model
 
     protected $fillable = [
         'name', 'name_sn', 'name_nd', 'description', 'description_sn', 'description_nd',
-        'category', 'type', 'upstream_service_id', 'rate', 'min_qty', 'max_qty',
+        'category', 'platform', 'type', 'upstream_service_id', 'rate', 'min_qty', 'max_qty',
         'is_active', 'is_dripfeed', 'is_refill', 'refill_days',
         'avg_time_minutes', 'display_order',
     ];
+
+    /**
+     * Canonical platform slug => display label. This is deliberately a small,
+     * closed set (unlike 'category', which an admin can name however they
+     * like) so every reader — order screen, catalog, marketing pages — can
+     * look up an icon by an exact key instead of guessing from category text.
+     */
+    public const PLATFORMS = [
+        'instagram' => 'Instagram',
+        'youtube' => 'YouTube',
+        'tiktok' => 'TikTok',
+        'facebook' => 'Facebook',
+        'twitter' => 'Twitter / X',
+        'telegram' => 'Telegram',
+        'whatsapp' => 'WhatsApp',
+        'spotify' => 'Spotify',
+        'linkedin' => 'LinkedIn',
+        'discord' => 'Discord',
+        'threads' => 'Threads',
+        'snapchat' => 'Snapchat',
+        'twitch' => 'Twitch',
+        'soundcloud' => 'SoundCloud',
+        'pinterest' => 'Pinterest',
+        'reddit' => 'Reddit',
+        'other' => 'Other',
+    ];
+
+    /** ServiceCategoryNormalizer's canonical platform name => our slug. */
+    private const CANONICAL_TO_SLUG = [
+        'Instagram' => 'instagram',
+        'YouTube' => 'youtube',
+        'TikTok' => 'tiktok',
+        'Facebook' => 'facebook',
+        'Twitter / X' => 'twitter',
+        'Telegram' => 'telegram',
+        'WhatsApp' => 'whatsapp',
+        'Spotify' => 'spotify',
+        'LinkedIn' => 'linkedin',
+        'Discord' => 'discord',
+        'Threads' => 'threads',
+        'Snapchat' => 'snapchat',
+        'Twitch' => 'twitch',
+        'SoundCloud' => 'soundcloud',
+        'Pinterest' => 'pinterest',
+        'Reddit' => 'reddit',
+    ];
+
+    /**
+     * Infer a canonical platform slug from free-text category (or any other
+     * label) via the same keyword matching used to normalize upstream
+     * categories at import time. Unrecognized text — a custom category name
+     * that names no known platform — falls back to 'other' rather than
+     * guessing.
+     */
+    public static function inferPlatform(string $category): string
+    {
+        $canonical = ServiceCategoryNormalizer::normalize($category);
+
+        return self::CANONICAL_TO_SLUG[$canonical] ?? 'other';
+    }
 
     protected function casts(): array
     {
