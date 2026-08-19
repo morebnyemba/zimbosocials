@@ -110,6 +110,15 @@ class NudgeIdleCustomers extends Command
                 continue;
             }
 
+            // Tier 3 is the last automated shot before the 24h window closes —
+            // the right moment to let the customer set the cadence themselves
+            // rather than have the bot keep guessing. Fixed (not AI-composed)
+            // so it's always present and its wording stays what
+            // FollowUpRequestParser is actually tuned to recognise.
+            if ($tier === 3) {
+                $message .= "\n\nNo rush! Want me to check back tomorrow, in a few days, or should I hold off for now? Just let me know 🙂";
+            }
+
             $responder->send($session->wa_phone, $message, [
                 'handled_by' => 'ai', 'ai_used' => true, 'intent' => 'reengagement_tier_'.$tier,
             ]);
