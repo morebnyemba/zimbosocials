@@ -69,6 +69,13 @@ return [
         // for marketing. Requires MM Lite onboarding on the WABA first (TOS +
         // enablement); until then leave this off. Falls back to the standard
         // endpoint automatically on any failure, so enabling it is never fatal.
+        // Shared cooldown between ANY two automated sends (idle nudges, saved-
+        // order reminders, marketing broadcasts) to the same contact. These
+        // systems run independently and don't otherwise know about each
+        // other, so this is what stops a contact getting hit by more than one
+        // of them in quick succession — a major driver of block/complaint
+        // rates when it isn't there.
+        'automated_cooldown_hours' => (int) env('WHATSAPP_AUTOMATED_COOLDOWN_HOURS', 6),
         'mm_lite' => (bool) env('WHATSAPP_MM_LITE', false),
         'mm_lite_path' => env('WHATSAPP_MM_LITE_PATH', 'marketing_messages'),
         'media_ai' => (bool) env('WHATSAPP_MEDIA_AI', true),

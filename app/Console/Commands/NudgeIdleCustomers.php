@@ -61,7 +61,7 @@ class NudgeIdleCustomers extends Command
             }
 
             $account = WhatsAppAccount::where('wa_phone', $session->wa_phone)->first();
-            if (! $account || ! $account->opted_in || $account->inAgentHandoff()) {
+            if (! $account || ! $account->canReceiveAutomatedMessage() || $account->inAgentHandoff()) {
                 continue;
             }
 
@@ -115,6 +115,7 @@ class NudgeIdleCustomers extends Command
             ]);
 
             $session->forceFill(['nudge_tier' => $tier, 'nudged_at' => now()])->save();
+            $account->markAutomatedMessageSent();
             $sent++;
         }
 

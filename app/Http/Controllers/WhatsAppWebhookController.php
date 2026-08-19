@@ -67,7 +67,7 @@ class WhatsAppWebhookController extends Controller
 
             foreach ($parsed['statuses'] as $status) {
                 if (! empty($status['wa_message_id'])) {
-                    $this->messages->updateDeliveryStatus($status['wa_message_id'], $status['status'] ?? null);
+                    $this->messages->updateDeliveryStatus($status['wa_message_id'], $status['status'] ?? null, $status['errors'] ?? null);
                 }
             }
         } catch (\Throwable $e) {
