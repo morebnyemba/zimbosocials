@@ -50,6 +50,11 @@ class InboundNormalizer
                         'wa_message_id' => $s['id'] ?? null,
                         'status' => $s['status'] ?? null,
                         'recipient' => $s['recipient_id'] ?? null,
+                        // Present on 'failed' — the actual reason (e.g. undeliverable,
+                        // recipient unreachable). Previously discarded entirely, which
+                        // meant there was no way to detect a contact silently blocking
+                        // the business number from delivery failures alone.
+                        'errors' => $s['errors'] ?? null,
                     ];
                 }
             }

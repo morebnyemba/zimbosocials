@@ -2,6 +2,7 @@
 
 namespace App\WhatsApp\Persistence;
 
+use App\Models\WhatsAppAccount;
 use App\Models\WhatsAppMessage;
 
 /**
@@ -53,11 +54,41 @@ class MessageStore
         );
     }
 
-    public function updateDeliveryStatus(string $waMessageId, ?string $status): void
+    /**
+     * @param  array|null  $errors  Meta's `errors` array on a 'failed' status callback.
+     */
+    public function updateDeliveryStatus(string $waMessageId, ?string $status, ?array $errors = null): void
     {
         if ($status === null) {
             return;
         }
-        WhatsAppMessage::where('wa_message_id', $waMessageId)->update(['delivery_status' => $status]);
+
+        $message = WhatsAppMessage::where('wa_message_id', $waMessageId)->first();
+        if (! $message) {
+            return;
+        }
+
+        $update = ['delivery_status' => $status];
+        if ($errors) {
+            $update['payload'] = array_merge((array) $message->payload, ['delivery_errors' => $errors]);
+        }
+        $message->update($update);
+
+        // Only outbound sends tell us anything about deliverability — an
+        // inbound message never carries a delivery status from Meta.
+        if ($message->direction !== 'out') {
+            return;
+        }
+
+        $account = WhatsAppAccount::where('wa_phone', $message->wa_phone)->first();
+        if (! $account) {
+            return;
+        }
+
+        if ($status === 'failed') {
+            $account->recordSendFailure();
+        } elseif (in_array($status, ['sent', 'delivered', 'read'], true)) {
+            $account->recordSendSuccess();
+        }
     }
 }
