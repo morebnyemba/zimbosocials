@@ -104,6 +104,45 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
         $this->assertSame(1, WhatsAppMessage::where('direction', 'out')->count());
     }
 
+    public function test_the_tier_3_nudge_asks_the_customer_when_to_follow_up(): void
+    {
+        $this->linkedAccountWithSession([
+            'last_activity' => now()->subHours(23),
+            'nudge_tier' => 2,
+            'nudged_at' => now()->subHours(11),
+        ]);
+        $this->mockAiText("Hope you're doing well — still keen to grow your page?");
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $out = WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringContainsString('check back tomorrow', (string) $out->body);
+        $session = WhatsAppSession::where('wa_phone', self::PHONE)->first();
+        $this->assertSame(3, $session->nudge_tier);
+    }
+
+    public function test_a_tier_1_or_2_nudge_does_not_carry_the_scheduling_ask(): void
+    {
+        $this->linkedAccountWithSession();
+        $this->mockAiText('Hey! Still around?');
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $out = WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringNotContainsString('check back tomorrow', (string) $out->body);
+    }
+
+    public function test_a_contact_who_asked_to_be_reminded_later_is_skipped_until_then(): void
+    {
+        $account = $this->linkedAccountWithSession();
+        $account->snoozeFollowUpsUntil(now()->addDays(3));
+        $this->mockAiText('Should never be called.');
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $this->assertSame(0, WhatsAppMessage::where('direction', 'out')->count());
+    }
+
     public function test_a_contact_with_no_session_at_all_is_untouched(): void
     {
         // Nothing to describe to the AI and nothing to mark as nudged — there

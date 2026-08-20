@@ -17,6 +17,7 @@ class WhatsAppAccount extends Model
         'link_otp', 'link_otp_expires', 'link_attempts', 'opted_in',
         'agent_handoff_until', 'last_seen_at', 'lead_flagged_at',
         'last_automated_message_at', 'blocked_at', 'consecutive_send_failures',
+        'follow_up_snooze_until',
     ];
 
     protected function casts(): array
@@ -28,6 +29,7 @@ class WhatsAppAccount extends Model
             'lead_flagged_at' => 'datetime',
             'last_automated_message_at' => 'datetime',
             'blocked_at' => 'datetime',
+            'follow_up_snooze_until' => 'datetime',
             'opted_in' => 'boolean',
             'link_attempts' => 'integer',
             'consecutive_send_failures' => 'integer',
@@ -159,6 +161,14 @@ class WhatsAppAccount extends Model
             return false;
         }
 
+        // The contact told us themselves when they want to hear from us next
+        // ("remind me next week") — that holds off every automated system
+        // regardless of the cooldown below. Once it passes it's spent: falls
+        // through to the normal cooldown rather than leaving it bypassed forever.
+        if ($this->follow_up_snooze_until !== null && $this->follow_up_snooze_until->isFuture()) {
+            return false;
+        }
+
         $cooldownHours ??= (int) config('services.whatsapp.automated_cooldown_hours', 6);
 
         return $this->last_automated_message_at === null
@@ -168,7 +178,21 @@ class WhatsAppAccount extends Model
     /** Stamp the shared cooldown clock after any automated system sends to this contact. */
     public function markAutomatedMessageSent(): void
     {
-        $this->forceFill(['last_automated_message_at' => now()])->save();
+        $update = ['last_automated_message_at' => now()];
+
+        // A spent (past) snooze has done its job — clear it so it reads
+        // cleanly rather than sitting there as a stale past timestamp.
+        if ($this->follow_up_snooze_until !== null && $this->follow_up_snooze_until->isPast()) {
+            $update['follow_up_snooze_until'] = null;
+        }
+
+        $this->forceFill($update)->save();
+    }
+
+    /** The contact asked to be followed up with at a specific later time (or asked us to stop for now). */
+    public function snoozeFollowUpsUntil(\Illuminate\Support\Carbon $until): void
+    {
+        $this->forceFill(['follow_up_snooze_until' => $until])->save();
     }
 
     /**
