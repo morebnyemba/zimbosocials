@@ -16,6 +16,8 @@ class WhatsAppAccount extends Model
         'wa_phone', 'user_id', 'link_status', 'display_name',
         'link_otp', 'link_otp_expires', 'link_attempts', 'opted_in',
         'agent_handoff_until', 'last_seen_at', 'lead_flagged_at',
+        'last_automated_message_at', 'blocked_at', 'consecutive_send_failures',
+        'follow_up_snooze_until',
     ];
 
     protected function casts(): array
@@ -25,10 +27,17 @@ class WhatsAppAccount extends Model
             'agent_handoff_until' => 'datetime',
             'last_seen_at' => 'datetime',
             'lead_flagged_at' => 'datetime',
+            'last_automated_message_at' => 'datetime',
+            'blocked_at' => 'datetime',
+            'follow_up_snooze_until' => 'datetime',
             'opted_in' => 'boolean',
             'link_attempts' => 'integer',
+            'consecutive_send_failures' => 'integer',
         ];
     }
+
+    /** Consecutive `failed` delivery statuses before we stop auto-messaging a contact. */
+    private const BLOCK_THRESHOLD = 3;
 
     public function user(): BelongsTo
     {
@@ -137,5 +146,76 @@ class WhatsAppAccount extends Model
     public function inAgentHandoff(): bool
     {
         return $this->agent_handoff_until !== null && $this->agent_handoff_until->isFuture();
+    }
+
+    /**
+     * Gate shared by every automated sender (idle nudges, saved-order
+     * reminders, marketing broadcasts): opted in, not flagged as blocked, and
+     * not messaged by ANY automated system within the cooldown. Each system
+     * still runs its own timing/dedupe logic on top of this — this only stops
+     * the systems from stacking on top of each other.
+     */
+    public function canReceiveAutomatedMessage(?int $cooldownHours = null): bool
+    {
+        if (! $this->opted_in || $this->blocked_at !== null) {
+            return false;
+        }
+
+        // The contact told us themselves when they want to hear from us next
+        // ("remind me next week") — that holds off every automated system
+        // regardless of the cooldown below. Once it passes it's spent: falls
+        // through to the normal cooldown rather than leaving it bypassed forever.
+        if ($this->follow_up_snooze_until !== null && $this->follow_up_snooze_until->isFuture()) {
+            return false;
+        }
+
+        $cooldownHours ??= (int) config('services.whatsapp.automated_cooldown_hours', 6);
+
+        return $this->last_automated_message_at === null
+            || $this->last_automated_message_at->lte(now()->subHours($cooldownHours));
+    }
+
+    /** Stamp the shared cooldown clock after any automated system sends to this contact. */
+    public function markAutomatedMessageSent(): void
+    {
+        $update = ['last_automated_message_at' => now()];
+
+        // A spent (past) snooze has done its job — clear it so it reads
+        // cleanly rather than sitting there as a stale past timestamp.
+        if ($this->follow_up_snooze_until !== null && $this->follow_up_snooze_until->isPast()) {
+            $update['follow_up_snooze_until'] = null;
+        }
+
+        $this->forceFill($update)->save();
+    }
+
+    /** The contact asked to be followed up with at a specific later time (or asked us to stop for now). */
+    public function snoozeFollowUpsUntil(\Illuminate\Support\Carbon $until): void
+    {
+        $this->forceFill(['follow_up_snooze_until' => $until])->save();
+    }
+
+    /**
+     * Meta reported a `failed` delivery status for an outbound message. Three
+     * in a row (nothing succeeding in between) auto-suppresses further
+     * automated sends — a strong signal the contact is unreachable or has
+     * blocked the business, and hammering a dead number is exactly what
+     * drives the block rate up further.
+     */
+    public function recordSendFailure(): void
+    {
+        $this->increment('consecutive_send_failures');
+
+        if ($this->consecutive_send_failures >= self::BLOCK_THRESHOLD && $this->blocked_at === null) {
+            $this->forceFill(['blocked_at' => now()])->save();
+        }
+    }
+
+    /** A send actually landed — clear any failure streak / block flag. */
+    public function recordSendSuccess(): void
+    {
+        if ($this->consecutive_send_failures !== 0 || $this->blocked_at !== null) {
+            $this->forceFill(['consecutive_send_failures' => 0, 'blocked_at' => null])->save();
+        }
     }
 }

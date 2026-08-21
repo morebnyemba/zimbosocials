@@ -154,18 +154,28 @@ class SendMarketingBroadcastJob implements ShouldQueue
                 }
 
                 if ($whatsappOn && ($prefs['whatsapp'] ?? true) && ! empty($user->whatsapp_number)) {
-                    SendWhatsAppNotification::dispatch(
-                        (string) $user->whatsapp_number,
-                        $waTemplate,
-                        (string) $subject,
-                        (string) $body,
-                        $this->templateParams($waParamLabels, (string) $user->name, (string) $subject, (string) $body),
-                        $locale,
-                        requireTemplate: true,
-                        marketing: true,
-                    )->onQueue('notifications');
-                    $sentWhatsApp++;
-                    $sentPhones[$this->phoneKey((string) $user->whatsapp_number)] = true;
+                    // A profile number may also be a WhatsApp bot contact with its
+                    // own automated-send history — respect that shared cooldown so
+                    // a campaign doesn't stack on top of a nudge/reminder this
+                    // contact just got. No account row at all means no history to
+                    // respect, so it's allowed through.
+                    $waAccount = WhatsAppAccount::where('wa_phone', (string) $user->whatsapp_number)->first();
+
+                    if (! $waAccount || $waAccount->canReceiveAutomatedMessage()) {
+                        SendWhatsAppNotification::dispatch(
+                            (string) $user->whatsapp_number,
+                            $waTemplate,
+                            (string) $subject,
+                            (string) $body,
+                            $this->templateParams($waParamLabels, (string) $user->name, (string) $subject, (string) $body),
+                            $locale,
+                            requireTemplate: true,
+                            marketing: true,
+                        )->onQueue('notifications');
+                        $sentWhatsApp++;
+                        $sentPhones[$this->phoneKey((string) $user->whatsapp_number)] = true;
+                        $waAccount?->markAutomatedMessageSent();
+                    }
                 }
             }
 
@@ -189,6 +199,13 @@ class SendMarketingBroadcastJob implements ShouldQueue
                             $key = $this->phoneKey((string) $account->wa_phone);
                             if ($key === '' || isset($sentPhones[$key])) {
                                 continue; // already messaged via a user profile
+                            }
+
+                            // Respect the shared automated-send cooldown/block flag —
+                            // a contact already nudged or reminded recently by another
+                            // system shouldn't also get swept into this broadcast.
+                            if (! $account->canReceiveAutomatedMessage()) {
+                                continue;
                             }
 
                             $linked = $account->user;
@@ -223,6 +240,7 @@ class SendMarketingBroadcastJob implements ShouldQueue
                                 marketing: true,
                             )->onQueue('notifications');
 
+                            $account->markAutomatedMessageSent();
                             $sentPhones[$key] = true;
                             $sentWhatsApp++;
                             $extraWhatsApp++;

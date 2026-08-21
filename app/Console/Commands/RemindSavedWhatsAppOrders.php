@@ -24,6 +24,12 @@ class RemindSavedWhatsAppOrders extends Command
     private const MIN_AGE_HOURS = 1;
     private const MAX_AGE_HOURS = 20;
 
+    // Unlike the other customer-facing automated commands, this one had no
+    // per-run cap at all — a backlog could fire up to 200 near-simultaneous
+    // sends in a single hourly run. Anything left over past the cap simply
+    // waits for next hour's run (reminded_at stays null).
+    private const MAX_PER_RUN = 40;
+
     public function handle(Responder $responder): int
     {
         $saved = WhatsAppSavedOrder::query()
@@ -37,6 +43,10 @@ class RemindSavedWhatsAppOrders extends Command
         $sent = 0;
 
         foreach ($saved as $order) {
+            if ($sent >= self::MAX_PER_RUN) {
+                break;
+            }
+
             $service = $order->service;
             $user = User::find($order->user_id);
             $account = WhatsAppAccount::where('wa_phone', $order->wa_phone)->first();
@@ -46,6 +56,14 @@ class RemindSavedWhatsAppOrders extends Command
             if (! $service || ! $user || ! $account || ! $account->opted_in || $account->inAgentHandoff()) {
                 $order->update(['reminded_at' => now()]);
 
+                continue;
+            }
+
+            // Another automated system (idle nudge, marketing broadcast) already
+            // messaged this contact recently, or they're flagged as blocked —
+            // leave reminded_at unset so this order is reconsidered next run,
+            // still inside the window, instead of piling a reminder on top.
+            if (! $account->canReceiveAutomatedMessage()) {
                 continue;
             }
 
@@ -75,6 +93,7 @@ class RemindSavedWhatsAppOrders extends Command
             );
 
             $order->update(['reminded_at' => now()]);
+            $account->markAutomatedMessageSent();
             $sent++;
         }
 

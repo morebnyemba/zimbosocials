@@ -19,7 +19,9 @@ use Tests\TestCase;
  * quiet — linked customer or unlinked guest alike. Used to be three (2h/12h/
  * 23h); real conversations showed a second or third automated check-in
  * reads as pestering and was a real contributor to blocks, so it now fires
- * at most once per idle episode. Must never mention the underlying
+ * at most once per idle episode. Since it's always the last shot, it always
+ * carries a fixed scheduling ask (FollowUpRequestParser then honors
+ * whatever the customer says back). Must never mention the underlying
  * window/deadline to the customer, and must never touch a contact with no
  * real session or one already handed to a human.
  */
@@ -110,6 +112,35 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
             'nudged_at' => now()->subHours(11),
         ]);
         $this->mockAiText('This should never be sent.');
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $this->assertSame(0, WhatsAppMessage::where('direction', 'out')->count());
+    }
+
+    /**
+     * With only one nudge left in the whole 24h window, it's always the last
+     * one — so it always carries the scheduling ask (there's no longer a
+     * "tier 1/2 doesn't get it" case, since there's no tier 1/2 anymore).
+     */
+    public function test_the_one_nudge_always_asks_the_customer_when_to_follow_up(): void
+    {
+        $this->linkedAccountWithSession();
+        $this->mockAiText("Hope you're doing well — still keen to grow your page?");
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $out = WhatsAppMessage::where('direction', 'out')->latest('id')->first();
+        $this->assertStringContainsString('check back tomorrow', (string) $out->body);
+        $session = WhatsAppSession::where('wa_phone', self::PHONE)->first();
+        $this->assertSame(1, $session->nudge_tier);
+    }
+
+    public function test_a_contact_who_asked_to_be_reminded_later_is_skipped_until_then(): void
+    {
+        $account = $this->linkedAccountWithSession();
+        $account->snoozeFollowUpsUntil(now()->addDays(3));
+        $this->mockAiText('Should never be called.');
 
         $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
 

@@ -48,6 +48,7 @@ class MessageRouter
         private readonly \App\WhatsApp\Messaging\MediaArchive $archive,
         private readonly \App\WhatsApp\Order\LiveOrderStatus $liveOrders,
         private readonly \App\WhatsApp\Admin\DepositApprovalCommand $depositApproval,
+        private readonly \App\WhatsApp\FollowUp\FollowUpRequestParser $followUp,
     ) {}
 
     public function handle(array $msg, ?string $displayName = null): void
@@ -107,6 +108,24 @@ class MessageRouter
                 $account->opted_in = true;
             } else {
                 $this->messages->tagInbound($inboundId, ['handled_by' => 'system', 'intent' => 'opted_out']);
+
+                return;
+            }
+        }
+
+        // A contact telling us when THEY want a follow-up ("remind me next
+        // week", "stop following up for now") sets the schedule every
+        // automated sender already respects (WhatsAppAccount::
+        // canReceiveAutomatedMessage). Checked deterministically, before
+        // flows/AI, same as the gates above — narrow enough (needs an
+        // explicit follow-up reference) that it won't hijack unrelated text.
+        if ($text !== '') {
+            $snooze = $this->followUp->parse($text);
+            if ($snooze !== null) {
+                $account->snoozeFollowUpsUntil($snooze['until']);
+                $reply = "👍 Got it — I'll check back {$snooze['label']}. Message me any time before then if you need something sooner!";
+                $this->responder->send($phone, $reply, ['handled_by' => 'system', 'intent' => 'followup_snooze']);
+                $this->messages->tagInbound($inboundId, ['handled_by' => 'system', 'intent' => 'followup_snooze']);
 
                 return;
             }

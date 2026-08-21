@@ -38,6 +38,15 @@ class AccountStore
         $previousSeen = $account->exists ? $account->last_seen_at : null;
 
         $account->last_seen_at = now();
+
+        // They just messaged us — whatever made earlier sends fail (or look
+        // blocked) clearly isn't stopping them from reaching us now, so lift
+        // the auto-suppression rather than leave them stuck skipped forever.
+        if ($account->blocked_at !== null || $account->consecutive_send_failures > 0) {
+            $account->blocked_at = null;
+            $account->consecutive_send_failures = 0;
+        }
+
         $account->save();
 
         $account->previousSeenAt = $previousSeen;

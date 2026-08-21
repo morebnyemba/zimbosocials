@@ -19,7 +19,10 @@ use Illuminate\Support\Facades\Log;
  * a real contributor to customers blocking the number. One honest
  * touchpoint, then leave it — nudge_tier and nudged_at reset the moment the
  * customer replies (SessionManager::save()), so a later stall gets its own
- * fresh nudge.
+ * fresh nudge. Since it's always the last shot, it always carries a fixed
+ * scheduling ask ("check back tomorrow, in a few days, or hold off?") that
+ * FollowUpRequestParser is tuned to recognise in whatever the customer
+ * says back.
  *
  * Runs for linked customers AND unlinked guests alike — a guest mid-order
  * (or just chatting) deserves the same follow-up as a registered one. It
@@ -66,7 +69,7 @@ class NudgeIdleCustomers extends Command
             }
 
             $account = WhatsAppAccount::where('wa_phone', $session->wa_phone)->first();
-            if (! $account || ! $account->opted_in || $account->inAgentHandoff()) {
+            if (! $account || ! $account->canReceiveAutomatedMessage() || $account->inAgentHandoff()) {
                 continue;
             }
 
@@ -102,11 +105,19 @@ class NudgeIdleCustomers extends Command
                 continue;
             }
 
+            // This is the only automated shot this contact gets before the 24h
+            // window closes — the right moment to let the customer set the
+            // cadence themselves rather than have the bot keep guessing.
+            // Fixed (not AI-composed) so it's always present and its wording
+            // stays what FollowUpRequestParser is actually tuned to recognise.
+            $message .= "\n\nNo rush! Want me to check back tomorrow, in a few days, or should I hold off for now? Just let me know 🙂";
+
             $responder->send($session->wa_phone, $message, [
                 'handled_by' => 'ai', 'ai_used' => true, 'intent' => 'reengagement',
             ]);
 
             $session->forceFill(['nudge_tier' => 1, 'nudged_at' => now()])->save();
+            $account->markAutomatedMessageSent();
             $sent++;
         }
 
