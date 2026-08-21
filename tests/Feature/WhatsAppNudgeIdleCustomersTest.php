@@ -14,11 +14,14 @@ use Mockery;
 use Tests\TestCase;
 
 /**
- * Three AI-composed check-ins (2h/12h/23h) for anyone who went quiet — linked
- * customer or unlinked guest alike — timed to land before Meta's 24h
- * free-form window closes. Each tier must fire exactly once, must never
- * mention the underlying window/deadline to the customer, and must never
- * touch a contact with no real session or one already handed to a human.
+ * ONE AI-composed check-in (23h since their last message — the last natural
+ * moment before Meta's 24h free-form window closes) for anyone who went
+ * quiet — linked customer or unlinked guest alike. Used to be three (2h/12h/
+ * 23h); real conversations showed a second or third automated check-in
+ * reads as pestering and was a real contributor to blocks, so it now fires
+ * at most once per idle episode. Must never mention the underlying
+ * window/deadline to the customer, and must never touch a contact with no
+ * real session or one already handed to a human.
  */
 class WhatsAppNudgeIdleCustomersTest extends TestCase
 {
@@ -38,7 +41,7 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
         $account = WhatsAppAccount::create([
             'wa_phone' => self::PHONE, 'user_id' => $user->id,
             'link_status' => 'linked', 'opted_in' => true,
-            'last_seen_at' => now()->subHours(3),
+            'last_seen_at' => now()->subHours(23)->subMinutes(30),
         ]);
 
         WhatsAppSession::create(array_merge([
@@ -46,8 +49,8 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
             'current_flow' => null,
             'current_state' => null,
             'status' => 'idle',
-            'last_activity' => now()->subHours(3),
-            'expires_at' => now()->subHours(2),
+            'last_activity' => now()->subHours(23)->subMinutes(30),
+            'expires_at' => now()->subHours(22)->subMinutes(30),
             'context' => ['_ai_history' => [['user' => 'do you do youtube views?', 'model' => 'Not yet, but we do TikTok and IG!']]],
         ], $sessionAttrs));
 
@@ -62,7 +65,7 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
         $this->app->instance(GeminiClient::class, $mock);
     }
 
-    public function test_a_customer_idle_3_hours_gets_the_tier_1_nudge(): void
+    public function test_a_customer_idle_past_23_hours_gets_the_one_nudge(): void
     {
         $this->linkedAccountWithSession();
         $this->mockAiText('Hey! Still around? Happy to help with TikTok or IG whenever you are ready 😊');
@@ -78,7 +81,17 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
         $this->assertNotNull($session->nudged_at);
     }
 
-    public function test_the_same_tier_is_never_sent_twice(): void
+    public function test_a_customer_idle_under_23_hours_is_not_yet_nudged(): void
+    {
+        $this->linkedAccountWithSession(['last_activity' => now()->subHours(13)]);
+        $this->mockAiText('This should never be sent.');
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $this->assertSame(0, WhatsAppMessage::where('direction', 'out')->count());
+    }
+
+    public function test_a_second_nudge_never_fires_once_one_has_been_sent(): void
     {
         $this->linkedAccountWithSession(['nudge_tier' => 1, 'nudged_at' => now()->subHour()]);
         $this->mockAiText('This should never be sent.');
@@ -88,20 +101,19 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
         $this->assertSame(0, WhatsAppMessage::where('direction', 'out')->count());
     }
 
-    public function test_a_customer_idle_13_hours_gets_tier_2_not_tier_1_again(): void
+    /** Same idle episode, well into the 24h window — still only the one nudge, never a second. */
+    public function test_no_second_nudge_even_much_later_in_the_same_24h_window(): void
     {
         $this->linkedAccountWithSession([
-            'last_activity' => now()->subHours(13),
+            'last_activity' => now()->subHours(23),
             'nudge_tier' => 1,
             'nudged_at' => now()->subHours(11),
         ]);
-        $this->mockAiText("It's been a bit — no rush, just checking in whenever you're free!");
+        $this->mockAiText('This should never be sent.');
 
         $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
 
-        $session = WhatsAppSession::where('wa_phone', self::PHONE)->first();
-        $this->assertSame(2, $session->nudge_tier);
-        $this->assertSame(1, WhatsAppMessage::where('direction', 'out')->count());
+        $this->assertSame(0, WhatsAppMessage::where('direction', 'out')->count());
     }
 
     public function test_a_contact_with_no_session_at_all_is_untouched(): void
@@ -110,7 +122,7 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
         // must be a real WhatsAppSession row for this command to act on.
         WhatsAppAccount::create([
             'wa_phone' => self::PHONE, 'link_status' => 'guest', 'opted_in' => true,
-            'last_seen_at' => now()->subHours(5),
+            'last_seen_at' => now()->subHours(13),
         ]);
         $this->mockAiText('Should never be called.');
 
@@ -123,12 +135,12 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
     {
         WhatsAppAccount::create([
             'wa_phone' => self::PHONE, 'link_status' => 'guest', 'opted_in' => true,
-            'last_seen_at' => now()->subHours(3),
+            'last_seen_at' => now()->subHours(23)->subMinutes(30),
         ]);
         WhatsAppSession::create([
             'wa_phone' => self::PHONE,
             'current_flow' => null, 'current_state' => null, 'status' => 'idle',
-            'last_activity' => now()->subHours(3), 'expires_at' => now()->subHours(2),
+            'last_activity' => now()->subHours(23)->subMinutes(30), 'expires_at' => now()->subHours(22)->subMinutes(30),
             'context' => ['_ai_history' => [['user' => 'how much for tiktok followers?', 'model' => 'From $10 per 1,000!']]],
         ]);
         $this->mockAiText('Hey! Still keen on those TikTok followers whenever you are ready 😊');
@@ -218,9 +230,42 @@ class WhatsAppNudgeIdleCustomersTest extends TestCase
         $this->assertStringContainsString('1,000', (string) $captured);
     }
 
+    /**
+     * A real conversation: the customer's last actual message was "Sounds
+     * good", but the bot had since asked for their Facebook page link and
+     * gone unanswered. Grounding the nudge on the customer's stale message
+     * alone made the re-engagement text quote "Sounds good" back at them,
+     * ignoring that the open question had moved on — reading as though the
+     * bot forgot what it had just asked.
+     */
+    public function test_a_pending_bot_question_is_described_over_the_customers_stale_reply(): void
+    {
+        $this->linkedAccountWithSession([
+            'context' => ['_ai_history' => [[
+                'user' => 'Sounds good',
+                'model' => 'Awesome! Could you please send me the link to your Facebook page?',
+            ]]],
+        ]);
+
+        $captured = null;
+        $mock = Mockery::mock(GeminiClient::class);
+        $mock->shouldReceive('isConfigured')->andReturn(true);
+        $mock->shouldReceive('generateText')->andReturnUsing(function (...$args) use (&$captured) {
+            $captured = $args[0];
+
+            return 'Hey! Still keen on setting up your Facebook page link whenever you\'re ready.';
+        });
+        $this->app->instance(GeminiClient::class, $mock);
+
+        $this->artisan('whatsapp:nudge-idle-customers')->assertSuccessful();
+
+        $this->assertStringContainsString('send me the link to your Facebook page', (string) $captured);
+        $this->assertStringNotContainsString('"Sounds good"', (string) $captured);
+    }
+
     public function test_a_reply_resets_the_tier_for_a_future_stall(): void
     {
-        $this->linkedAccountWithSession(['nudge_tier' => 2, 'nudged_at' => now()->subMinutes(5)]);
+        $this->linkedAccountWithSession(['nudge_tier' => 1, 'nudged_at' => now()->subMinutes(5)]);
 
         $sessions = app(SessionManager::class);
         $ctx = $sessions->load(self::PHONE);
