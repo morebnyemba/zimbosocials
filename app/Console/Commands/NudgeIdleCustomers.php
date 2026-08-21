@@ -11,11 +11,18 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Three warm, AI-composed check-ins for anyone who went quiet — at 2h, 12h
- * and 23h since their last message, timed to land before Meta's 24-hour
- * free-form messaging window closes. Each tier fires once; nudge_tier and
- * nudged_at reset the moment the customer replies (SessionManager::save()),
- * so a later stall gets its own fresh set of three.
+ * ONE warm, AI-composed check-in for anyone who went quiet — 23h since their
+ * last message, the last natural moment before Meta's 24h free-form
+ * messaging window closes. Used to be three (2h/12h/23h); real conversations
+ * showed that even with better-grounded, better-behaved messages, a SECOND
+ * or THIRD automated check-in on top of the first reads as pestering and was
+ * a real contributor to customers blocking the number. One honest
+ * touchpoint, then leave it — nudge_tier and nudged_at reset the moment the
+ * customer replies (SessionManager::save()), so a later stall gets its own
+ * fresh nudge. Since it's always the last shot, it always carries a fixed
+ * scheduling ask ("check back tomorrow, in a few days, or hold off?") that
+ * FollowUpRequestParser is tuned to recognise in whatever the customer
+ * says back.
  *
  * Runs for linked customers AND unlinked guests alike — a guest mid-order
  * (or just chatting) deserves the same follow-up as a registered one. It
@@ -31,10 +38,10 @@ class NudgeIdleCustomers extends Command
 {
     protected $signature = 'whatsapp:nudge-idle-customers';
 
-    protected $description = 'Send an AI-composed re-engagement message to anyone who went quiet, before the 24h window closes';
+    protected $description = 'Send a single AI-composed re-engagement message to anyone who went quiet, before the 24h window closes';
 
-    /** tier => hours since last message. Checked highest-first so a long-idle customer gets the right tone, not tier 1. */
-    private const TIERS = [3 => 23, 2 => 12, 1 => 2];
+    /** Hours of silence before the one check-in fires. */
+    private const NUDGE_AFTER_HOURS = 23;
 
     private const MAX_PER_RUN = 15;
 
@@ -47,7 +54,8 @@ class NudgeIdleCustomers extends Command
         }
 
         $sessions = WhatsAppSession::query()
-            ->where('last_activity', '<=', now()->subHours(2))
+            ->where('nudge_tier', 0)
+            ->where('last_activity', '<=', now()->subHours(self::NUDGE_AFTER_HOURS))
             ->where('last_activity', '>=', now()->subHours(24))
             ->orderBy('last_activity')
             ->limit(300)
@@ -84,46 +92,31 @@ class NudgeIdleCustomers extends Command
                 continue;
             }
 
-            $elapsedHours = $session->last_activity->diffInHours(now());
-            $tier = null;
-            foreach (self::TIERS as $t => $hours) {
-                if ($elapsedHours >= $hours) {
-                    $tier = $t;
-                    break;
-                }
-            }
-            if ($tier === null || (int) $session->nudge_tier >= $tier) {
-                continue;
-            }
-
             $message = $ai->reengagementMessage([
                 'name' => $account->friendlyName(),
                 'situation' => $this->situationFor($session),
-                'tier' => $tier,
             ]);
 
             if ($message === null) {
                 Log::info('Re-engagement message skipped — AI did not compose one', [
-                    'phone' => $session->wa_phone, 'tier' => $tier,
+                    'phone' => $session->wa_phone,
                 ]);
 
                 continue;
             }
 
-            // Tier 3 is the last automated shot before the 24h window closes —
-            // the right moment to let the customer set the cadence themselves
-            // rather than have the bot keep guessing. Fixed (not AI-composed)
-            // so it's always present and its wording stays what
-            // FollowUpRequestParser is actually tuned to recognise.
-            if ($tier === 3) {
-                $message .= "\n\nNo rush! Want me to check back tomorrow, in a few days, or should I hold off for now? Just let me know 🙂";
-            }
+            // This is the only automated shot this contact gets before the 24h
+            // window closes — the right moment to let the customer set the
+            // cadence themselves rather than have the bot keep guessing.
+            // Fixed (not AI-composed) so it's always present and its wording
+            // stays what FollowUpRequestParser is actually tuned to recognise.
+            $message .= "\n\nNo rush! Want me to check back tomorrow, in a few days, or should I hold off for now? Just let me know 🙂";
 
             $responder->send($session->wa_phone, $message, [
-                'handled_by' => 'ai', 'ai_used' => true, 'intent' => 'reengagement_tier_'.$tier,
+                'handled_by' => 'ai', 'ai_used' => true, 'intent' => 'reengagement',
             ]);
 
-            $session->forceFill(['nudge_tier' => $tier, 'nudged_at' => now()])->save();
+            $session->forceFill(['nudge_tier' => 1, 'nudged_at' => now()])->save();
             $account->markAutomatedMessageSent();
             $sent++;
         }
@@ -172,6 +165,17 @@ class NudgeIdleCustomers extends Command
 
         $history = (array) ($context['_ai_history'] ?? []);
         $last = end($history);
+
+        // What WE last asked is the actual open question — grounding on only
+        // their last message let a real check-in quote a stale answer
+        // ("Sounds good") back at the customer while the bot had already
+        // moved on to asking for their page link, reading as if the bot had
+        // forgotten what it just asked.
+        if (is_array($last) && ! empty($last['model'])) {
+            return 'The last thing WE said to them was: "'.mb_substr((string) $last['model'], 0, 200)
+                .'" — they have not replied since.';
+        }
+
         if (is_array($last) && ! empty($last['user'])) {
             return 'Their last message was: "'.mb_substr((string) $last['user'], 0, 140).'" — they have not replied since.';
         }
