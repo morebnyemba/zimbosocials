@@ -34,8 +34,9 @@ class PromoInPricingContextTest extends TestCase
         $prompt = null;
         $client = Mockery::mock(GeminiClient::class);
         $client->shouldReceive('isConfigured')->andReturn(true);
-        $client->shouldReceive('generateJson')->andReturnUsing(function (string $p) use (&$prompt) {
-            $prompt = $p;
+        $client->shouldReceive('generateJson')->andReturnUsing(function (string $p, float $temperature = 0.2, ?array $schema = null, ?string $system = null) use (&$prompt) {
+            // Catalogue + promos now ride in the cached system instruction.
+            $prompt = $system."\n".$p;
 
             return ['reply' => 'ok', 'flow' => 'none', 'flow_data' => []];
         });

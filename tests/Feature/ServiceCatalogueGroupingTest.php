@@ -26,13 +26,19 @@ class ServiceCatalogueGroupingTest extends TestCase
         ]);
     }
 
-    /** buildContext is private; exercise it the way respond() does. */
+    /**
+     * Everything the model is grounded on, both halves: the catalogue and
+     * price blocks that ride in the cached system instruction, and the
+     * per-user context that rides in the user turn.
+     */
     private function context(): string
     {
         $provider = app(GeminiProvider::class);
-        $method = new \ReflectionMethod($provider, 'buildContext');
 
-        return (string) $method->invoke($provider, 'list your services', null);
+        $static = new \ReflectionMethod($provider, 'staticContext');
+        $dynamic = new \ReflectionMethod($provider, 'buildContext');
+
+        return $static->invoke($provider)."\n".$dynamic->invoke($provider, 'list your services', null);
     }
 
     public function test_catalogue_is_grouped_by_platform_then_type(): void

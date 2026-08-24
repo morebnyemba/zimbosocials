@@ -24,11 +24,16 @@ class AdvertPricesInContextTest extends TestCase
         $prompt = '';
         $client = Mockery::mock(GeminiClient::class);
         $client->shouldReceive('isConfigured')->andReturn(true);
-        $client->shouldReceive('generateJson')->andReturnUsing(function (string $p) use (&$prompt) {
-            $prompt = $p;
+        // Static grounding (catalogue, advert packages, support items, payment
+        // details) rides in the cached SYSTEM instruction; per-user context
+        // rides in the user turn. What the model sees is both, so assert on both.
+        $client->shouldReceive('generateJson')->andReturnUsing(
+            function (string $p, float $temperature = 0.2, ?array $schema = null, ?string $system = null) use (&$prompt) {
+                $prompt = $system."\n".$p;
 
-            return ['reply' => 'ok', 'flow' => 'none', 'flow_data' => []];
-        });
+                return ['reply' => 'ok', 'flow' => 'none', 'flow_data' => []];
+            }
+        );
         $this->app->instance(GeminiClient::class, $client);
 
         app(GeminiProvider::class)->respond($message, ['user' => null, 'authenticated' => true, 'history' => []]);

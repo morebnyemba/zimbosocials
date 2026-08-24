@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\AiUsage;
+use App\Models\Service;
+use App\Models\User;
 use App\Services\AI\GeminiClient;
 use App\WhatsApp\AI\AIGuard;
+use App\WhatsApp\AI\GeminiProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -142,6 +145,51 @@ class AiCostControlsTest extends TestCase
         Cache::forget('wa:ai:spend:'.now()->format('Y-m-d'));
 
         $this->assertFalse($guard->allow('263771234567'), 'over budget — falls back to the deterministic menu');
+    }
+
+    /** The static grounding must ride in the cached system instruction, not be re-billed each turn. */
+    public function test_catalogue_and_price_blocks_ride_in_the_cached_system_instruction(): void
+    {
+        Service::create([
+            'name' => 'TikTok Followers', 'name_sn' => 'x', 'description' => '', 'description_sn' => '',
+            'category' => 'TikTok', 'type' => 'followers', 'rate' => 7.0,
+            'min_qty' => 10, 'max_qty' => 100000, 'is_active' => true,
+        ]);
+
+        $provider = app(GeminiProvider::class);
+
+        $system = (new \ReflectionMethod($provider, 'systemPrompt'))->invoke($provider);
+        $userTurn = (new \ReflectionMethod($provider, 'buildContext'))->invoke($provider, 'what do you have', null);
+
+        $this->assertStringContainsString('SERVICE CATALOGUE', $system);
+        $this->assertStringContainsString('TikTok Followers', $system);
+
+        // The expensive half must NOT be duplicated into the fresh-billed turn.
+        $this->assertStringNotContainsString('SERVICE CATALOGUE', $userTurn);
+        $this->assertStringNotContainsString('TikTok Followers', $userTurn);
+    }
+
+    /** Per-user grounding must stay OUT of the shared cache — one user's balance is not another's. */
+    public function test_per_user_context_never_leaks_into_the_shared_cached_prefix(): void
+    {
+        $user = User::factory()->create(['name' => 'Tendai', 'balance' => 42.50]);
+        $provider = app(GeminiProvider::class);
+
+        $system = (new \ReflectionMethod($provider, 'systemPrompt'))->invoke($provider);
+        $userTurn = (new \ReflectionMethod($provider, 'buildContext'))->invoke($provider, 'my balance', $user);
+
+        $this->assertStringContainsString('Tendai', $userTurn);
+        $this->assertStringNotContainsString('Tendai', $system);
+    }
+
+    public function test_the_chat_call_stays_on_the_flagship_unless_explicitly_opted_out(): void
+    {
+        config(['services.gemini.chat_light' => false]);
+        $this->fakeOk();
+
+        app(GeminiProvider::class)->respond('hi', ['user' => null, 'authenticated' => false, 'history' => []]);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'gemini-2.5-flash:generateContent'));
     }
 
     public function test_a_zero_budget_means_no_ceiling(): void

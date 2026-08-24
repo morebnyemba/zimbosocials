@@ -43,20 +43,31 @@ it makes no decision — the flow is already chosen and every fact it may use is
 handed to it in the step prompt. Same for nudges, moderation, dashboard
 summaries and marketing copy. Flash-Lite output is $0.40/M against $2.50/M.
 
+**4. The catalogue was re-billed as fresh input on every single message.**
+The service catalogue, advert packages, support items and payment accounts are
+byte-identical for every user and every message — several thousand tokens of
+it — yet they were rebuilt into the user turn each time at the $0.30/M fresh
+rate. They now sit in the cached prefix at $0.03/M. Only what genuinely varies
+per user (locale glossary, knowledge-base hits for *this* question, balance,
+orders, pending deposits) still rides in the user turn.
+
+The cache key is a hash of that prefix, so it does double duty: change a price
+and the hash changes, which means a stale catalogue cannot be served from an
+old cache.
+
 ## Before and after, at ~30 messages/day
 
 | | before | after |
 |---|---|---|
 | thinking tokens | $0.68 | $0.00 |
-| cache storage | $0.48 | $0.12 |
+| cache storage | $0.48 | $0.14 |
 | voice pass (2nd call per message) | $0.20 | $0.01 |
-| fresh context input | $0.24 | $0.24 |
-| cached system prompt | $0.09 | $0.09 |
+| fresh context input | $0.24 | $0.05 |
+| cached system prompt | $0.09 | $0.11 |
 | reply tokens | $0.14 | $0.14 |
-| **7-day total** | **$1.82** | **$0.59** |
+| **7-day total** | **$1.82** | **$0.45** |
 
-A 67% cut, leaving ~4x headroom under $2.50/week — about 126 messages a day
-before the budget is in question. The model reconstructs $1.82 of the observed
+A 75% cut, leaving ~5.5x headroom under $2.50/week. The model reconstructs $1.82 of the observed
 $2.50; the rest is media turns (audio input is $1.00/M), idle-customer nudges,
 dashboard recommendations and retries, all of which the same changes reduce.
 
@@ -73,13 +84,12 @@ Two changes were made to it for *correctness*, not spend:
   makes a model waffle — and waffling is what thinking tokens are.
 - Rules 5b/5c, and 4f/4g, each said the same thing twice.
 
-**The per-message CONTEXT block is still sent fresh.** At ~3,800 tokens of
-catalogue, advert packages, payment details and account state, this is now the
-largest remaining line ($0.24/week) and the highest-value *next* lever: the
-catalogue and price blocks are identical for every user and every message, so
-moving them into the cached system instruction would bill them at $0.03/M
-instead of $0.30/M — worth roughly $0.15/week today, and more as volume grows.
-It is a structural change to the money path and was left for its own PR.
+**Conversation history was left alone.** 18 turns re-sent fresh on every
+message looks expensive and compounds with chat length, but the arithmetic says
+otherwise: a real WhatsApp conversation is around eight messages, so the
+average turn carries ~315 tokens of history — **$0.02 a week**. Capping it to
+four turns would save less than a cent and cost the assistant its memory of
+what the customer already told it, which rule 4 exists to protect.
 
 ## The controls
 
@@ -92,7 +102,8 @@ documented in `.env.example`.
 | `GEMINI_THINKING_BUDGET_TEXT` | `0` | thinking on plain-text calls |
 | `GEMINI_MODEL_LIGHT` | `gemini-2.5-flash-lite` | model for calls that decide nothing. Set equal to `GEMINI_MODEL` to disable the split |
 | `GEMINI_CACHE_TTL` | `900` | prompt-cache TTL — see finding 2 before raising it |
-| `GEMINI_DAILY_BUDGET_USD` | `0.35` | hard ceiling; ~$2.45/week |
+| `GEMINI_DAILY_BUDGET_USD` | `0.14` | hard ceiling; ~$0.98/week |
+| `GEMINI_CHAT_LIGHT` | `false` | run the main conversation call on Flash-Lite too. The last big lever and the only one touching the flow/money decision — see below |
 
 ### The ceiling is the part that actually guarantees the budget
 
@@ -118,3 +129,20 @@ The chat call is a grounded extract-and-decide task with a server-side
 is a prediction, not a measurement, and this repo has the tool to measure it.
 If flow accuracy drops, `GEMINI_THINKING_BUDGET=512` buys most of the reasoning
 back at a fifth of the old cost and still lands near $0.86 for seven days.
+
+## If you need it lower still
+
+The remaining $0.45 is mostly two irreducible things: the reply tokens
+themselves ($0.14) and holding the cache ($0.14). Below that you are trading
+quality for cents, so these are dials rather than defaults:
+
+| lever | saves | what it costs you |
+|---|---|---|
+| `GEMINI_CHAT_LIGHT=true` | ~$0.25/wk | the flow/money decision moves to Flash-Lite. **Eval first** — this is the call the whole prompt exists to protect |
+| `GEMINI_CACHE_SYSTEM_PROMPT=false` | ~$0.14/wk storage, **costs ~$0.86/wk** in fresh input | net loss at any volume above roughly one message an hour. Only sensible if the bot goes nearly idle |
+| `WHATSAPP_AI_MAX_SERVICES` below 150 | ~$0.01/wk per 10 services dropped | the model can only quote what it can see; rule 8 forbids it inventing the rest |
+| `WHATSAPP_MEDIA_AI=false` / `WHATSAPP_AUDIO_AI=false` | varies | audio input is $1.00/M, 3.3x text. But reading a screenshot off a customer who cannot copy a link is a sale saved |
+
+The honest summary: the defaults in this PR land near $0.45/week modelled, the
+ceiling makes $0.98 a guarantee, and `GEMINI_CHAT_LIGHT` is the only remaining
+lever big enough to notice.

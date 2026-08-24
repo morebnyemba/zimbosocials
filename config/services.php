@@ -345,8 +345,17 @@ return [
         // actually banked in ai_usage (thinking included). At the ceiling the
         // WhatsApp assistant stops calling the model and the router falls back
         // to its deterministic menu — degraded, but never a surprise bill.
-        // 0 = no ceiling. 0.35/day is ~$2.45 across 7 days.
-        'daily_budget_usd' => (float) env('GEMINI_DAILY_BUDGET_USD', 0.35),
+        // 0 = no ceiling. 0.14/day is ~$0.98 across 7 days.
+        'daily_budget_usd' => (float) env('GEMINI_DAILY_BUDGET_USD', 0.14),
+
+        // Run the MAIN conversation call on the light model too. This is the
+        // last big lever and the only one that touches the flow/money
+        // decision, so it is opt-in rather than a default: Flash-Lite output
+        // is $0.40/M against $2.50/M, which takes a week from roughly $0.45 to
+        // $0.20, but the decision quality is the thing this whole prompt
+        // exists to protect. Turn it on ONLY with a passing
+        // `php artisan whatsapp:ai-eval` behind it.
+        'chat_light' => (bool) env('GEMINI_CHAT_LIGHT', false),
     ],
 
 ];

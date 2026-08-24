@@ -100,6 +100,7 @@ class GeminiProvider
             system: $this->systemPrompt(),
             timeout: $timeout,
             media: $media,
+            light: (bool) config('services.gemini.chat_light', false),
         );
         if (! is_array($json) || empty($json['reply'])) {
             return null;
@@ -343,7 +344,27 @@ class GeminiProvider
         return $res['reply'] ?? null;
     }
 
+    /**
+     * The cached prefix: the instructions PLUS every grounding block that is
+     * the same for every user and every message.
+     *
+     * The catalogue, advert packages, support items and payment details used
+     * to be rebuilt into the user turn on each inbound message — several
+     * thousand tokens of byte-identical text, billed as FRESH input at
+     * $0.30/M every time. Here they are billed as cached input at $0.03/M
+     * instead. They are also the blocks the model must never improvise
+     * around, which makes the cache key doing double duty: change a price and
+     * the hash changes, so a stale catalogue can't be served from an old
+     * cache.
+     */
     private function systemPrompt(): string
+    {
+        $static = $this->staticContext();
+
+        return $this->instructions().($static !== '' ? "\n\n".$static : '');
+    }
+
+    private function instructions(): string
     {
         $site = self::siteName();
         $flows = FlowCatalog::prompt();
@@ -406,10 +427,10 @@ class GeminiProvider
             ."1. Be concise and warm. If something's unclear, prefer a smart assumption you confirm (\"I'll set up *1,000* — good?\") "
             ."over interrogating them; ask a clarifying question only when you genuinely can't proceed. Handle multi-part messages "
             ."gracefully — do the main thing, acknowledge the rest.\n"
-            ."2. Ground answers in the CONTEXT below; if you don't know, say so and suggest *support*.\n"
+            ."2. Ground answers in your CONTEXT — the CATALOGUE, prices and knowledge base you have been given; if you don't know, say so and suggest *support*.\n"
             ."3. SERVICE LISTS — GROUP BY PLATFORM, THEN BY TYPE. Never dump followers, likes and views together in one run of "
             ."numbers: the customer is shopping for ONE kind of thing. Use the platform as the heading and the service TYPE as a "
-            ."sub-heading, exactly as they are grouped in the CATALOGUE below, and restart numbering under each type:\n"
+            ."sub-heading, exactly as they are grouped in the CATALOGUE, and restart numbering under each type:\n"
             ."   *FACEBOOK*\n"
             ."   _Followers_\n"
             ."   1. *Service Name* — \$PRICE per 1,000 (minimum N)\n"
@@ -502,7 +523,7 @@ class GeminiProvider
                     ."say a payment will confirm automatically. Everyone transfers to one of our accounts, sends the screenshot "
                     ."here (or replies *done* and gives the name the money came from), and our team credits the wallet once "
                     ."they've matched it.\n"
-                    ."   GIVE THEM THE NUMBER when they're ready to pay — it's in WHERE TO PAY above. Making someone go through "
+                    ."   GIVE THEM THE NUMBER when they're ready to pay — it's in your WHERE TO PAY block. Making someone go through "
                     ."a menu to see a number you are holding is the kind of friction that loses a paid order. Send it in this "
                     ."shape, short and scannable, in their language:\n"
                     ."     Send *\$10* to:\n"
@@ -810,49 +831,20 @@ class GeminiProvider
      * run. The `type` column is often the useless default 'default', so fall
      * back to reading the name, which always says what it sells.
      */
-    private function serviceTypeLabel(Service $service): string
-    {
-        $haystack = mb_strtolower($service->name.' '.(string) $service->type);
-
-        // Ordered: the first match wins, so more specific terms come first.
-        $types = [
-            'Subscribers' => ['subscriber', 'subscribe'],
-            'Members' => ['member'],
-            'Followers' => ['follower', 'follow'],
-            'Likes' => ['like', 'reaction'],
-            'Views' => ['view', 'play', 'watch', 'impression'],
-            'Comments' => ['comment'],
-            'Shares' => ['share', 'repost', 'retweet'],
-            'Saves' => ['save', 'bookmark'],
-        ];
-
-        foreach ($types as $label => $needles) {
-            foreach ($needles as $needle) {
-                if (str_contains($haystack, $needle)) {
-                    return $label;
-                }
-            }
-        }
-
-        return 'Other';
-    }
-
-    private function buildContext(string $query, ?User $user): string
+    /**
+     * Grounding that is identical for every user and every message: the
+     * catalogue, the advert packages, the one-off support items and the
+     * accounts money may be sent to. Concatenated onto the instructions so it
+     * is served from the prompt cache rather than re-billed as fresh input on
+     * every turn.
+     *
+     * Anything that varies per user — their locale glossary, the knowledge
+     * base hits for THIS question, their balance and orders — stays in
+     * buildContext() and rides in the user turn, where it belongs.
+     */
+    private function staticContext(): string
     {
         $lines = [];
-
-        // Preferred language + approved-term glossary from the site's i18n.
-        $locale = $user?->locale ?: (string) config('app.locale', 'en');
-        if (! isset(LocaleGlossary::LANGUAGES[$locale])) {
-            $locale = 'en';
-        }
-        // Weak hint only — the language rule says mirror the user's actual
-        // message and default to English; this just breaks ties on very short
-        // or ambiguous input. Kept understated so the model doesn't over-weight it.
-        $lines[] = 'Saved language hint (use ONLY if the message itself is too short to tell): '.LocaleGlossary::languageName($locale);
-        if ($glossary = LocaleGlossary::promptBlock($locale)) {
-            $lines[] = $glossary;
-        }
 
         // Service catalogue — ALL active services, so the model can recommend or
         // quote any of them. A configurable cap (0 = unlimited) is available as a
@@ -960,6 +952,53 @@ class GeminiProvider
             }
             $lines[] = 'Quote these EXACTLY, digit for digit. NEVER invent, guess or adjust an account number or a dial code — money sent to a wrong number is gone.';
             $lines[] = '===';
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function serviceTypeLabel(Service $service): string
+    {
+        $haystack = mb_strtolower($service->name.' '.(string) $service->type);
+
+        // Ordered: the first match wins, so more specific terms come first.
+        $types = [
+            'Subscribers' => ['subscriber', 'subscribe'],
+            'Members' => ['member'],
+            'Followers' => ['follower', 'follow'],
+            'Likes' => ['like', 'reaction'],
+            'Views' => ['view', 'play', 'watch', 'impression'],
+            'Comments' => ['comment'],
+            'Shares' => ['share', 'repost', 'retweet'],
+            'Saves' => ['save', 'bookmark'],
+        ];
+
+        foreach ($types as $label => $needles) {
+            foreach ($needles as $needle) {
+                if (str_contains($haystack, $needle)) {
+                    return $label;
+                }
+            }
+        }
+
+        return 'Other';
+    }
+
+    private function buildContext(string $query, ?User $user): string
+    {
+        $lines = [];
+
+        // Preferred language + approved-term glossary from the site's i18n.
+        $locale = $user?->locale ?: (string) config('app.locale', 'en');
+        if (! isset(LocaleGlossary::LANGUAGES[$locale])) {
+            $locale = 'en';
+        }
+        // Weak hint only — the language rule says mirror the user's actual
+        // message and default to English; this just breaks ties on very short
+        // or ambiguous input. Kept understated so the model doesn't over-weight it.
+        $lines[] = 'Saved language hint (use ONLY if the message itself is too short to tell): '.LocaleGlossary::languageName($locale);
+        if ($glossary = LocaleGlossary::promptBlock($locale)) {
+            $lines[] = $glossary;
         }
 
         // Knowledge base — top matches for grounded answers (context only).
