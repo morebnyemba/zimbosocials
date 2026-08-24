@@ -30,7 +30,7 @@ class PortfolioCaptionGenerator
             return null;
         }
 
-        $result = $this->client->generateJson($this->buildPrompt($title, $platform, $tone), 0.5);
+        $result = $this->client->generateJson($this->buildPrompt($title, $platform, $tone), 0.5, light: true);
 
         if (! is_array($result)) {
             return null;

@@ -24,9 +24,9 @@ class GeminiClient
     /**
      * Send a prompt and return the model's raw text reply (or null on failure).
      */
-    public function generateText(string $prompt, float $temperature = 0.7, ?string $system = null, ?int $timeout = null): ?string
+    public function generateText(string $prompt, float $temperature = 0.7, ?string $system = null, ?int $timeout = null, bool $light = false): ?string
     {
-        return $this->send($prompt, $this->baseConfig($temperature, json: false), $system, $timeout);
+        return $this->send($prompt, $this->baseConfig($temperature, json: false), $system, $timeout, light: $light);
     }
 
     /**
@@ -40,7 +40,7 @@ class GeminiClient
      * @param  int|null  $timeout  Per-call timeout override (seconds).
      * @return array<mixed>|null
      */
-    public function generateJson(string $prompt, float $temperature = 0.2, ?array $schema = null, ?string $system = null, ?int $timeout = null, array $media = []): ?array
+    public function generateJson(string $prompt, float $temperature = 0.2, ?array $schema = null, ?string $system = null, ?int $timeout = null, array $media = [], bool $light = false): ?array
     {
         $config = array_merge($this->baseConfig($temperature, json: true), ['responseMimeType' => 'application/json']);
         if ($schema !== null) {
@@ -49,16 +49,29 @@ class GeminiClient
 
         // One retry: a transient malformed body is common enough to be worth
         // a single second attempt before giving up to the deterministic path.
+        //
+        // Hard-bounded at two BILLED requests. The schema-less degrade below
+        // used to sit inside this loop with its own send(), so a run of 400s
+        // could quietly cost four full prompt-sized requests for one inbound
+        // message. It now fires at most once, and consumes the retry it uses.
+        $sends = 0;
+
         foreach ([1, 2] as $attempt) {
-            $text = $this->send($prompt, $config, $system, $timeout, $media);
+            if ($sends >= 2) {
+                break;
+            }
+
+            $text = $this->send($prompt, $config, $system, $timeout, $media, $light);
+            $sends++;
 
             // Safety net: if the API rejects the schema itself (endpoint/version
             // quirks), degrade to a schema-less JSON call instead of turning
             // every AI request into a hard failure.
-            if (! is_string($text) && isset($config['responseSchema']) && $this->lastStatus === 400) {
+            if (! is_string($text) && isset($config['responseSchema']) && $this->lastStatus === 400 && $sends < 2) {
                 Log::warning('Gemini rejected responseSchema — retrying without it');
                 unset($config['responseSchema']);
-                $text = $this->send($prompt, $config, $system, $timeout, $media);
+                $text = $this->send($prompt, $config, $system, $timeout, $media, $light);
+                $sends++;
             }
 
             if (! is_string($text)) {
@@ -101,6 +114,18 @@ class GeminiClient
             $config['maxOutputTokens'] = $limit;
         }
 
+        // Thinking tokens bill at the OUTPUT rate and 2.5 Flash decides the
+        // budget itself unless told otherwise, so an unset thinkingConfig is
+        // not "the default" — it is an open tab. -1 asks for the dynamic
+        // behaviour explicitly; anything >= 0 is sent as a hard budget, with 0
+        // meaning no thinking at all. See config/services.php for the
+        // reasoning and for what to do if the eval regresses.
+        $budget = (int) config(
+            $json ? 'services.gemini.thinking_budget' : 'services.gemini.thinking_budget_text',
+            0
+        );
+        $config['thinkingConfig'] = ['thinkingBudget' => max(-1, $budget)];
+
         return $config;
     }
 
@@ -111,13 +136,20 @@ class GeminiClient
      *                                    Sent inline, so keep the total well under
      *                                    the ~20MB request cap — WhatsApp media is.
      */
-    private function send(string $prompt, array $generationConfig, ?string $system = null, ?int $timeout = null, array $media = []): ?string
+    private function send(string $prompt, array $generationConfig, ?string $system = null, ?int $timeout = null, array $media = [], bool $light = false): ?string
     {
         if (! $this->isConfigured()) {
             return null;
         }
 
-        $model = config('services.gemini.model', 'gemini-2.5-flash');
+        // Calls that only write prose from facts they were handed go to the
+        // cheap model; anything making a flow, money or grounding decision
+        // stays on the flagship. Falls back to the main model if no light
+        // model is configured, so the split can be switched off in one place.
+        $model = $light
+            ? (string) (config('services.gemini.model_light') ?: config('services.gemini.model', 'gemini-2.5-flash'))
+            : (string) config('services.gemini.model', 'gemini-2.5-flash');
+
         $baseUrl = rtrim((string) config('services.gemini.base_url'), '/');
         $endpoint = "{$baseUrl}/models/{$model}:generateContent";
 
@@ -216,6 +248,11 @@ class GeminiClient
      * Bank what this request cost. cachedContentTokenCount is the slice of the
      * prompt served from cache — if it stays at zero, the caching is not doing
      * anything and the dashboard will show that plainly.
+     *
+     * thoughtsTokenCount is reported SEPARATELY from candidatesTokenCount and
+     * is billed at the same output rate, so leaving it out did not make the
+     * thinking free — it only hid it. On the chat path it was the largest
+     * single component of a turn while the dashboard showed the reply alone.
      */
     private function recordUsage(mixed $body, string $model): void
     {
@@ -229,6 +266,7 @@ class GeminiClient
             (int) ($usage['promptTokenCount'] ?? 0),
             (int) ($usage['cachedContentTokenCount'] ?? 0),
             (int) ($usage['candidatesTokenCount'] ?? 0),
+            (int) ($usage['thoughtsTokenCount'] ?? 0),
         );
     }
 }

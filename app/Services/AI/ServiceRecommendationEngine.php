@@ -58,7 +58,7 @@ class ServiceRecommendationEngine
             return [];
         }
 
-        $result = $this->client->generateJson($this->buildPrompt($history, $catalog, $limit), 0.3);
+        $result = $this->client->generateJson($this->buildPrompt($history, $catalog, $limit), 0.3, light: true);
 
         if (! is_array($result)) {
             return [];

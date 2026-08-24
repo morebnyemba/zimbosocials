@@ -27,7 +27,7 @@ class SeoContentGenerator
         }
 
         $angle ??= 'general growth and engagement';
-        $result = $this->client->generateJson($this->buildCategoryPrompt($category, $services, $angle), 0.4);
+        $result = $this->client->generateJson($this->buildCategoryPrompt($category, $services, $angle), 0.4, light: true);
 
         return $this->normalizeContent($result);
     }
@@ -44,7 +44,7 @@ class SeoContentGenerator
             return null;
         }
 
-        $result = $this->client->generateJson($this->buildFaqPrompt($services, $count), 0.4);
+        $result = $this->client->generateJson($this->buildFaqPrompt($services, $count), 0.4, light: true);
 
         if (! is_array($result)) {
             return null;

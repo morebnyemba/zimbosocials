@@ -44,6 +44,6 @@ Raw source text (source of truth — do not change any values in here):
 Return ONLY the final formatted text, ready to paste directly into {$platform}. No explanations, no markdown code fences, no commentary.
 PROMPT;
 
-        return $this->client->generateText($prompt, 0.4);
+        return $this->client->generateText($prompt, 0.4, light: true);
     }
 }
