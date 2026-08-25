@@ -35,7 +35,7 @@ class MarketingCopyGenerator
             return null;
         }
 
-        $result = $this->client->generateJson($this->buildPrompt($brief, $channels, $tone), 0.4);
+        $result = $this->client->generateJson($this->buildPrompt($brief, $channels, $tone), 0.4, light: true);
 
         if (! is_array($result)) {
             return null;

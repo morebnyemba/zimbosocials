@@ -28,7 +28,7 @@ class AnalyticsSummarizer
             return null;
         }
 
-        $result = $this->client->generateText($this->buildPrompt($stats, $dailyRevenue, $ordersByStatus, $days), 0.3);
+        $result = $this->client->generateText($this->buildPrompt($stats, $dailyRevenue, $ordersByStatus, $days), 0.3, light: true);
 
         if (! is_string($result) || trim($result) === '') {
             return null;

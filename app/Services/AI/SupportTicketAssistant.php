@@ -29,7 +29,7 @@ class SupportTicketAssistant
 
         $tone ??= 'professional, empathetic, concise';
 
-        return $this->client->generateText($this->buildPrompt($ticket, $tone), 0.3);
+        return $this->client->generateText($this->buildPrompt($ticket, $tone), 0.3, light: true);
     }
 
     private function buildPrompt(Ticket $ticket, string $tone): string

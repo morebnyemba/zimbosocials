@@ -236,6 +236,15 @@ return [
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+
+        // Cheap model for the calls that don't need the flagship: the "one
+        // voice" fusion pass, re-engagement copy, moderation, dashboard
+        // summaries, SEO/marketing copy. Flash-Lite output is $0.40/M against
+        // Flash's $2.50/M — 6x cheaper on the half of the bill that is output
+        // tokens — and none of these calls make a flow/money decision. Set it
+        // equal to GEMINI_MODEL to turn the split off.
+        'model_light' => env('GEMINI_MODEL_LIGHT', 'gemini-2.5-flash-lite'),
+
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 30),
         // WhatsApp chat path only: the webhook processes inline, and Meta
@@ -252,14 +261,43 @@ return [
         // billed at roughly a quarter of fresh input.
         'rates' => [
             'input' => (float) env('GEMINI_RATE_INPUT', 0.30),
-            'cached_input' => (float) env('GEMINI_RATE_CACHED_INPUT', 0.075),
+            // Google's published cached-input rate for 2.5 Flash is $0.03/M,
+            // not the $0.075 this used to assume — the old number inflated the
+            // cached slice of the dashboard figure by 2.5x.
+            'cached_input' => (float) env('GEMINI_RATE_CACHED_INPUT', 0.03),
             'output' => (float) env('GEMINI_RATE_OUTPUT', 2.50),
+            // Explicit caching is billed for STORAGE as well as reads, at
+            // $1.00 per million cached tokens per hour, for the whole TTL
+            // whether or not a single message arrives. That charge lands on
+            // the Google bill but was invisible here, which is most of the gap
+            // between what this dashboard reported and what was actually paid.
+            'cache_storage_hour' => (float) env('GEMINI_RATE_CACHE_STORAGE_HOUR', 1.00),
+        ],
+
+        // Light-model rates, so a request routed to model_light isn't costed
+        // at the flagship's prices.
+        'light_rates' => [
+            'input' => (float) env('GEMINI_LIGHT_RATE_INPUT', 0.10),
+            'cached_input' => (float) env('GEMINI_LIGHT_RATE_CACHED_INPUT', 0.01),
+            'output' => (float) env('GEMINI_LIGHT_RATE_OUTPUT', 0.40),
         ],
 
         // Cache the system prompt with Gemini so it isn't re-billed as fresh
         // input on every message. See GeminiPromptCache.
         'cache_system_prompt' => (bool) env('GEMINI_CACHE_SYSTEM_PROMPT', true),
-        'cache_ttl_seconds' => (int) env('GEMINI_CACHE_TTL', 3600),
+
+        // TTL is a STORAGE BILL, not a free parking space. A ~14k-token system
+        // prompt held for an hour costs $0.014 whether one message arrives or
+        // a hundred; a cached read only saves $0.27 per million against fresh
+        // input, so the cache pays for itself at roughly 4+ messages per hour
+        // of TTL and LOSES money below that. At a handful of chats a day the
+        // old 3600s TTL was the single largest line on the bill.
+        //
+        // 900s covers the burst of one real conversation (people reply within
+        // minutes, not hours) at a quarter of the storage. If traffic grows to
+        // steady all-day volume, put this back up — the break-even moves with
+        // messages-per-hour, not with total messages.
+        'cache_ttl_seconds' => (int) env('GEMINI_CACHE_TTL', 900),
 
         // Both plain-text and JSON calls are UNCAPPED by default (0 = no
         // maxOutputTokens sent at all) — a fixed cap fights whatever length
@@ -278,6 +316,46 @@ return [
         // plain-text calls (nudges, dashboard summary, marketing copy, etc.).
         'max_output_tokens' => (int) env('GEMINI_MAX_OUTPUT_TOKENS', 0),
         'max_output_tokens_json' => (int) env('GEMINI_MAX_OUTPUT_TOKENS_JSON', 0),
+
+        // THINKING BUDGET — the biggest single lever on this bill.
+        //
+        // Gemini 2.5 Flash ships with thinking ON and dynamic (budget -1): it
+        // decides for itself how much to reason, up to 24,576 tokens, and
+        // every one of those is billed at the OUTPUT rate of $2.50/M. A
+        // 14k-token prompt of layered rules invites a lot of it. Measured
+        // against a ~260-token reply, thinking was around 60% of what a single
+        // chat turn cost — and it never showed up on the dashboard, because
+        // thoughtsTokenCount is reported separately from candidatesTokenCount
+        // and nothing here was reading it.
+        //
+        // 0 disables it. The chat call is a grounded extract-and-decide task
+        // with a server-side responseSchema, which is the shape that survives
+        // no-thinking best. RE-RUN `php artisan whatsapp:ai-eval` AFTER
+        // CHANGING THIS: if flow accuracy drops, 512 buys most of the
+        // reasoning back at a fifth of the old cost. -1 restores the previous
+        // dynamic behaviour.
+        'thinking_budget' => (int) env('GEMINI_THINKING_BUDGET', 0),
+
+        // Plain-text calls (voice fusion, nudges, copy, summaries). These are
+        // writing tasks with the facts already supplied — there is nothing to
+        // reason about.
+        'thinking_budget_text' => (int) env('GEMINI_THINKING_BUDGET_TEXT', 0),
+
+        // HARD SPEND CEILING, in USD per day, measured from the tokens
+        // actually banked in ai_usage (thinking included). At the ceiling the
+        // WhatsApp assistant stops calling the model and the router falls back
+        // to its deterministic menu — degraded, but never a surprise bill.
+        // 0 = no ceiling. 0.14/day is ~$0.98 across 7 days.
+        'daily_budget_usd' => (float) env('GEMINI_DAILY_BUDGET_USD', 0.14),
+
+        // Run the MAIN conversation call on the light model too. This is the
+        // last big lever and the only one that touches the flow/money
+        // decision, so it is opt-in rather than a default: Flash-Lite output
+        // is $0.40/M against $2.50/M, which takes a week from roughly $0.45 to
+        // $0.20, but the decision quality is the thing this whole prompt
+        // exists to protect. Turn it on ONLY with a passing
+        // `php artisan whatsapp:ai-eval` behind it.
+        'chat_light' => (bool) env('GEMINI_CHAT_LIGHT', false),
     ],
 
 ];

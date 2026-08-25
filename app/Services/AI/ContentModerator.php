@@ -57,7 +57,7 @@ class ContentModerator
             return null;
         }
 
-        $result = $this->client->generateJson($this->buildPrompt($content, $contentType), 0.2);
+        $result = $this->client->generateJson($this->buildPrompt($content, $contentType), 0.2, light: true);
 
         if (! is_array($result)) {
             return null;
