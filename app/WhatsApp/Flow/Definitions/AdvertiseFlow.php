@@ -87,10 +87,13 @@ class AdvertiseFlow extends AbstractFlow
             $i++;
         }
 
-        return FlowResult::step(
+        $result = FlowResult::step(
             "📣 *Sponsored adverts*\n\nWe run the campaign for you on Facebook & Instagram to put you in front of new customers.\n\nPick a package — from a quick 1-day test to a full month. 🎬 = we make you an AI video advert:",
             'pick_package'
         )->withList('Choose package', [['title' => 'Packages', 'rows' => $rows]], 'Advertise', 'Flat price — no hidden extras');
+        $this->attachImage($result, AdvertBooking::overviewImage());
+
+        return $result;
     }
 
     private function pickPackage(string $input, SessionContext $ctx): FlowResult
@@ -167,7 +170,7 @@ class AdvertiseFlow extends AbstractFlow
                 ['id' => 'fl_deposit', 'title' => '💰 Deposit'],
                 ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
             ]);
-            $this->attachPackageImage($result, $pkg);
+            $this->attachImage($result, $pkg['image'] ?? null);
 
             return $result;
         }
@@ -176,7 +179,7 @@ class AdvertiseFlow extends AbstractFlow
             ['id' => 'fs:yes', 'title' => '✅ Pay & book'],
             ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
         ]);
-        $this->attachPackageImage($result, $pkg);
+        $this->attachImage($result, $pkg['image'] ?? null);
 
         return $result;
     }
@@ -301,14 +304,13 @@ class AdvertiseFlow extends AbstractFlow
     }
 
     /**
-     * Attach the package's branded plans-card graphic, if one is configured
-     * (config/adverts.php 'image'). Not every package is guaranteed one, so
-     * this stays silent rather than sending a broken/missing image.
+     * Attach a branded graphic (public/-relative path) to a step, if one is
+     * actually configured and present. Missing/unset stays silent rather than
+     * sending a broken image — a step's text always stands on its own.
      */
-    private function attachPackageImage(FlowResult $result, array $pkg): void
+    private function attachImage(FlowResult $result, ?string $path): void
     {
-        $path = (string) ($pkg['image'] ?? '');
-        if ($path === '' || ! is_file(public_path($path))) {
+        if ($path === null || $path === '' || ! is_file(public_path($path))) {
             return;
         }
 

@@ -95,4 +95,15 @@ return [
     ],
     'repriced_at' => '2026-09-15 21:45:00',
     'reprice_grace_days' => 7,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Plans overview image
+    |--------------------------------------------------------------------------
+    | The combined graphic showing all 4 packages side by side — sent by
+    | AdvertiseFlow::packageMenu() BEFORE the picker, so the customer sees the
+    | full lineup before choosing. Distinct from each package's own 'image'
+    | above, which is sent AFTER they pick, for that package specifically.
+    */
+    'overview_image' => 'images/adverts/plans-overview.png',
 ];

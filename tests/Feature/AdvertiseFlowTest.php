@@ -102,6 +102,20 @@ class AdvertiseFlowTest extends TestCase
         $this->assertStringContainsString('80.00', (string) $res->reply); // 1 month = $80 flat
     }
 
+    /** The package picker itself leads with the combined all-packages overview graphic. */
+    public function test_the_package_menu_sends_the_overview_image(): void
+    {
+        $user = User::factory()->create(['balance' => 100]);
+        $ctx = new SessionContext(self::PHONE);
+        $ctx->set('_user_id', $user->id);
+
+        $res = app(FlowEngine::class)->start($ctx, 'advertise');
+
+        $this->assertNotNull($res->media);
+        $this->assertSame('image', $res->media['kind']);
+        $this->assertStringContainsString('images/adverts/plans-overview.png', $res->media['source']);
+    }
+
     /** Picking a package sends that package's own branded plans-card image. */
     public function test_picking_a_package_sends_its_branded_image(): void
     {

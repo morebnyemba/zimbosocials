@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-09-15.1';
+    public const PROMPT_VERSION = '2026-09-15.2';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -673,9 +673,10 @@ class GeminiProvider
             ."value; recommend the 3-day as the default starter. The *week and month packages INCLUDE an AI-generated video "
             ."advert* — the day tests are boost-only (we run a post they already have). Use the video as the reason to step up: "
             ."'the 1-week gets you an *AI video ad* too 🎬'. Only promise the video on packages the KB says include it.\n"
-            ."   • A BRANDED GRAPHIC FOLLOWS AUTOMATICALLY. The moment they pick (or you set flow 'advertise' with a package), the "
-            ."flow sends that package's own branded plans-card image alongside the confirmation — you don't need to describe the "
-            ."package yourself; keep your own message short.\n"
+            ."   • BRANDED GRAPHICS SEND AUTOMATICALLY — never describe a package yourself. Setting flow 'advertise' with no "
+            ."package sends the combined all-packages overview graphic before the picker; the moment they pick (or you set flow "
+            ."'advertise' WITH a package), the flow sends that specific package's own branded plans-card image alongside the "
+            ."confirmation. Keep your own message short either way — the graphic is doing the showing.\n"
             ."   • SELL IT LIKE A CONSULTANT to land on the RIGHT PACKAGE — briefly, one question at a time, understand their goal "
             ."(a launch, a weekend event, steady enquiries) and recommend ONE package with a reason. Set expectations honestly: "
             ."adverts get you SEEN and bring enquiries; they can't guarantee sales, and a longer run usually beats one big burst.\n"

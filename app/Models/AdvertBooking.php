@@ -40,6 +40,14 @@ class AdvertBooking extends Model
         return self::packages()[$key] ?? null;
     }
 
+    /** The combined "all packages" graphic shown before the picker, or null if unset. */
+    public static function overviewImage(): ?string
+    {
+        $path = (string) config('adverts.overview_image', '');
+
+        return $path !== '' ? $path : null;
+    }
+
     /**
      * The price for a package, honoring a temporary grandfather window: a
      * contact who already existed before a reprice keeps seeing the old
