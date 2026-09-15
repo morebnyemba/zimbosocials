@@ -98,12 +98,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Plans overview image
+    | Intro image
     |--------------------------------------------------------------------------
-    | The combined graphic showing all 4 packages side by side — sent by
-    | AdvertiseFlow::packageMenu() BEFORE the picker, so the customer sees the
-    | full lineup before choosing. Distinct from each package's own 'image'
-    | above, which is sent AFTER they pick, for that package specifically.
+    | Sent by AdvertiseFlow::packageMenu() BEFORE the picker — the "why
+    | ZimboSocials" before/after comparison (reach, enquiries, actual
+    | customers with vs without us), condensed pricing strip included. Makes
+    | the case for advertising with us at all, before the customer even looks
+    | at package options. Distinct from each package's own 'image' above,
+    | which is sent AFTER they pick, for that specific package.
+    |
+    | images/adverts/plans-detail.png is the earlier "all 4 packages, full
+    | feature lists" sheet — kept as an asset but no longer used here; swap it
+    | back in if the value-comparison hook doesn't perform as well.
     */
-    'overview_image' => 'images/adverts/plans-overview.png',
+    'overview_image' => 'images/adverts/why-zimbosocials.png',
 ];

@@ -40,7 +40,7 @@ class AdvertBooking extends Model
         return self::packages()[$key] ?? null;
     }
 
-    /** The combined "all packages" graphic shown before the picker, or null if unset. */
+    /** The "why advertise with us" intro graphic shown before the picker, or null if unset. */
     public static function overviewImage(): ?string
     {
         $path = (string) config('adverts.overview_image', '');
