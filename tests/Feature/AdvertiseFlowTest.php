@@ -99,7 +99,7 @@ class AdvertiseFlowTest extends TestCase
 
         // Everything gathered → straight to the money gate.
         $this->assertSame('confirm', $ctx->state);
-        $this->assertStringContainsString('65.00', (string) $res->reply); // 1 month = $65 flat
+        $this->assertStringContainsString('80.00', (string) $res->reply); // 1 month = $80 flat
     }
 
     /** The package picker sends the plans-card graphic as its own image message. */
@@ -151,12 +151,18 @@ class AdvertiseFlowTest extends TestCase
         $this->assertStringContainsString('1 day — $6.00', $titles);
         $this->assertStringContainsString('3 days — $14.00', $titles);
         $this->assertStringContainsString('1 week — $25.00', $titles);
-        $this->assertStringContainsString('1 month — $65.00', $titles);
+        $this->assertStringContainsString('1 month — $80.00', $titles);
     }
 
     public function test_an_existing_contact_still_sees_the_old_price_during_the_grace_window(): void
     {
-        config(['adverts.repriced_at' => now()->subDay()->toDateTimeString(), 'adverts.reprice_grace_days' => 7]);
+        // Own fixture price, independent of the real previous_packages default
+        // (which now reflects the actual $65->$80 month1 reprice history).
+        config([
+            'adverts.repriced_at' => now()->subDay()->toDateTimeString(),
+            'adverts.reprice_grace_days' => 7,
+            'adverts.previous_packages.week1.price' => 20.00,
+        ]);
 
         $user = User::factory()->create(['balance' => 100]);
         // Existed BEFORE the reprice — grandfathered.
@@ -199,7 +205,11 @@ class AdvertiseFlowTest extends TestCase
     {
         // '_ad_quoted_price' is '_'-prefixed, so a detour that resets the flow
         // (e.g. to deposit funds) must not lose the price already locked in.
-        config(['adverts.repriced_at' => now()->subDay()->toDateTimeString(), 'adverts.reprice_grace_days' => 7]);
+        config([
+            'adverts.repriced_at' => now()->subDay()->toDateTimeString(),
+            'adverts.reprice_grace_days' => 7,
+            'adverts.previous_packages.week1.price' => 20.00,
+        ]);
 
         $user = User::factory()->create(['balance' => 0]);
         $account = \App\Models\WhatsAppAccount::create([

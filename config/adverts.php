@@ -23,8 +23,9 @@ return [
     */
     'packages' => [
         // Repriced 2026-08-01 back down to a $25/week anchor (was briefly $30).
-        // Per-day rate still falls as the duration grows: $6/day, ~$4.67/day,
-        // $3.57/day, ~$2.17/day. Benefits still escalate with price, not just
+        // month1 repriced again 2026-09-15 ($65 → $80) to match the plans-card
+        // graphics. Per-day rate falls as the duration grows: $6/day, ~$4.67/day,
+        // $3.57/day, ~$2.67/day. Benefits still escalate with price, not just
         // reach — see each blurb.
         //
         // 'week2' (2 weeks / $42) was removed 2026-09 — no plans-card image
@@ -55,7 +56,7 @@ return [
         'month1' => [
             'label' => '1 month',
             'days' => 30,
-            'price' => 65.00,
+            'price' => 80.00,
             'includes_video' => true,
             'blurb' => 'Maximum reach — custom video advert (pick from 2 concepts), priority setup, a progress update partway through, and a wrap-up performance summary. Best for launches and busy seasons.',
         ],
@@ -71,17 +72,16 @@ return [
     | brand new contact created after 'repriced_at' always sees the current
     | price above. See AdvertBooking::priceFor().
     |
-    | These are the ORIGINAL prices that were actually live in production
-    | ($20/week) — not the $25/week intermediate, which was only ever a local
-    | commit and never reached a real customer, so there's nothing to
-    | grandfather from it.
+    | These are the prices in effect immediately before the CURRENT
+    | 'repriced_at' — day1/day3/week1 are unchanged (grandfathering to the
+    | same price is a harmless no-op) since only month1 moved this round.
     */
     'previous_packages' => [
-        'day1' => ['price' => 5.00],
-        'day3' => ['price' => 10.00],
-        'week1' => ['price' => 20.00],
-        'month1' => ['price' => 60.00],
+        'day1' => ['price' => 6.00],
+        'day3' => ['price' => 14.00],
+        'week1' => ['price' => 25.00],
+        'month1' => ['price' => 65.00],
     ],
-    'repriced_at' => '2026-08-01 20:00:00',
+    'repriced_at' => '2026-09-15 21:45:00',
     'reprice_grace_days' => 7,
 ];
