@@ -27,7 +27,7 @@ class GeminiProvider
      * Bumped on every behavioural prompt change; stamped into logged decisions
      * so accuracy can be compared across versions (see whatsapp:ai-eval).
      */
-    public const PROMPT_VERSION = '2026-09-15.2';
+    public const PROMPT_VERSION = '2026-09-15.3';
 
     public function __construct(
         private readonly GeminiClient $client,
@@ -283,6 +283,7 @@ class GeminiProvider
     public static function responseSchema(): array
     {
         $flows = array_merge(array_keys(FlowCatalog::all()), ['handoff', 'none']);
+        $images = array_merge(array_keys(\App\Models\AdvertBooking::imageLibrary()), ['none']);
 
         return [
             'type' => 'OBJECT',
@@ -319,12 +320,17 @@ class GeminiProvider
                         // see going wrong. 'handoff' stops the conversation; this
                         // just raises a flag while the assistant keeps helping.
                         'notify_admin' => ['type' => 'STRING', 'nullable' => true],
+                        // A branded advert image to attach to THIS reply, picked
+                        // BY NAME — the model can't see or judge these images, it
+                        // only knows the names and what each one is for (see the
+                        // prompt). Works standalone, with no flow at all.
+                        'send_image' => ['type' => 'STRING', 'enum' => $images, 'nullable' => true],
                     ],
                     'propertyOrdering' => [
                         'service_id', 'platform', 'service', 'link', 'quantity',
                         'amount', 'method', 'phone', 'order_id', 'ticket_id',
                         'email', 'name', 'subject',
-                        'package', 'weeks', 'promoting', 'audience', 'notify_admin',
+                        'package', 'weeks', 'promoting', 'audience', 'notify_admin', 'send_image',
                     ],
                 ],
             ],
@@ -391,7 +397,9 @@ class GeminiProvider
             ."- LEAD WITH SPONSORED ADVERTS. On first contact, and whenever someone's goal is vague or general ('grow my "
             ."business', 'help me get customers', 'promote my page', 'I don't know where to start', 'what do you offer'), your "
             ."default pitch is the paid advert campaigns — not a followers/likes/views package. Adverts are what a new "
-            ."conversation should open with.\n"
+            ."conversation should open with. Attach flow_data.send_image = 'why_zimbosocials' to that opening greeting (see "
+            ."YOU CAN ALSO SEND ONE OF THESE IMAGES YOURSELF, further down) so the case for advertising with us lands "
+            ."visually, not just in words.\n"
             ."- NEVER PROACTIVELY PITCH FOLLOWERS, LIKES, VIEWS OR SUBSCRIBERS. Do not bring up buying followers/likes/views, "
             ."mention them as an add-on, or recommend 'build followers first, then advertise' unless the CUSTOMER raises it "
             ."themselves — by naming the service ('I want followers', 'how much for likes', 'grow my TikTok'), or by asking to "
@@ -673,11 +681,23 @@ class GeminiProvider
             ."value; recommend the 3-day as the default starter. The *week and month packages INCLUDE an AI-generated video "
             ."advert* — the day tests are boost-only (we run a post they already have). Use the video as the reason to step up: "
             ."'the 1-week gets you an *AI video ad* too 🎬'. Only promise the video on packages the KB says include it.\n"
-            ."   • BRANDED GRAPHICS SEND AUTOMATICALLY — never describe a package yourself. Setting flow 'advertise' with no "
-            ."package sends a graphic making the case for advertising with us at all (real reach/enquiries/customers, with vs "
-            ."without) before the picker; the moment they pick (or you set flow 'advertise' WITH a package), the flow sends that "
-            ."specific package's own branded plans-card image alongside the confirmation. Keep your own message short either "
-            ."way — the graphic is doing the showing.\n"
+            ."   • THE BOOKING FLOW SENDS ITS OWN GRAPHICS AUTOMATICALLY — never describe a package yourself once you're there. "
+            ."Setting flow 'advertise' with no package sends the 'why_zimbosocials' value-comparison graphic before the picker; "
+            ."the moment they pick (or you set flow 'advertise' WITH a package), the flow sends that specific package's own "
+            ."branded plans-card image alongside the confirmation.\n"
+            ."   • YOU CAN ALSO SEND ONE OF THESE IMAGES YOURSELF, ANY TIME, WITH NO FLOW AT ALL — set flow_data.send_image to "
+            ."one of these exact names (never trigger 'advertise' just to show a picture):\n"
+            ."     - why_zimbosocials: the before/after value comparison (reach, enquiries, real customers, with vs without "
+            ."us). Your best opener when FIRST raising adverts, greeting someone about growing their business, or making the "
+            ."case for advertising at all — including on first contact.\n"
+            ."     - plans_detail: all 4 packages side by side with full feature checklists. Use when someone wants to see "
+            ."everything at once before choosing, or asks to compare plans in detail.\n"
+            ."     - day1 / day3 / week1 / month1: that ONE package's own branded flyer. Use when you're discussing or "
+            ."quoting that specific package in chat — even before they're ready to book it.\n"
+            ."   YOU CANNOT SEE THESE IMAGES — pick strictly BY NAME, based on what the moment calls for; never claim to "
+            ."describe, read or judge their contents beyond what this prompt already tells you. Don't set both send_image AND "
+            ."flow 'advertise' in the same turn — once the flow starts, it sends its own image for that step, and sending "
+            ."both would double up. Keep your own reply short either way — the graphic is doing the showing.\n"
             ."   • SELL IT LIKE A CONSULTANT to land on the RIGHT PACKAGE — briefly, one question at a time, understand their goal "
             ."(a launch, a weekend event, steady enquiries) and recommend ONE package with a reason. Set expectations honestly: "
             ."adverts get you SEEN and bring enquiries; they can't guarantee sales, and a longer run usually beats one big burst.\n"

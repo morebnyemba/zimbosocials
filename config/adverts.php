@@ -108,8 +108,22 @@ return [
     | which is sent AFTER they pick, for that specific package.
     |
     | images/adverts/plans-detail.png is the earlier "all 4 packages, full
-    | feature lists" sheet — kept as an asset but no longer used here; swap it
-    | back in if the value-comparison hook doesn't perform as well.
+    | feature lists" sheet — no longer used as the flow's own intro, but still
+    | reachable by name (see 'plans_detail_image' below) since the AI can send
+    | it directly when a customer wants the full feature breakdown.
     */
     'overview_image' => 'images/adverts/why-zimbosocials.png',
+    'plans_detail_image' => 'images/adverts/plans-detail.png',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Named image library (for the AI to attach directly, outside any flow)
+    |--------------------------------------------------------------------------
+    | AdvertBooking::imageLibrary() builds the full name => path map the AI's
+    | flow_data.send_image enum is generated from (see GeminiProvider::
+    | responseSchema()) — day1/day3/week1/month1 from each package's own
+    | 'image' above, plus 'why_zimbosocials' and 'plans_detail' from the two
+    | keys above. The AI picks by NAME ONLY (it never analyses image pixels)
+    | and MessageRouter resolves the name to a path when sending.
+    */
 ];

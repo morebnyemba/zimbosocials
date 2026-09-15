@@ -619,6 +619,12 @@ class MessageRouter
         $flow = $r['flow'] ?? null;
         $flowData = array_filter((array) ($r['flow_data'] ?? []), fn ($v) => $v !== null && $v !== '');
 
+        // The model picked a branded image BY NAME (never by looking at pixels —
+        // it can't). Pulled out of flow_data now so it never leaks into a flow's
+        // '_prefill_*' context if the model also happens to set a flow this turn.
+        $sendImage = $flowData['send_image'] ?? null;
+        unset($flowData['send_image']);
+
         // Only a *different* flow or *new data* warrants a (re)start — the
         // model sometimes re-names the active flow for a plain side answer.
         $willStartFlow = $flow !== null && $flow !== 'handoff'
@@ -651,6 +657,19 @@ class MessageRouter
             $rescued = $this->breakLoop($ctx, $account, $flowData);
             if ($rescued) {
                 return true;
+            }
+        }
+
+        // Send the picked image ahead of the text reply — same ordering as a
+        // flow step's own media. Skipped when a flow is about to start: the
+        // flow (e.g. AdvertiseFlow) sends its own image for that moment, and
+        // sending both would double up.
+        if (! $willStartFlow && $sendImage && $sendImage !== 'none') {
+            $path = \App\Models\AdvertBooking::imagePath((string) $sendImage);
+            if ($path !== null && is_file(public_path($path))) {
+                $this->responder->sendMedia($ctx->phone, 'image', asset($path), null, [
+                    'handled_by' => 'ai', 'ai_used' => true, 'intent' => 'send_image',
+                ]);
             }
         }
 
