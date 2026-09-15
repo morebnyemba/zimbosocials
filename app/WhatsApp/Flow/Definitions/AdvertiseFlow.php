@@ -90,8 +90,7 @@ class AdvertiseFlow extends AbstractFlow
         return FlowResult::step(
             "📣 *Sponsored adverts*\n\nWe run the campaign for you on Facebook & Instagram to put you in front of new customers.\n\nPick a package — from a quick 1-day test to a full month. 🎬 = we make you an AI video advert:",
             'pick_package'
-        )->withMedia('image', route('advertise.plans-image'))
-            ->withList('Choose package', [['title' => 'Packages', 'rows' => $rows]], 'Advertise', 'Flat price — no hidden extras');
+        )->withList('Choose package', [['title' => 'Packages', 'rows' => $rows]], 'Advertise', 'Flat price — no hidden extras');
     }
 
     private function pickPackage(string $input, SessionContext $ctx): FlowResult
@@ -160,7 +159,7 @@ class AdvertiseFlow extends AbstractFlow
             // Hand the exact shortfall to the deposit flow, same as an order.
             $ctx->set('_prefill_amount', $short);
 
-            return FlowResult::step(
+            $result = FlowResult::step(
                 $summary."⚠️ You're a bit short — you need *".$this->money($short, $cur)."* more.\n\n"
                 .'Top up first (I\'ve got the amount ready 👍), then confirm your advert.',
                 'confirm'
@@ -168,12 +167,18 @@ class AdvertiseFlow extends AbstractFlow
                 ['id' => 'fl_deposit', 'title' => '💰 Deposit'],
                 ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
             ]);
+            $this->attachPackageImage($result, $pkg);
+
+            return $result;
         }
 
-        return FlowResult::step($summary.'Book & pay now?', 'confirm')->withButtons([
+        $result = FlowResult::step($summary.'Book & pay now?', 'confirm')->withButtons([
             ['id' => 'fs:yes', 'title' => '✅ Pay & book'],
             ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
         ]);
+        $this->attachPackageImage($result, $pkg);
+
+        return $result;
     }
 
     private function confirm(string $input, SessionContext $ctx): FlowResult
@@ -293,5 +298,20 @@ class AdvertiseFlow extends AbstractFlow
     private function currency(SessionContext $ctx): string
     {
         return $this->user($ctx)?->currency ?? 'USD';
+    }
+
+    /**
+     * Attach the package's branded plans-card graphic, if one is configured
+     * (config/adverts.php 'image'). Not every package is guaranteed one, so
+     * this stays silent rather than sending a broken/missing image.
+     */
+    private function attachPackageImage(FlowResult $result, array $pkg): void
+    {
+        $path = (string) ($pkg['image'] ?? '');
+        if ($path === '' || ! is_file(public_path($path))) {
+            return;
+        }
+
+        $result->withMedia('image', asset($path));
     }
 }

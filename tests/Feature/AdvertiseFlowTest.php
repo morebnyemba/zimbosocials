@@ -102,18 +102,33 @@ class AdvertiseFlowTest extends TestCase
         $this->assertStringContainsString('80.00', (string) $res->reply); // 1 month = $80 flat
     }
 
-    /** The package picker sends the plans-card graphic as its own image message. */
-    public function test_the_package_menu_sends_the_plans_image(): void
+    /** Picking a package sends that package's own branded plans-card image. */
+    public function test_picking_a_package_sends_its_branded_image(): void
     {
         $user = User::factory()->create(['balance' => 100]);
         $ctx = new SessionContext(self::PHONE);
         $ctx->set('_user_id', $user->id);
 
-        $res = app(FlowEngine::class)->start($ctx, 'advertise');
+        app(FlowEngine::class)->start($ctx, 'advertise');
+        $res = app(FlowEngine::class)->advance($ctx, '3'); // 1 week
 
         $this->assertNotNull($res->media);
         $this->assertSame('image', $res->media['kind']);
-        $this->assertStringContainsString('advertising-plans.png', $res->media['source']);
+        $this->assertStringContainsString('images/adverts/week1.jpg', $res->media['source']);
+    }
+
+    /** The AI can prefill a package straight to confirm — the image still attaches. */
+    public function test_ai_prefilled_package_also_sends_its_branded_image(): void
+    {
+        $user = User::factory()->create(['balance' => 100]);
+        $ctx = new SessionContext(self::PHONE);
+        $ctx->set('_user_id', $user->id);
+        $ctx->set('_prefill_package', 'month1');
+
+        $res = app(FlowEngine::class)->start($ctx, 'advertise');
+
+        $this->assertNotNull($res->media);
+        $this->assertStringContainsString('images/adverts/month1.jpg', $res->media['source']);
     }
 
     public function test_video_packages_are_flagged_and_boost_only_ones_are_not(): void

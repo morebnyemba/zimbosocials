@@ -20,6 +20,13 @@ return [
     | Keep the "Sponsored adverts" knowledge-base entry in step with these
     | prices/inclusions — the assistant quotes the KB when it explains packages.
     | 'recommended' marks the default the AI should nudge people toward.
+    |
+    | 'image' => the branded plans-card graphic for that package, relative to
+    | public/ (served as a plain static file, then sent as a WhatsApp image
+    | message from AdvertiseFlow::confirmPrompt() once the customer has
+    | picked). Converted to JPEG from the WebP they were designed in — Meta's
+    | Cloud API only accepts image/jpeg and image/png for image messages, and
+    | WebP isn't one of them.
     */
     'packages' => [
         // Repriced 2026-08-01 back down to a $25/week anchor (was briefly $30).
@@ -37,6 +44,7 @@ return [
             'price' => 6.00,
             'includes_video' => false,
             'blurb' => 'A quick test run — we boost a post you already have.',
+            'image' => 'images/adverts/day1.jpg',
         ],
         'day3' => [
             'label' => '3 days',
@@ -45,6 +53,7 @@ return [
             'includes_video' => true,
             'blurb' => 'Long enough to see real enquiries — includes a custom AI video advert too. Most people start here.',
             'recommended' => true,
+            'image' => 'images/adverts/day3.jpg',
         ],
         'week1' => [
             'label' => '1 week',
@@ -52,6 +61,7 @@ return [
             'price' => 25.00,
             'includes_video' => true,
             'blurb' => 'A full week of reach — custom video advert, plus a progress update from our team partway through.',
+            'image' => 'images/adverts/week1.jpg',
         ],
         'month1' => [
             'label' => '1 month',
@@ -59,6 +69,7 @@ return [
             'price' => 80.00,
             'includes_video' => true,
             'blurb' => 'Maximum reach — custom video advert (pick from 2 concepts), priority setup, a progress update partway through, and a wrap-up performance summary. Best for launches and busy seasons.',
+            'image' => 'images/adverts/month1.jpg',
         ],
     ],
 
