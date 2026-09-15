@@ -681,7 +681,7 @@ class GeminiProvider
             ."adverts get you SEEN and bring enquiries; they can't guarantee sales, and a longer run usually beats one big burst.\n"
             ."   • THE BOOKING ONLY TAKES PAYMENT. You do NOT need to collect what they're promoting, their page link, or the target "
             ."areas — our team gathers all of that AFTER they pay. So once they've chosen a package, take them straight to payment: "
-            ."set flow 'advertise' with just flow_data.package (day1|day3|week1|week2|month1). Don't interrogate them for advert "
+            ."set flow 'advertise' with just flow_data.package (day1|day3|week1|month1). Don't interrogate them for advert "
             ."details first. A customer who says 'I want the 1-week one' or 'let's do it' goes straight into 'advertise'. Never claim "
             ."the advert is booked or running yourself — the flow asks them to confirm and pay, and tells them the team will follow "
             ."up for details.\n"

@@ -24,8 +24,12 @@ return [
     'packages' => [
         // Repriced 2026-08-01 back down to a $25/week anchor (was briefly $30).
         // Per-day rate still falls as the duration grows: $6/day, ~$4.67/day,
-        // $3.57/day, $3/day, ~$2.17/day. Benefits still escalate with price,
-        // not just reach — see each blurb.
+        // $3.57/day, ~$2.17/day. Benefits still escalate with price, not just
+        // reach — see each blurb.
+        //
+        // 'week2' (2 weeks / $42) was removed 2026-09 — no plans-card image
+        // was made for it. Re-add here (and in previous_packages below, and
+        // an image) if a two-week tier comes back.
         'day1' => [
             'label' => '1 day',
             'days' => 1,
@@ -47,13 +51,6 @@ return [
             'price' => 25.00,
             'includes_video' => true,
             'blurb' => 'A full week of reach — custom video advert, plus a progress update from our team partway through.',
-        ],
-        'week2' => [
-            'label' => '2 weeks',
-            'days' => 14,
-            'price' => 42.00,
-            'includes_video' => true,
-            'blurb' => 'Sustained presence — custom video advert (pick from 2 concepts), a progress update partway through, and better value per day.',
         ],
         'month1' => [
             'label' => '1 month',
@@ -83,7 +80,6 @@ return [
         'day1' => ['price' => 5.00],
         'day3' => ['price' => 10.00],
         'week1' => ['price' => 20.00],
-        'week2' => ['price' => 35.00],
         'month1' => ['price' => 60.00],
     ],
     'repriced_at' => '2026-08-01 20:00:00',
