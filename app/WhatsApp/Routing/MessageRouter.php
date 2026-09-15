@@ -1068,6 +1068,19 @@ class MessageRouter
             }
         }
 
+        // Media rides ahead of the step's text as its own WhatsApp message —
+        // an interactive list/buttons message can't carry inline media, so
+        // this is never merged with the branches below, only sequenced before.
+        if ($res->media !== null) {
+            $this->responder->sendMedia(
+                $ctx->phone,
+                $res->media['kind'],
+                $res->media['source'],
+                $res->media['caption'] ?? null,
+                $meta,
+            );
+        }
+
         if ($res->buttons !== null && $body !== null) {
             $this->responder->sendButtons($ctx->phone, $body, $res->buttons, $meta);
         } elseif ($res->list !== null) {

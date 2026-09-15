@@ -90,7 +90,8 @@ class AdvertiseFlow extends AbstractFlow
         return FlowResult::step(
             "📣 *Sponsored adverts*\n\nWe run the campaign for you on Facebook & Instagram to put you in front of new customers.\n\nPick a package — from a quick 1-day test to a full month. 🎬 = we make you an AI video advert:",
             'pick_package'
-        )->withList('Choose package', [['title' => 'Packages', 'rows' => $rows]], 'Advertise', 'Flat price — no hidden extras');
+        )->withMedia('image', route('advertise.plans-image'))
+            ->withList('Choose package', [['title' => 'Packages', 'rows' => $rows]], 'Advertise', 'Flat price — no hidden extras');
     }
 
     private function pickPackage(string $input, SessionContext $ctx): FlowResult

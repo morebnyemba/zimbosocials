@@ -81,6 +81,11 @@ Route::middleware('cache.headers:public;max_age=300;etag')->group(function () {
 // Public marketer portfolio
 Route::get('/marketers/{user}', [PortfolioController::class, 'show'])->name('portfolio.show');
 
+// Sponsored-advert plans card, rendered as a PNG — public because WhatsApp's
+// servers fetch it directly when the assistant sends it as an image message.
+Route::get('/assets/advertising-plans.png', [\App\Http\Controllers\AdvertPlanImageController::class, 'show'])
+    ->name('advertise.plans-image');
+
 // One-tap login link sent over WhatsApp (see WebLoginFlow) — deliberately
 // outside the 'guest' group since it must also work for someone already
 // signed in on this browser (it just switches identity).
