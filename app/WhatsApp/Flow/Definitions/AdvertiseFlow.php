@@ -87,10 +87,13 @@ class AdvertiseFlow extends AbstractFlow
             $i++;
         }
 
-        return FlowResult::step(
+        $result = FlowResult::step(
             "📣 *Sponsored adverts*\n\nWe run the campaign for you on Facebook & Instagram to put you in front of new customers.\n\nPick a package — from a quick 1-day test to a full month. 🎬 = we make you an AI video advert:",
             'pick_package'
         )->withList('Choose package', [['title' => 'Packages', 'rows' => $rows]], 'Advertise', 'Flat price — no hidden extras');
+        $this->attachImage($result, AdvertBooking::overviewImage());
+
+        return $result;
     }
 
     private function pickPackage(string $input, SessionContext $ctx): FlowResult
@@ -159,7 +162,7 @@ class AdvertiseFlow extends AbstractFlow
             // Hand the exact shortfall to the deposit flow, same as an order.
             $ctx->set('_prefill_amount', $short);
 
-            return FlowResult::step(
+            $result = FlowResult::step(
                 $summary."⚠️ You're a bit short — you need *".$this->money($short, $cur)."* more.\n\n"
                 .'Top up first (I\'ve got the amount ready 👍), then confirm your advert.',
                 'confirm'
@@ -167,12 +170,18 @@ class AdvertiseFlow extends AbstractFlow
                 ['id' => 'fl_deposit', 'title' => '💰 Deposit'],
                 ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
             ]);
+            $this->attachImage($result, $pkg['image'] ?? null);
+
+            return $result;
         }
 
-        return FlowResult::step($summary.'Book & pay now?', 'confirm')->withButtons([
+        $result = FlowResult::step($summary.'Book & pay now?', 'confirm')->withButtons([
             ['id' => 'fs:yes', 'title' => '✅ Pay & book'],
             ['id' => 'fs:cancel', 'title' => '✖ Cancel'],
         ]);
+        $this->attachImage($result, $pkg['image'] ?? null);
+
+        return $result;
     }
 
     private function confirm(string $input, SessionContext $ctx): FlowResult
@@ -292,5 +301,19 @@ class AdvertiseFlow extends AbstractFlow
     private function currency(SessionContext $ctx): string
     {
         return $this->user($ctx)?->currency ?? 'USD';
+    }
+
+    /**
+     * Attach a branded graphic (public/-relative path) to a step, if one is
+     * actually configured and present. Missing/unset stays silent rather than
+     * sending a broken image — a step's text always stands on its own.
+     */
+    private function attachImage(FlowResult $result, ?string $path): void
+    {
+        if ($path === null || $path === '' || ! is_file(public_path($path))) {
+            return;
+        }
+
+        $result->withMedia('image', asset($path));
     }
 }

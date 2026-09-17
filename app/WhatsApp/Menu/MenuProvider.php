@@ -65,6 +65,10 @@ class MenuProvider
             'button' => 'Open menu',
             'footer' => 'Or just tell me what you need',
             'sections' => [
+                // Advertising is the primary business now — leads the menu.
+                ['title' => 'Advertise', 'rows' => [
+                    ['id' => 'fl_advertise', 'title' => '📣 Sponsored adverts', 'description' => 'Get new customers on Facebook & Instagram'],
+                ]],
                 ['title' => 'Orders', 'rows' => [
                     ['id' => 'fl_order', 'title' => '🚀 New order', 'description' => 'Followers, likes, views & more'],
                     ['id' => 'fl_orders', 'title' => '📦 My orders', 'description' => 'Recent orders & their status'],
@@ -76,9 +80,6 @@ class MenuProvider
                     ['id' => 'fl_history', 'title' => '🧾 History', 'description' => 'Deposits, orders & refunds'],
                 ]],
                 ['title' => 'More', 'rows' => [
-                    // Advertise takes the old "Ask AI" slot (the assistant IS the
-                    // AI, so that row was redundant — 'ai' still works by typing).
-                    ['id' => 'fl_advertise', 'title' => '📣 Advertise', 'description' => 'Sponsored ads to reach customers'],
                     ['id' => 'fl_browse', 'title' => '📂 Services', 'description' => 'Browse the full catalogue'],
                     ['id' => 'fl_support', 'title' => '🆘 Support', 'description' => 'Your tickets & our replies'],
                     ['id' => 'fl_profile', 'title' => '👤 My account', 'description' => 'Profile & settings'],
@@ -92,7 +93,7 @@ class MenuProvider
     {
         return [
             'header' => 'Welcome',
-            'body' => "👋 Welcome! I'm your social media growth assistant.\n\nRegister or link your account to browse services, place orders and track delivery right here on WhatsApp.",
+            'body' => "👋 Welcome! I'm your business advertising & social media growth assistant.\n\nRegister or link your account to book ads, browse services, place orders and track delivery right here on WhatsApp.",
             'button' => 'Get started',
             'sections' => [
                 ['title' => 'Get started', 'rows' => [

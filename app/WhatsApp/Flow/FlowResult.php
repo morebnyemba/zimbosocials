@@ -25,6 +25,9 @@ class FlowResult
     /** List spec: ['button'=>string,'sections'=>array,'header'=>?string,'footer'=>?string]. */
     public ?array $list = null;
 
+    /** Media to send ahead of this step's text: ['kind'=>, 'source'=>, 'caption'=>?]. */
+    public ?array $media = null;
+
     private function __construct(
         public string $type,
         public ?string $reply,
@@ -48,6 +51,21 @@ class FlowResult
     public function withList(string $buttonLabel, array $sections, ?string $header = null, ?string $footer = null): self
     {
         $this->list = ['button' => $buttonLabel, 'sections' => $sections, 'header' => $header, 'footer' => $footer];
+
+        return $this;
+    }
+
+    /**
+     * Send an image/video/document/sticker as its own message right before
+     * this step's text (a caption card followed by the reply, never merged —
+     * WhatsApp interactive lists/buttons can't carry inline media).
+     *
+     * @param  string  $kind  image|video|audio|document|sticker
+     * @param  string  $source  A public https URL or an uploaded media id.
+     */
+    public function withMedia(string $kind, string $source, ?string $caption = null): self
+    {
+        $this->media = ['kind' => $kind, 'source' => $source, 'caption' => $caption];
 
         return $this;
     }

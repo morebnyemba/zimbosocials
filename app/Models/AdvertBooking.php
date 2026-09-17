@@ -40,6 +40,43 @@ class AdvertBooking extends Model
         return self::packages()[$key] ?? null;
     }
 
+    /** The "why advertise with us" intro graphic shown before the picker, or null if unset. */
+    public static function overviewImage(): ?string
+    {
+        return self::imagePath('why_zimbosocials');
+    }
+
+    /**
+     * Every branded advert image the AI can attach directly to a reply BY
+     * NAME, keyed the same way flow_data.send_image's enum is generated (see
+     * GeminiProvider::responseSchema()) — the model picks a name, never
+     * analyses pixels, so this map is the single source of truth for both.
+     *
+     * @return array<string, string> name => path relative to public/
+     */
+    public static function imageLibrary(): array
+    {
+        $images = [];
+        foreach (self::packages() as $key => $pkg) {
+            if (! empty($pkg['image'])) {
+                $images[$key] = (string) $pkg['image'];
+            }
+        }
+
+        $named = [
+            'why_zimbosocials' => (string) config('adverts.overview_image', ''),
+            'plans_detail' => (string) config('adverts.plans_detail_image', ''),
+        ];
+
+        return array_merge($images, array_filter($named, fn ($v) => $v !== ''));
+    }
+
+    /** Resolve one image by name, or null if that name isn't in the library. */
+    public static function imagePath(string $name): ?string
+    {
+        return self::imageLibrary()[$name] ?? null;
+    }
+
     /**
      * The price for a package, honoring a temporary grandfather window: a
      * contact who already existed before a reprice keeps seeing the old

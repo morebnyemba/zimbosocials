@@ -20,18 +20,31 @@ return [
     | Keep the "Sponsored adverts" knowledge-base entry in step with these
     | prices/inclusions — the assistant quotes the KB when it explains packages.
     | 'recommended' marks the default the AI should nudge people toward.
+    |
+    | 'image' => the branded plans-card graphic for that package, relative to
+    | public/ (served as a plain static file, then sent as a WhatsApp image
+    | message from AdvertiseFlow::confirmPrompt() once the customer has
+    | picked). Converted to JPEG from the WebP they were designed in — Meta's
+    | Cloud API only accepts image/jpeg and image/png for image messages, and
+    | WebP isn't one of them.
     */
     'packages' => [
         // Repriced 2026-08-01 back down to a $25/week anchor (was briefly $30).
-        // Per-day rate still falls as the duration grows: $6/day, ~$4.67/day,
-        // $3.57/day, $3/day, ~$2.17/day. Benefits still escalate with price,
-        // not just reach — see each blurb.
+        // month1 repriced again 2026-09-15 ($65 → $80) to match the plans-card
+        // graphics. Per-day rate falls as the duration grows: $6/day, ~$4.67/day,
+        // $3.57/day, ~$2.67/day. Benefits still escalate with price, not just
+        // reach — see each blurb.
+        //
+        // 'week2' (2 weeks / $42) was removed 2026-09 — no plans-card image
+        // was made for it. Re-add here (and in previous_packages below, and
+        // an image) if a two-week tier comes back.
         'day1' => [
             'label' => '1 day',
             'days' => 1,
             'price' => 6.00,
             'includes_video' => false,
             'blurb' => 'A quick test run — we boost a post you already have.',
+            'image' => 'images/adverts/day1.jpg',
         ],
         'day3' => [
             'label' => '3 days',
@@ -40,6 +53,7 @@ return [
             'includes_video' => true,
             'blurb' => 'Long enough to see real enquiries — includes a custom AI video advert too. Most people start here.',
             'recommended' => true,
+            'image' => 'images/adverts/day3.jpg',
         ],
         'week1' => [
             'label' => '1 week',
@@ -47,20 +61,15 @@ return [
             'price' => 25.00,
             'includes_video' => true,
             'blurb' => 'A full week of reach — custom video advert, plus a progress update from our team partway through.',
-        ],
-        'week2' => [
-            'label' => '2 weeks',
-            'days' => 14,
-            'price' => 42.00,
-            'includes_video' => true,
-            'blurb' => 'Sustained presence — custom video advert (pick from 2 concepts), a progress update partway through, and better value per day.',
+            'image' => 'images/adverts/week1.jpg',
         ],
         'month1' => [
             'label' => '1 month',
             'days' => 30,
-            'price' => 65.00,
+            'price' => 80.00,
             'includes_video' => true,
             'blurb' => 'Maximum reach — custom video advert (pick from 2 concepts), priority setup, a progress update partway through, and a wrap-up performance summary. Best for launches and busy seasons.',
+            'image' => 'images/adverts/month1.jpg',
         ],
     ],
 
@@ -74,18 +83,47 @@ return [
     | brand new contact created after 'repriced_at' always sees the current
     | price above. See AdvertBooking::priceFor().
     |
-    | These are the ORIGINAL prices that were actually live in production
-    | ($20/week) — not the $25/week intermediate, which was only ever a local
-    | commit and never reached a real customer, so there's nothing to
-    | grandfather from it.
+    | These are the prices in effect immediately before the CURRENT
+    | 'repriced_at' — day1/day3/week1 are unchanged (grandfathering to the
+    | same price is a harmless no-op) since only month1 moved this round.
     */
     'previous_packages' => [
-        'day1' => ['price' => 5.00],
-        'day3' => ['price' => 10.00],
-        'week1' => ['price' => 20.00],
-        'week2' => ['price' => 35.00],
-        'month1' => ['price' => 60.00],
+        'day1' => ['price' => 6.00],
+        'day3' => ['price' => 14.00],
+        'week1' => ['price' => 25.00],
+        'month1' => ['price' => 65.00],
     ],
-    'repriced_at' => '2026-08-01 20:00:00',
+    'repriced_at' => '2026-09-15 21:45:00',
     'reprice_grace_days' => 7,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Intro image
+    |--------------------------------------------------------------------------
+    | Sent by AdvertiseFlow::packageMenu() BEFORE the picker — the "why
+    | ZimboSocials" before/after comparison (reach, enquiries, actual
+    | customers with vs without us), condensed pricing strip included. Makes
+    | the case for advertising with us at all, before the customer even looks
+    | at package options. Distinct from each package's own 'image' above,
+    | which is sent AFTER they pick, for that specific package.
+    |
+    | images/adverts/plans-detail.png is the earlier "all 4 packages, full
+    | feature lists" sheet — no longer used as the flow's own intro, but still
+    | reachable by name (see 'plans_detail_image' below) since the AI can send
+    | it directly when a customer wants the full feature breakdown.
+    */
+    'overview_image' => 'images/adverts/why-zimbosocials.png',
+    'plans_detail_image' => 'images/adverts/plans-detail.png',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Named image library (for the AI to attach directly, outside any flow)
+    |--------------------------------------------------------------------------
+    | AdvertBooking::imageLibrary() builds the full name => path map the AI's
+    | flow_data.send_image enum is generated from (see GeminiProvider::
+    | responseSchema()) — day1/day3/week1/month1 from each package's own
+    | 'image' above, plus 'why_zimbosocials' and 'plans_detail' from the two
+    | keys above. The AI picks by NAME ONLY (it never analyses image pixels)
+    | and MessageRouter resolves the name to a path when sending.
+    */
 ];
